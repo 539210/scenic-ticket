@@ -1,0 +1,2 @@
+-- Day 02: create MySQL triggers.
+-- Required: at least 2 triggers.

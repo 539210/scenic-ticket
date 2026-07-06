@@ -1,0 +1,2 @@
+-- Day 02: create MySQL views.
+-- Required: at least 2 views.

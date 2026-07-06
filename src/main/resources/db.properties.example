@@ -1,0 +1,12 @@
+# Copy this file to db.properties for local development.
+# Do not commit db.properties because it contains real credentials.
+
+mysql.url=jdbc:mysql://localhost:3306/scenic_ticket?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+mysql.username=root
+mysql.password=YOUR_LOCAL_PASSWORD
+mysql.pool.maximumPoolSize=10
+mysql.pool.minimumIdle=2
+mysql.pool.connectionTimeoutMs=30000
+
+mongodb.uri=mongodb://localhost:27017
+mongodb.database=scenic_ticket

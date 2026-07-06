@@ -1,0 +1,2 @@
+-- Day 02: create MySQL stored procedures.
+-- Required: at least 2 stored procedures.

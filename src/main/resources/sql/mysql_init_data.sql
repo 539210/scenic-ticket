@@ -1,0 +1,2 @@
+-- Day 02: insert initial MySQL data.
+-- Required: at least 10 records per table.

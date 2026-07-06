@@ -1,0 +1,2 @@
+-- Day 02: create MySQL schema for scenic_ticket.
+-- Tables planned: users, categories, items, orders, profiles.

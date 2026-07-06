@@ -1,0 +1,21 @@
+# Build output
+target/
+
+# IDE files
+.idea/
+.vscode/
+*.iml
+
+# Logs
+logs/
+*.log
+
+# Local database and runtime configuration
+src/main/resources/db.properties
+
+# OS and temporary files
+.DS_Store
+Thumbs.db
+~$*.docx
+*.tmp
+*.swp
