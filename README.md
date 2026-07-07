@@ -62,7 +62,23 @@ SQL 和 MongoDB 初始化脚本统一放在：
 src/main/resources/sql/
 ```
 
-当前第一版只放置占位文件，后续 Day 02 完成具体建表、索引、视图、存储过程、触发器和初始化数据。
+Day 02 已补充具体建表、索引、视图、存储过程、触发器、初始化数据和 MongoDB 初始化脚本。
+
+MySQL 建议按以下顺序执行：
+
+```text
+mysql -uroot -p < src/main/resources/sql/mysql_schema.sql
+mysql -uroot -p < src/main/resources/sql/mysql_init_data.sql
+mysql -uroot -p < src/main/resources/sql/mysql_views.sql
+mysql -uroot -p < src/main/resources/sql/mysql_procedures.sql
+mysql -uroot -p < src/main/resources/sql/mysql_triggers.sql
+```
+
+MongoDB 初始化：
+
+```text
+mongosh src/main/resources/sql/mongodb_init.js
+```
 
 ## 版本控制规范
 
@@ -80,8 +96,14 @@ Day 01 初始提交信息：
 
 ## 运行说明
 
-第一版只完成工程骨架，暂不包含完整业务功能。后续完成数据库脚本和 DAO 后，可使用 Maven 编译和测试：
+当前已完成项目骨架、数据库脚本、DAO 基础类和 `UserDAO`。安装并配置 Maven 后，可使用 Maven 编译和测试：
 
 ```text
 mvn test
+```
+
+`UserDAOTest` 默认跳过数据库集成测试；初始化本地 MySQL 数据库后，可显式开启：
+
+```text
+mvn test -DintegrationTests=true
 ```

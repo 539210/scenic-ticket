@@ -14,8 +14,8 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.source>21</maven.compiler.source>
         <maven.compiler.target>21</maven.compiler.target>
-        <mysql.connector.version>9.7.0</mysql.connector.version>
-        <mongodb.driver.version>5.8.0</mongodb.driver.version>
+        <mysql.connector.version>8.3.0</mysql.connector.version>
+        <mongodb.driver.version>5.2.0</mongodb.driver.version>
         <hikaricp.version>5.1.0</hikaricp.version>
         <jbcrypt.version>0.4</jbcrypt.version>
         <slf4j.version>2.0.9</slf4j.version>
