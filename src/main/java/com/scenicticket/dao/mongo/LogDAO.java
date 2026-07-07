@@ -64,6 +64,41 @@ public class LogDAO extends MongoBaseDAO {
         return getCollection("action_logs").aggregate(pipeline).into(new ArrayList<>());
     }
 
+    public Document aggregateUserReport(long userId, Date startTime, Date endTime) {
+        List<Bson> pipeline = List.of(
+                new Document("$match", withDateRange(new Document("user_id", userId), "created_at", startTime, endTime)),
+                new Document("$group", new Document("_id", "$user_id")
+                        .append("action_count", new Document("$sum", 1))
+                        .append("visited_items", new Document("$addToSet", "$item_id"))
+                        .append("total_duration", new Document("$sum", "$duration_seconds"))
+                        .append("avg_duration", new Document("$avg", "$duration_seconds"))
+                        .append("view_count", new Document("$sum", new Document("$cond", List.of(
+                                new Document("$eq", List.of("$action_type", "VIEW")), 1, 0))))
+                        .append("search_count", new Document("$sum", new Document("$cond", List.of(
+                                new Document("$eq", List.of("$action_type", "SEARCH")), 1, 0))))
+                        .append("comment_count", new Document("$sum", new Document("$cond", List.of(
+                                new Document("$eq", List.of("$action_type", "COMMENT")), 1, 0))))
+                        .append("order_count", new Document("$sum", new Document("$cond", List.of(
+                                new Document("$eq", List.of("$action_type", "ORDER")), 1, 0))))
+                        .append("first_action_time", new Document("$min", "$created_at"))
+                        .append("latest_action_time", new Document("$max", "$created_at"))),
+                new Document("$project", new Document("user_id", "$_id")
+                        .append("action_count", 1)
+                        .append("visited_item_count", new Document("$size", "$visited_items"))
+                        .append("total_duration", 1)
+                        .append("avg_duration", 1)
+                        .append("view_count", 1)
+                        .append("search_count", 1)
+                        .append("comment_count", 1)
+                        .append("order_count", 1)
+                        .append("first_action_time", 1)
+                        .append("latest_action_time", 1)
+                        .append("_id", 0))
+        );
+        Document report = getCollection("action_logs").aggregate(pipeline).first();
+        return report == null ? new Document("user_id", userId).append("action_count", 0) : report;
+    }
+
     public List<Document> aggregateHotItems(Date startTime, Date endTime, int limit) {
         List<Bson> pipeline = List.of(
                 new Document("$match", withDateRange(new Document(), "created_at", startTime, endTime)),

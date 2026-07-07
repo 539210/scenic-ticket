@@ -10,6 +10,9 @@ public class StatisticsReportDTO {
     private List<Document> actionTypeSummary = new ArrayList<>();
     private List<Document> dailyTrend = new ArrayList<>();
     private List<Document> hotTags = new ArrayList<>();
+    private List<Document> systemAuditSummary = new ArrayList<>();
+    private List<Document> systemAuditTrend = new ArrayList<>();
+    private List<MonthlyOrderReportDTO> monthlyOrderReport = new ArrayList<>();
 
     public List<Document> getHotItems() {
         return hotItems;
@@ -41,5 +44,29 @@ public class StatisticsReportDTO {
 
     public void setHotTags(List<Document> hotTags) {
         this.hotTags = hotTags;
+    }
+
+    public List<Document> getSystemAuditSummary() {
+        return systemAuditSummary;
+    }
+
+    public void setSystemAuditSummary(List<Document> systemAuditSummary) {
+        this.systemAuditSummary = systemAuditSummary;
+    }
+
+    public List<Document> getSystemAuditTrend() {
+        return systemAuditTrend;
+    }
+
+    public void setSystemAuditTrend(List<Document> systemAuditTrend) {
+        this.systemAuditTrend = systemAuditTrend;
+    }
+
+    public List<MonthlyOrderReportDTO> getMonthlyOrderReport() {
+        return monthlyOrderReport;
+    }
+
+    public void setMonthlyOrderReport(List<MonthlyOrderReportDTO> monthlyOrderReport) {
+        this.monthlyOrderReport = monthlyOrderReport;
     }
 }

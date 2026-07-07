@@ -22,7 +22,7 @@ public class SystemLogDAO extends MongoBaseDAO {
                 .append("log_type", logType)
                 .append("log_level", logLevel)
                 .append("message", message)
-                .append("action_detail", actionDetail)
+                .append("action_detail", actionDetail == null ? new Document() : actionDetail)
                 .append("timestamp", new Date());
         insertSystemLog(systemLog);
     }
@@ -31,7 +31,108 @@ public class SystemLogDAO extends MongoBaseDAO {
         return getCollection("system_logs")
                 .find()
                 .sort(Sorts.descending("timestamp"))
-                .limit(limit)
+                .limit(normalizeLimit(limit))
                 .into(new ArrayList<>());
+    }
+
+    public List<Document> findByCondition(Long userId, String logType, String logLevel,
+                                          Date startTime, Date endTime, int limit) {
+        Document filter = new Document();
+        if (userId != null && userId > 0) {
+            filter.append("user_id", userId);
+        }
+        if (logType != null && !logType.isBlank()) {
+            filter.append("log_type", logType.trim());
+        }
+        if (logLevel != null && !logLevel.isBlank()) {
+            filter.append("log_level", logLevel.trim());
+        }
+        return getCollection("system_logs")
+                .find(withDateRange(filter, "timestamp", startTime, endTime))
+                .sort(Sorts.descending("timestamp"))
+                .limit(normalizeLimit(limit))
+                .into(new ArrayList<>());
+    }
+
+    public List<Document> aggregateAuditSummary(Date startTime, Date endTime) {
+        List<org.bson.conversions.Bson> pipeline = List.of(
+                new Document("$match", withDateRange(new Document(), "timestamp", startTime, endTime)),
+                new Document("$group", new Document("_id", new Document("log_type", "$log_type")
+                        .append("log_level", "$log_level"))
+                        .append("operation_count", new Document("$sum", 1))
+                        .append("unique_users", new Document("$addToSet", "$user_id"))
+                        .append("latest_timestamp", new Document("$max", "$timestamp"))),
+                new Document("$project", new Document("log_type", "$_id.log_type")
+                        .append("log_level", "$_id.log_level")
+                        .append("operation_count", 1)
+                        .append("user_count", new Document("$size", "$unique_users"))
+                        .append("latest_timestamp", 1)
+                        .append("_id", 0)),
+                new Document("$sort", new Document("operation_count", -1).append("latest_timestamp", -1))
+        );
+        return getCollection("system_logs").aggregate(pipeline).into(new ArrayList<>());
+    }
+
+    public List<Document> aggregateDailyAuditTrend(Date startTime, Date endTime) {
+        List<org.bson.conversions.Bson> pipeline = List.of(
+                new Document("$match", withDateRange(new Document(), "timestamp", startTime, endTime)),
+                new Document("$group", new Document("_id", new Document("date", new Document("$dateToString",
+                        new Document("format", "%Y-%m-%d").append("date", "$timestamp")))
+                        .append("log_type", "$log_type")
+                        .append("log_level", "$log_level"))
+                        .append("operation_count", new Document("$sum", 1))),
+                new Document("$project", new Document("date", "$_id.date")
+                        .append("log_type", "$_id.log_type")
+                        .append("log_level", "$_id.log_level")
+                        .append("operation_count", 1)
+                        .append("_id", 0)),
+                new Document("$sort", new Document("date", 1).append("log_type", 1).append("log_level", 1))
+        );
+        return getCollection("system_logs").aggregate(pipeline).into(new ArrayList<>());
+    }
+
+    public List<Document> aggregateUserOperationSummary(Date startTime, Date endTime, int limit) {
+        List<org.bson.conversions.Bson> pipeline = List.of(
+                new Document("$match", withDateRange(new Document(), "timestamp", startTime, endTime)),
+                new Document("$group", new Document("_id", "$user_id")
+                        .append("operation_count", new Document("$sum", 1))
+                        .append("log_types", new Document("$addToSet", "$log_type"))
+                        .append("warn_count", new Document("$sum", new Document("$cond", List.of(
+                                new Document("$eq", List.of("$log_level", "WARN")), 1, 0))))
+                        .append("error_count", new Document("$sum", new Document("$cond", List.of(
+                                new Document("$eq", List.of("$log_level", "ERROR")), 1, 0))))
+                        .append("latest_timestamp", new Document("$max", "$timestamp"))),
+                new Document("$project", new Document("user_id", "$_id")
+                        .append("operation_count", 1)
+                        .append("log_types", 1)
+                        .append("warn_count", 1)
+                        .append("error_count", 1)
+                        .append("latest_timestamp", 1)
+                        .append("_id", 0)),
+                new Document("$sort", new Document("operation_count", -1).append("latest_timestamp", -1)),
+                new Document("$limit", normalizeLimit(limit))
+        );
+        return getCollection("system_logs").aggregate(pipeline).into(new ArrayList<>());
+    }
+
+    private Document withDateRange(Document filter, String field, Date startTime, Date endTime) {
+        Document range = new Document();
+        if (startTime != null) {
+            range.append("$gte", startTime);
+        }
+        if (endTime != null) {
+            range.append("$lte", endTime);
+        }
+        if (!range.isEmpty()) {
+            filter.append(field, range);
+        }
+        return filter;
+    }
+
+    private int normalizeLimit(int limit) {
+        if (limit <= 0) {
+            return 50;
+        }
+        return Math.min(limit, 500);
     }
 }
