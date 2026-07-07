@@ -51,6 +51,10 @@ public class BusinessService {
         return categoryDAO.create(category);
     }
 
+    public List<Category> listCategories() {
+        return categoryDAO.findAll();
+    }
+
     public long createItem(String title, long categoryId, String description, List<String> images, Document metadata) {
         String safeTitle = SecurityUtil.requireText(title, "Item title", 200);
         Item item = new Item();
@@ -66,6 +70,16 @@ public class BusinessService {
     public List<Item> searchItems(String keyword, Long categoryId, int limit, int offset) {
         return itemDAO.search(SecurityUtil.normalizeText(keyword, 100), categoryId, 1,
                 SecurityUtil.normalizeLimit(limit, 20, 100), SecurityUtil.normalizeOffset(offset));
+    }
+
+    public boolean updateItemStatus(long itemId, int status) {
+        if (itemId <= 0) {
+            throw new BusinessException("Item id must be positive.");
+        }
+        if (status != 0 && status != 1) {
+            throw new BusinessException("Item status must be 0 or 1.");
+        }
+        return itemDAO.updateStatus(itemId, status);
     }
 
     public ItemDetailDTO getItemDetail(long userId, long itemId, String ip) {
@@ -113,6 +127,24 @@ public class BusinessService {
         } catch (SQLException e) {
             throw new DBException("Failed to create order transaction.", e);
         }
+    }
+
+    public List<Order> listUserOrders(long userId, int limit, int offset) {
+        if (userId <= 0) {
+            throw new BusinessException("User id must be positive.");
+        }
+        return orderDAO.findByUserId(userId, SecurityUtil.normalizeLimit(limit, 20, 100),
+                SecurityUtil.normalizeOffset(offset));
+    }
+
+    public boolean updateOrderStatus(long orderId, int status) {
+        if (orderId <= 0) {
+            throw new BusinessException("Order id must be positive.");
+        }
+        if (status < 0 || status > 3) {
+            throw new BusinessException("Order status must be between 0 and 3.");
+        }
+        return orderDAO.updateStatus(orderId, status);
     }
 
     private void rollbackQuietly(Connection connection) {
