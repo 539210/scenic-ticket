@@ -23,18 +23,6 @@
         <junit.version>5.10.1</junit.version>
     </properties>
 
-    <dependencyManagement>
-        <dependencies>
-            <dependency>
-                <groupId>org.mongodb</groupId>
-                <artifactId>mongodb-driver-bom</artifactId>
-                <version>${mongodb.driver.version}</version>
-                <type>pom</type>
-                <scope>import</scope>
-            </dependency>
-        </dependencies>
-    </dependencyManagement>
-
     <dependencies>
         <dependency>
             <groupId>com.mysql</groupId>
@@ -44,6 +32,7 @@
         <dependency>
             <groupId>org.mongodb</groupId>
             <artifactId>mongodb-driver-sync</artifactId>
+            <version>${mongodb.driver.version}</version>
         </dependency>
         <dependency>
             <groupId>com.zaxxer</groupId>

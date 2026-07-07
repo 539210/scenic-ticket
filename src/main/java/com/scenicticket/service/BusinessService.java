@@ -1,0 +1,120 @@
+package com.scenicticket.service;
+
+import com.scenicticket.dao.mongo.DetailDAO;
+import com.scenicticket.dao.mongo.LogDAO;
+import com.scenicticket.dao.mongo.CommentDAO;
+import com.scenicticket.dao.mysql.CategoryDAO;
+import com.scenicticket.dao.mysql.ItemDAO;
+import com.scenicticket.dao.mysql.OrderDAO;
+import com.scenicticket.dto.ItemDetailDTO;
+import com.scenicticket.exception.BusinessException;
+import com.scenicticket.exception.DBException;
+import com.scenicticket.model.Category;
+import com.scenicticket.model.Item;
+import com.scenicticket.model.Order;
+import com.scenicticket.util.MySQLDBUtil;
+import org.bson.Document;
+
+import java.math.BigDecimal;
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.util.List;
+
+public class BusinessService {
+    private final CategoryDAO categoryDAO;
+    private final ItemDAO itemDAO;
+    private final OrderDAO orderDAO;
+    private final DetailDAO detailDAO;
+    private final LogDAO logDAO;
+    private final CommentDAO commentDAO;
+
+    public BusinessService() {
+        this(new CategoryDAO(), new ItemDAO(), new OrderDAO(), new DetailDAO(), new LogDAO(), new CommentDAO());
+    }
+
+    public BusinessService(CategoryDAO categoryDAO, ItemDAO itemDAO, OrderDAO orderDAO, DetailDAO detailDAO,
+                           LogDAO logDAO, CommentDAO commentDAO) {
+        this.categoryDAO = categoryDAO;
+        this.itemDAO = itemDAO;
+        this.orderDAO = orderDAO;
+        this.detailDAO = detailDAO;
+        this.logDAO = logDAO;
+        this.commentDAO = commentDAO;
+    }
+
+    public long createCategory(String name, Long parentId) {
+        if (name == null || name.isBlank()) {
+            throw new BusinessException("Category name is required.");
+        }
+        Category category = new Category();
+        category.setName(name.trim());
+        category.setParentId(parentId);
+        return categoryDAO.create(category);
+    }
+
+    public long createItem(String title, long categoryId, String description, List<String> images, Document metadata) {
+        if (title == null || title.isBlank()) {
+            throw new BusinessException("Item title is required.");
+        }
+        Item item = new Item();
+        item.setTitle(title.trim());
+        item.setCategoryId(categoryId);
+        item.setStatus(1);
+        long itemId = itemDAO.create(item);
+        detailDAO.upsertDetail(itemId, description, images == null ? List.of() : images, metadata == null ? new Document() : metadata);
+        return itemId;
+    }
+
+    public List<Item> searchItems(String keyword, Long categoryId, int limit, int offset) {
+        return itemDAO.search(keyword, categoryId, 1, limit, offset);
+    }
+
+    public ItemDetailDTO getItemDetail(long userId, long itemId, String ip) {
+        Item item = itemDAO.findById(itemId)
+                .orElseThrow(() -> new BusinessException("Item not found."));
+        logDAO.recordAction(userId, itemId, "VIEW", 0, "SWING", ip);
+        ItemDetailDTO dto = new ItemDetailDTO();
+        dto.setItem(item);
+        dto.setDetail(detailDAO.findByItemId(itemId));
+        dto.setComments(commentDAO.findByItemId(itemId, 20));
+        return dto;
+    }
+
+    public long createOrder(long userId, long itemId, BigDecimal amount) {
+        if (amount == null || amount.compareTo(BigDecimal.ZERO) < 0) {
+            throw new BusinessException("Order amount must be non-negative.");
+        }
+        try (Connection connection = MySQLDBUtil.getConnection()) {
+            try {
+                connection.setAutoCommit(false);
+                Order order = new Order();
+                order.setUserId(userId);
+                order.setItemId(itemId);
+                order.setAmount(amount);
+                order.setStatus(0);
+                long orderId = orderDAO.create(connection, order);
+                connection.commit();
+                logDAO.recordAction(userId, itemId, "ORDER", 0, "SWING", "127.0.0.1");
+                return orderId;
+            } catch (SQLException e) {
+                rollbackQuietly(connection);
+                throw new DBException("Failed to create order.", e);
+            } catch (RuntimeException e) {
+                rollbackQuietly(connection);
+                throw e;
+            } finally {
+                connection.setAutoCommit(true);
+            }
+        } catch (SQLException e) {
+            throw new DBException("Failed to create order transaction.", e);
+        }
+    }
+
+    private void rollbackQuietly(Connection connection) {
+        try {
+            connection.rollback();
+        } catch (SQLException rollbackException) {
+            throw new DBException("Failed to rollback order transaction.", rollbackException);
+        }
+    }
+}
