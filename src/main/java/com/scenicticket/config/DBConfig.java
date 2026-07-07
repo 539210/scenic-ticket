@@ -39,4 +39,16 @@ public final class DBConfig {
             throw new DBException("Invalid integer database configuration: " + key, e);
         }
     }
+
+    public static int getInt(String key, int defaultValue) {
+        String value = PROPERTIES.getProperty(key);
+        if (value == null || value.isBlank()) {
+            return defaultValue;
+        }
+        try {
+            return Integer.parseInt(value.trim());
+        } catch (NumberFormatException e) {
+            throw new DBException("Invalid integer database configuration: " + key, e);
+        }
+    }
 }

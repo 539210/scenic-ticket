@@ -2,6 +2,7 @@ package com.scenicticket.dao.mongo;
 
 import com.scenicticket.dao.MongoBaseDAO;
 import com.mongodb.client.model.Filters;
+import com.mongodb.client.model.InsertManyOptions;
 import com.mongodb.client.model.Sorts;
 import org.bson.conversions.Bson;
 import org.bson.Document;
@@ -16,6 +17,25 @@ public class LogDAO extends MongoBaseDAO {
             actionLog.append("created_at", new Date());
         }
         getCollection("action_logs").insertOne(actionLog);
+    }
+
+    public void insertActionLogs(List<Document> actionLogs) {
+        if (actionLogs == null || actionLogs.isEmpty()) {
+            return;
+        }
+        List<Document> preparedLogs = new ArrayList<>();
+        for (Document actionLog : actionLogs) {
+            if (actionLog == null) {
+                continue;
+            }
+            if (!actionLog.containsKey("created_at")) {
+                actionLog.append("created_at", new Date());
+            }
+            preparedLogs.add(actionLog);
+        }
+        if (!preparedLogs.isEmpty()) {
+            getCollection("action_logs").insertMany(preparedLogs, new InsertManyOptions().ordered(false));
+        }
     }
 
     public void recordAction(long userId, long itemId, String actionType, int durationSeconds, String clientType, String ip) {

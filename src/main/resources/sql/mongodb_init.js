@@ -13,10 +13,12 @@ db.createCollection("system_logs");
 db.action_logs.createIndex({ user_id: 1, created_at: -1 });
 db.action_logs.createIndex({ item_id: 1, action_type: 1 });
 db.action_logs.createIndex({ created_at: -1 });
+db.action_logs.createIndex({ created_at: -1, action_type: 1, item_id: 1 });
 
 db.comments.createIndex({ item_id: 1, created_at: -1 });
 db.comments.createIndex({ item_id: 1, rating: 1 });
 db.comments.createIndex({ user_id: 1 });
+db.comments.createIndex({ rating: -1, item_id: 1 });
 
 db.item_details.createIndex({ item_id: 1 }, { unique: true });
 db.item_details.createIndex({ "metadata.language": 1 });
@@ -24,6 +26,7 @@ db.item_details.createIndex({ "metadata.language": 1 });
 db.system_logs.createIndex({ user_id: 1, timestamp: -1 });
 db.system_logs.createIndex({ log_type: 1, log_level: 1 });
 db.system_logs.createIndex({ timestamp: -1 });
+db.system_logs.createIndex({ timestamp: -1, log_type: 1, log_level: 1 });
 
 const itemDetails = [];
 for (let i = 1; i <= 20; i += 1) {

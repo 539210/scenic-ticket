@@ -63,6 +63,7 @@ src/main/resources/sql/
 ```
 
 Day 02 已补充具体建表、索引、视图、存储过程、触发器、初始化数据和 MongoDB 初始化脚本。
+Day 07 增加了索引优化脚本和 MongoDB 聚合索引补充脚本。
 
 MySQL 建议按以下顺序执行：
 
@@ -72,12 +73,14 @@ mysql -uroot -p < src/main/resources/sql/mysql_init_data.sql
 mysql -uroot -p < src/main/resources/sql/mysql_views.sql
 mysql -uroot -p < src/main/resources/sql/mysql_procedures.sql
 mysql -uroot -p < src/main/resources/sql/mysql_triggers.sql
+mysql -uroot -p < src/main/resources/sql/mysql_day07_optimization.sql
 ```
 
 MongoDB 初始化：
 
 ```text
 mongosh src/main/resources/sql/mongodb_init.js
+mongosh src/main/resources/sql/mongodb_day07_optimization.js
 ```
 
 ## 版本控制规范
@@ -96,10 +99,16 @@ Day 01 初始提交信息：
 
 ## 运行说明
 
-当前已完成项目骨架、数据库脚本、DAO 基础类、用户模块、核心业务模块、订单事务、MongoDB 日志/详情 DAO、推荐与跨库联查、统计报表与系统审计模块。安装并配置 Maven 后，可使用 Maven 编译和测试：
+当前已完成项目骨架、数据库脚本、DAO 基础类、用户模块、核心业务模块、订单事务、MongoDB 日志/详情 DAO、推荐与跨库联查、统计报表与系统审计模块、性能优化和 Swing 集成入口。安装并配置 Maven 后，可使用 Maven 编译和测试：
 
 ```text
 mvn test
+```
+
+启动 Swing 应用：
+
+```text
+mvn exec:java -Dexec.mainClass=com.scenicticket.Main
 ```
 
 `UserDAOTest` 默认跳过数据库集成测试；初始化本地 MySQL 数据库后，可显式开启：
@@ -116,3 +125,4 @@ mvn test -DintegrationTests=true
 - Day 04：行为日志模块、评论管理、MongoDB 聚合管道、统计服务初版。
 - Day 05：推荐功能、跨数据库联查服务、推荐结果 DTO 和跨库详情 DTO。
 - Day 06：数据统计报表、MySQL 月度订单存储过程调用、MongoDB 系统操作审计聚合。
+- Day 07：索引与 SQL 优化、批量日志写入、输入安全校验、Swing 系统集成入口、性能优化报告和安全检查清单。

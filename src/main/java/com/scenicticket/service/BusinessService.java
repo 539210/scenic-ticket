@@ -13,6 +13,7 @@ import com.scenicticket.model.Category;
 import com.scenicticket.model.Item;
 import com.scenicticket.model.Order;
 import com.scenicticket.util.MySQLDBUtil;
+import com.scenicticket.util.SecurityUtil;
 import org.bson.Document;
 
 import java.math.BigDecimal;
@@ -43,36 +44,37 @@ public class BusinessService {
     }
 
     public long createCategory(String name, Long parentId) {
-        if (name == null || name.isBlank()) {
-            throw new BusinessException("Category name is required.");
-        }
+        String safeName = SecurityUtil.requireText(name, "Category name", 50);
         Category category = new Category();
-        category.setName(name.trim());
+        category.setName(safeName);
         category.setParentId(parentId);
         return categoryDAO.create(category);
     }
 
     public long createItem(String title, long categoryId, String description, List<String> images, Document metadata) {
-        if (title == null || title.isBlank()) {
-            throw new BusinessException("Item title is required.");
-        }
+        String safeTitle = SecurityUtil.requireText(title, "Item title", 200);
         Item item = new Item();
-        item.setTitle(title.trim());
+        item.setTitle(safeTitle);
         item.setCategoryId(categoryId);
         item.setStatus(1);
         long itemId = itemDAO.create(item);
-        detailDAO.upsertDetail(itemId, description, images == null ? List.of() : images, metadata == null ? new Document() : metadata);
+        detailDAO.upsertDetail(itemId, SecurityUtil.normalizeText(description, 2000),
+                images == null ? List.of() : images, metadata == null ? new Document() : metadata);
         return itemId;
     }
 
     public List<Item> searchItems(String keyword, Long categoryId, int limit, int offset) {
-        return itemDAO.search(keyword, categoryId, 1, limit, offset);
+        return itemDAO.search(SecurityUtil.normalizeText(keyword, 100), categoryId, 1,
+                SecurityUtil.normalizeLimit(limit, 20, 100), SecurityUtil.normalizeOffset(offset));
     }
 
     public ItemDetailDTO getItemDetail(long userId, long itemId, String ip) {
+        if (userId <= 0 || itemId <= 0) {
+            throw new BusinessException("User id and item id must be positive.");
+        }
         Item item = itemDAO.findById(itemId)
                 .orElseThrow(() -> new BusinessException("Item not found."));
-        logDAO.recordAction(userId, itemId, "VIEW", 0, "SWING", ip);
+        logDAO.recordAction(userId, itemId, "VIEW", 0, "SWING", SecurityUtil.normalizeIp(ip));
         ItemDetailDTO dto = new ItemDetailDTO();
         dto.setItem(item);
         dto.setDetail(detailDAO.findByItemId(itemId));
@@ -81,6 +83,9 @@ public class BusinessService {
     }
 
     public long createOrder(long userId, long itemId, BigDecimal amount) {
+        if (userId <= 0 || itemId <= 0) {
+            throw new BusinessException("User id and item id must be positive.");
+        }
         if (amount == null || amount.compareTo(BigDecimal.ZERO) < 0) {
             throw new BusinessException("Order amount must be non-negative.");
         }

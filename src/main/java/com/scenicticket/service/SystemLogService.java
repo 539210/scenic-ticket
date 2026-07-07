@@ -2,6 +2,7 @@ package com.scenicticket.service;
 
 import com.scenicticket.dao.mongo.SystemLogDAO;
 import com.scenicticket.exception.BusinessException;
+import com.scenicticket.util.SecurityUtil;
 import org.bson.Document;
 
 import java.util.Date;
@@ -55,16 +56,13 @@ public class SystemLogService {
         if (userId <= 0) {
             throw new BusinessException("User id must be positive.");
         }
-        if (logType == null || logType.isBlank()) {
-            throw new BusinessException("Log type is required.");
-        }
-        if (message == null || message.isBlank()) {
-            throw new BusinessException("System log message is required.");
-        }
+        String safeLogType = SecurityUtil.requireText(logType, "Log type", 50);
+        String safeMessage = SecurityUtil.requireText(message, "System log message", 500);
+        String safeOperation = SecurityUtil.normalizeText(operation, 120);
         Document actionDetail = new Document()
-                .append("ip", ip == null || ip.isBlank() ? "127.0.0.1" : ip)
-                .append("operation", operation == null || operation.isBlank() ? logType.trim() : operation.trim());
-        systemLogDAO.record(userId, logType.trim(), logLevel, message.trim(), actionDetail);
+                .append("ip", SecurityUtil.normalizeIp(ip))
+                .append("operation", safeOperation == null || safeOperation.isBlank() ? safeLogType : safeOperation);
+        systemLogDAO.record(userId, safeLogType, logLevel, safeMessage, actionDetail);
     }
 
     private int normalizeLimit(int limit) {

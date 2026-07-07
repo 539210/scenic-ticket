@@ -4,6 +4,7 @@ import com.scenicticket.dao.mongo.CommentDAO;
 import com.scenicticket.dao.mongo.LogDAO;
 import com.scenicticket.dto.BehaviorLogQuery;
 import com.scenicticket.exception.BusinessException;
+import com.scenicticket.util.SecurityUtil;
 import org.bson.Document;
 
 import java.util.List;
@@ -23,7 +24,7 @@ public class BehaviorLogService {
 
     public void recordView(long userId, long itemId, int durationSeconds, String ip) {
         validateIds(userId, itemId);
-        logDAO.recordAction(userId, itemId, "VIEW", Math.max(durationSeconds, 0), "SWING", defaultIp(ip));
+        logDAO.recordAction(userId, itemId, "VIEW", Math.max(durationSeconds, 0), "SWING", SecurityUtil.normalizeIp(ip));
     }
 
     public void recordSearch(long userId, String keyword, String ip) {
@@ -35,8 +36,8 @@ public class BehaviorLogService {
                 .append("item_id", 0L)
                 .append("action_type", "SEARCH")
                 .append("duration_seconds", 0)
-                .append("keyword", keyword)
-                .append("client_info", new Document("client_type", "SWING").append("ip", defaultIp(ip)));
+                .append("keyword", SecurityUtil.normalizeText(keyword, 100))
+                .append("client_info", new Document("client_type", "SWING").append("ip", SecurityUtil.normalizeIp(ip)));
         logDAO.insertActionLog(actionLog);
     }
 
@@ -48,8 +49,8 @@ public class BehaviorLogService {
         if (rating < 1 || rating > 5) {
             throw new BusinessException("Rating must be between 1 and 5.");
         }
-        commentDAO.addComment(userId, itemId, content.trim(), rating, tags);
-        logDAO.recordAction(userId, itemId, "COMMENT", 0, "SWING", defaultIp(ip));
+        commentDAO.addComment(userId, itemId, SecurityUtil.requireText(content, "Comment content", 1000), rating, tags);
+        logDAO.recordAction(userId, itemId, "COMMENT", 0, "SWING", SecurityUtil.normalizeIp(ip));
     }
 
     public List<Document> queryRecentLogs(BehaviorLogQuery query) {
@@ -74,10 +75,6 @@ public class BehaviorLogService {
         if (itemId <= 0) {
             throw new BusinessException("Item id must be positive.");
         }
-    }
-
-    private String defaultIp(String ip) {
-        return ip == null || ip.isBlank() ? "127.0.0.1" : ip;
     }
 
     private int normalizeLimit(int limit) {

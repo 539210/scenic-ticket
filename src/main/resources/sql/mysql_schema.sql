@@ -44,7 +44,8 @@ CREATE TABLE IF NOT EXISTS items (
         ON UPDATE CASCADE,
     INDEX idx_items_category_status (category_id, status),
     INDEX idx_items_title (title),
-    INDEX idx_items_created_at (created_at)
+    INDEX idx_items_created_at (created_at),
+    INDEX idx_items_status_updated_at (status, updated_at DESC, item_id DESC)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE IF NOT EXISTS orders (
@@ -65,7 +66,8 @@ CREATE TABLE IF NOT EXISTS orders (
     CONSTRAINT chk_orders_amount CHECK (amount >= 0),
     INDEX idx_orders_user_created_at (user_id, created_at),
     INDEX idx_orders_item_status (item_id, status),
-    INDEX idx_orders_status_created_at (status, created_at)
+    INDEX idx_orders_status_created_at (status, created_at),
+    INDEX idx_orders_created_status (created_at, status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE IF NOT EXISTS profiles (

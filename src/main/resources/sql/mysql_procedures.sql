@@ -4,13 +4,19 @@ DROP PROCEDURE IF EXISTS sp_monthly_order_report;
 DELIMITER //
 CREATE PROCEDURE sp_monthly_order_report(IN p_year INT, IN p_month INT)
 BEGIN
+    DECLARE v_start_date DATE;
+    DECLARE v_end_date DATE;
+
+    SET v_start_date = STR_TO_DATE(CONCAT(p_year, '-', LPAD(p_month, 2, '0'), '-01'), '%Y-%m-%d');
+    SET v_end_date = DATE_ADD(v_start_date, INTERVAL 1 MONTH);
+
     SELECT
         DATE(created_at) AS order_date,
         COUNT(*) AS order_count,
         COALESCE(SUM(amount), 0) AS total_amount
     FROM orders
-    WHERE YEAR(created_at) = p_year
-      AND MONTH(created_at) = p_month
+    WHERE created_at >= v_start_date
+      AND created_at < v_end_date
       AND status IN (1, 3)
     GROUP BY DATE(created_at)
     ORDER BY order_date;

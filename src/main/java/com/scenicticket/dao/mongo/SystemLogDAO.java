@@ -1,6 +1,7 @@
 package com.scenicticket.dao.mongo;
 
 import com.scenicticket.dao.MongoBaseDAO;
+import com.mongodb.client.model.InsertManyOptions;
 import com.mongodb.client.model.Sorts;
 import org.bson.Document;
 
@@ -14,6 +15,28 @@ public class SystemLogDAO extends MongoBaseDAO {
             systemLog.append("timestamp", new Date());
         }
         getCollection("system_logs").insertOne(systemLog);
+    }
+
+    public void insertSystemLogs(List<Document> systemLogs) {
+        if (systemLogs == null || systemLogs.isEmpty()) {
+            return;
+        }
+        List<Document> preparedLogs = new ArrayList<>();
+        for (Document systemLog : systemLogs) {
+            if (systemLog == null) {
+                continue;
+            }
+            if (!systemLog.containsKey("timestamp")) {
+                systemLog.append("timestamp", new Date());
+            }
+            if (!systemLog.containsKey("action_detail")) {
+                systemLog.append("action_detail", new Document());
+            }
+            preparedLogs.add(systemLog);
+        }
+        if (!preparedLogs.isEmpty()) {
+            getCollection("system_logs").insertMany(preparedLogs, new InsertManyOptions().ordered(false));
+        }
     }
 
     public void record(long userId, String logType, String logLevel, String message, Document actionDetail) {
