@@ -82,4 +82,16 @@ public class CommentDAO extends MongoBaseDAO {
         );
         return getCollection("comments").aggregate(pipeline).into(new ArrayList<>());
     }
+
+    public List<Document> aggregateTopRatedItems(int limit) {
+        List<Bson> pipeline = List.of(
+                new Document("$group", new Document("_id", "$item_id")
+                        .append("comment_count", new Document("$sum", 1))
+                        .append("avg_rating", new Document("$avg", "$rating"))),
+                new Document("$match", new Document("comment_count", new Document("$gte", 1))),
+                new Document("$sort", new Document("avg_rating", -1).append("comment_count", -1)),
+                new Document("$limit", limit)
+        );
+        return getCollection("comments").aggregate(pipeline).into(new ArrayList<>());
+    }
 }

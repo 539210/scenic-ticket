@@ -114,3 +114,4 @@ mvn test -DintegrationTests=true
 - Day 02：MySQL/MongoDB 初始化脚本、DAO 基础结构、`UserDAO`。
 - Day 03：用户注册登录、权限判断、用户档案维护、分类/景点/订单 DAO、订单事务、景点详情与日志 MongoDB DAO。
 - Day 04：行为日志模块、评论管理、MongoDB 聚合管道、统计服务初版。
+- Day 05：推荐功能、跨数据库联查服务、推荐结果 DTO 和跨库详情 DTO。

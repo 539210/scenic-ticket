@@ -80,6 +80,28 @@ public class LogDAO extends MongoBaseDAO {
         return getCollection("action_logs").aggregate(pipeline).into(new ArrayList<>());
     }
 
+    public List<Document> aggregateUserItemScores(long userId, int limit) {
+        List<Bson> pipeline = List.of(
+                new Document("$match", new Document("user_id", userId).append("item_id", new Document("$gt", 0))),
+                new Document("$group", new Document("_id", "$item_id")
+                        .append("view_count", new Document("$sum", new Document("$cond", List.of(
+                                new Document("$eq", List.of("$action_type", "VIEW")), 1, 0))))
+                        .append("comment_count", new Document("$sum", new Document("$cond", List.of(
+                                new Document("$eq", List.of("$action_type", "COMMENT")), 1, 0))))
+                        .append("order_count", new Document("$sum", new Document("$cond", List.of(
+                                new Document("$eq", List.of("$action_type", "ORDER")), 1, 0))))
+                        .append("latest_action_time", new Document("$max", "$created_at"))),
+                new Document("$addFields", new Document("interest_score", new Document("$add", List.of(
+                        "$view_count",
+                        new Document("$multiply", List.of("$comment_count", 3)),
+                        new Document("$multiply", List.of("$order_count", 5))
+                )))),
+                new Document("$sort", new Document("interest_score", -1).append("latest_action_time", -1)),
+                new Document("$limit", limit)
+        );
+        return getCollection("action_logs").aggregate(pipeline).into(new ArrayList<>());
+    }
+
     public List<Document> aggregateActionTypeSummary(Date startTime, Date endTime) {
         List<Bson> pipeline = List.of(
                 new Document("$match", withDateRange(new Document(), "created_at", startTime, endTime)),
