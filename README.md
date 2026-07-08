@@ -99,7 +99,7 @@ Day 01 初始提交信息：
 
 ## 运行说明
 
-当前已完成项目骨架、数据库脚本、DAO 基础类、用户模块、核心业务模块、订单事务、MongoDB 日志/详情 DAO、推荐与跨库联查、统计报表与系统审计模块、性能优化和 Swing 前端页面。安装并配置 Maven 后，可使用 Maven 编译和测试：
+当前已完成项目骨架、数据库脚本、DAO 基础类、用户模块、核心业务模块、订单事务、MongoDB 日志/详情 DAO、推荐与跨库联查、统计报表与系统审计模块、性能优化、Swing 前端页面，以及 Day 08 单元测试、事务回滚测试和压力测试。安装并配置 Maven 后，可使用 Maven 编译和测试：
 
 ```text
 mvn test
@@ -108,7 +108,7 @@ mvn test
 启动 Swing 应用：
 
 ```text
-mvn exec:java -Dexec.mainClass=com.scenicticket.Main
+.\start-system.cmd
 ```
 
 Swing 前端当前包含：首页、登录注册、个人档案、景点浏览、我的订单、后台管理、推荐、统计报表、系统审计。
@@ -117,6 +117,12 @@ Swing 前端当前包含：首页、登录注册、个人档案、景点浏览�
 
 ```text
 mvn test -DintegrationTests=true
+```
+
+Day 08 压力测试默认跳过；需要执行 10000 条日志 + 50 并发测试时，可显式开启：
+
+```text
+mvn test -DstressTests=true
 ```
 
 ## 当前进度
@@ -128,4 +134,5 @@ mvn test -DintegrationTests=true
 - Day 05：推荐功能、跨数据库联查服务、推荐结果 DTO 和跨库详情 DTO。
 - Day 06：数据统计报表、MySQL 月度订单存储过程调用、MongoDB 系统操作审计聚合。
 - Day 07：索引与 SQL 优化、批量日志写入、输入安全校验、Swing 系统集成入口、性能优化报告和安全检查清单。
+- Day 08：补充 JUnit 单元测试、订单事务回滚测试、批量日志压力测试和测试报告。
 - Swing 前端：补齐可演示页面，覆盖登录注册、景点浏览、订单、评论、后台管理、推荐、统计和审计。

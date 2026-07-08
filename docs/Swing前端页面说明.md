@@ -39,6 +39,20 @@ src/main/java/com/scenicticket/ui/AppFrame.java
 
 ## 运行方式
 
+推荐在项目根目录直接运行：
+
+```powershell
+.\start-system.cmd
+```
+
+如果数据库已经启动，也可以只启动 Swing 前端：
+
+```powershell
+.\start-app.cmd
+```
+
+手动 Maven 启动方式：
+
 ```powershell
 $env:JAVA_HOME='D:\zulu21.44.17-ca-jdk21.0.8-win_x64\zulu21.44.17-ca-jdk21.0.8-win_x64'
 $env:Path="$env:JAVA_HOME\bin;$env:Path"

@@ -6,6 +6,7 @@ import org.bson.Document;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 public class BatchLogService {
     private static final int DEFAULT_BATCH_SIZE = 500;
@@ -42,10 +43,16 @@ public class BatchLogService {
         if (logs == null || logs.isEmpty()) {
             return 0;
         }
+        List<Document> preparedLogs = logs.stream()
+                .filter(Objects::nonNull)
+                .toList();
+        if (preparedLogs.isEmpty()) {
+            return 0;
+        }
         int imported = 0;
-        for (int start = 0; start < logs.size(); start += batchSize) {
-            int end = Math.min(start + batchSize, logs.size());
-            List<Document> batch = new ArrayList<>(logs.subList(start, end));
+        for (int start = 0; start < preparedLogs.size(); start += batchSize) {
+            int end = Math.min(start + batchSize, preparedLogs.size());
+            List<Document> batch = new ArrayList<>(preparedLogs.subList(start, end));
             writer.accept(batch);
             imported += batch.size();
         }

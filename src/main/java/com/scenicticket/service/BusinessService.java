@@ -12,6 +12,7 @@ import com.scenicticket.exception.DBException;
 import com.scenicticket.model.Category;
 import com.scenicticket.model.Item;
 import com.scenicticket.model.Order;
+import com.scenicticket.util.ConnectionProvider;
 import com.scenicticket.util.MySQLDBUtil;
 import com.scenicticket.util.SecurityUtil;
 import org.bson.Document;
@@ -28,6 +29,7 @@ public class BusinessService {
     private final DetailDAO detailDAO;
     private final LogDAO logDAO;
     private final CommentDAO commentDAO;
+    private final ConnectionProvider connectionProvider;
 
     public BusinessService() {
         this(new CategoryDAO(), new ItemDAO(), new OrderDAO(), new DetailDAO(), new LogDAO(), new CommentDAO());
@@ -35,12 +37,18 @@ public class BusinessService {
 
     public BusinessService(CategoryDAO categoryDAO, ItemDAO itemDAO, OrderDAO orderDAO, DetailDAO detailDAO,
                            LogDAO logDAO, CommentDAO commentDAO) {
+        this(categoryDAO, itemDAO, orderDAO, detailDAO, logDAO, commentDAO, MySQLDBUtil::getConnection);
+    }
+
+    public BusinessService(CategoryDAO categoryDAO, ItemDAO itemDAO, OrderDAO orderDAO, DetailDAO detailDAO,
+                           LogDAO logDAO, CommentDAO commentDAO, ConnectionProvider connectionProvider) {
         this.categoryDAO = categoryDAO;
         this.itemDAO = itemDAO;
         this.orderDAO = orderDAO;
         this.detailDAO = detailDAO;
         this.logDAO = logDAO;
         this.commentDAO = commentDAO;
+        this.connectionProvider = connectionProvider;
     }
 
     public long createCategory(String name, Long parentId) {
@@ -103,7 +111,7 @@ public class BusinessService {
         if (amount == null || amount.compareTo(BigDecimal.ZERO) < 0) {
             throw new BusinessException("Order amount must be non-negative.");
         }
-        try (Connection connection = MySQLDBUtil.getConnection()) {
+        try (Connection connection = connectionProvider.getConnection()) {
             try {
                 connection.setAutoCommit(false);
                 Order order = new Order();
