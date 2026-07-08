@@ -615,20 +615,20 @@ public class AppFrame extends JFrame {
         ), reports -> reportArea.setText(formatMonthlyReports(reports))));
 
         hotButton.addActionListener(event -> runTask("热门排行", () -> statisticsService.getHotItemRanking(null, null, 10),
-                documents -> reportArea.setText(formatDocuments(documents))));
+                documents -> reportArea.setText(formatHotItems(documents))));
 
         userButton.addActionListener(event -> runTask("用户报告", () -> statisticsService.getUserReport(
                 userIdField.getText().isBlank() ? requireCurrentUserId() : parseRequiredLong(userIdField.getText(), "用户ID"),
                 null,
                 null
-        ), document -> reportArea.setText(documentToText(document))));
+        ), document -> reportArea.setText(formatUserReport(document))));
 
         dashboardButton.addActionListener(event -> runTask("仪表盘汇总", () -> statisticsService.buildDashboardReport(
                 null, null, parseRequiredInt(yearField.getText(), "年份"), parseRequiredInt(monthField.getText(), "月份")
         ), dto -> reportArea.setText(new StringBuilder()
-                .append("热门景点：").append(System.lineSeparator()).append(formatDocuments(dto.getHotItems()))
-                .append(System.lineSeparator()).append("行为类型：").append(System.lineSeparator()).append(formatDocuments(dto.getActionTypeSummary()))
-                .append(System.lineSeparator()).append("热门标签：").append(System.lineSeparator()).append(formatDocuments(dto.getHotTags()))
+                .append("热门景点：").append(System.lineSeparator()).append(formatHotItems(dto.getHotItems()))
+                .append(System.lineSeparator()).append("行为类型：").append(System.lineSeparator()).append(formatActionTypeSummary(dto.getActionTypeSummary()))
+                .append(System.lineSeparator()).append("热门标签：").append(System.lineSeparator()).append(formatHotTags(dto.getHotTags()))
                 .append(System.lineSeparator()).append("系统审计：").append(System.lineSeparator()).append(formatAuditSummary(dto.getSystemAuditSummary()))
                 .append(System.lineSeparator()).append("月度订单：").append(System.lineSeparator()).append(formatMonthlyReports(dto.getMonthlyOrderReport()))
                 .toString())));
@@ -968,7 +968,7 @@ public class AppFrame extends JFrame {
                     item == null ? "" : item.getTitle(),
                     recommendation.getScore(),
                     recommendation.getReason(),
-                    documentToText(recommendation.getRatingSummary())
+                    formatRatingSummary(recommendation.getRatingSummary())
             });
         }
     }
@@ -980,10 +980,10 @@ public class AppFrame extends JFrame {
                 .append(" / 分类 ").append(dto.getItem().getCategoryId())
                 .append(" / 状态 ").append(formatItemStatus(dto.getItem().getStatus()))
                 .append(System.lineSeparator());
-        builder.append("详情：").append(documentToText(dto.getDetail())).append(System.lineSeparator());
-        builder.append("评分：").append(documentToText(dto.getRatingSummary())).append(System.lineSeparator());
-        builder.append("评论：").append(System.lineSeparator()).append(formatDocuments(dto.getComments()));
-        builder.append("行为摘要：").append(System.lineSeparator()).append(formatDocuments(dto.getBehaviorSummary()));
+        builder.append("详情：").append(formatItemDetailDocument(dto.getDetail())).append(System.lineSeparator());
+        builder.append("评分：").append(formatRatingSummary(dto.getRatingSummary())).append(System.lineSeparator());
+        builder.append("评论：").append(System.lineSeparator()).append(formatComments(dto.getComments()));
+        builder.append("行为摘要：").append(System.lineSeparator()).append(formatBehaviorSummary(dto.getBehaviorSummary()));
         return builder.toString();
     }
 
@@ -1004,6 +1004,169 @@ public class AppFrame extends JFrame {
             builder.append(documentToText(document)).append(System.lineSeparator());
         }
         return builder.isEmpty() ? "暂无数据" : builder.toString();
+    }
+
+    private String formatItemDetailDocument(Document detail) {
+        if (detail == null || detail.isEmpty()) {
+            return "暂无详情";
+        }
+        Document metadata = detail.get("metadata", Document.class);
+        StringBuilder builder = new StringBuilder();
+        builder.append(valueText(detail.get("description")));
+        if (metadata != null && !metadata.isEmpty()) {
+            builder.append(System.lineSeparator())
+                    .append("开放时间：").append(valueText(metadata.get("open_time")))
+                    .append("  地址：").append(valueText(metadata.get("address")));
+        }
+        Object images = detail.get("images");
+        if (images instanceof List<?> imageList && !imageList.isEmpty()) {
+            builder.append(System.lineSeparator()).append("图片数量：").append(imageList.size());
+        }
+        return builder.toString();
+    }
+
+    private String formatRatingSummary(Document document) {
+        if (document == null || document.isEmpty()) {
+            return "暂无评分";
+        }
+        return "评论数：" + numberText(document.get("comment_count"))
+                + "，平均分：" + decimalText(document.get("avg_rating"))
+                + "，最高分：" + numberText(document.get("max_rating"))
+                + "，最低分：" + numberText(document.get("min_rating"));
+    }
+
+    private String formatComments(List<Document> documents) {
+        if (documents == null || documents.isEmpty()) {
+            return "暂无评论";
+        }
+        StringBuilder builder = new StringBuilder();
+        int index = 1;
+        for (Document document : documents) {
+            builder.append(index).append(". 用户ID：").append(valueText(document.get("user_id")))
+                    .append("  评分：").append(numberText(document.get("rating")))
+                    .append("  时间：").append(formatDate(document.get("created_at")))
+                    .append(System.lineSeparator())
+                    .append("   内容：").append(valueText(document.get("content")))
+                    .append(System.lineSeparator())
+                    .append("   标签：").append(listText(document.get("tags")))
+                    .append(System.lineSeparator());
+            index += 1;
+        }
+        return builder.toString();
+    }
+
+    private String formatBehaviorSummary(List<Document> documents) {
+        if (documents == null || documents.isEmpty()) {
+            return "暂无行为记录";
+        }
+        StringBuilder builder = new StringBuilder();
+        for (Document document : documents) {
+            builder.append("行为：").append(actionTypeName(String.valueOf(document.get("_id"))))
+                    .append("  次数：").append(numberText(document.get("action_count")))
+                    .append("  总停留：").append(numberText(document.get("total_duration"))).append(" 秒")
+                    .append("  平均停留：").append(decimalText(document.get("avg_duration"))).append(" 秒")
+                    .append("  最近时间：").append(formatDate(document.get("latest_action_time")))
+                    .append(System.lineSeparator());
+        }
+        return builder.toString();
+    }
+
+    private String formatHotItems(List<Document> documents) {
+        if (documents == null || documents.isEmpty()) {
+            return "暂无热门景点数据";
+        }
+        StringBuilder builder = new StringBuilder();
+        int index = 1;
+        for (Document document : documents) {
+            builder.append(index).append(". 景点ID：").append(valueText(document.get("_id")))
+                    .append("  总操作：").append(numberText(document.get("total_actions")))
+                    .append("  浏览：").append(numberText(document.get("view_count")))
+                    .append("  下单：").append(numberText(document.get("order_count")))
+                    .append("  平均停留：").append(decimalText(document.get("avg_duration"))).append(" 秒")
+                    .append(System.lineSeparator());
+            index += 1;
+        }
+        return builder.toString();
+    }
+
+    private String formatActionTypeSummary(List<Document> documents) {
+        if (documents == null || documents.isEmpty()) {
+            return "暂无行为类型数据";
+        }
+        StringBuilder builder = new StringBuilder();
+        for (Document document : documents) {
+            builder.append("行为：").append(actionTypeName(document.getString("action_type")))
+                    .append("  次数：").append(numberText(document.get("action_count")))
+                    .append("  用户数：").append(numberText(document.get("user_count")))
+                    .append("  最近时间：").append(formatDate(document.get("latest_action_time")))
+                    .append(System.lineSeparator());
+        }
+        return builder.toString();
+    }
+
+    private String formatHotTags(List<Document> documents) {
+        if (documents == null || documents.isEmpty()) {
+            return "暂无热门标签数据";
+        }
+        StringBuilder builder = new StringBuilder();
+        int index = 1;
+        for (Document document : documents) {
+            builder.append(index).append(". 标签：").append(valueText(document.get("_id")))
+                    .append("  出现次数：").append(numberText(document.get("tag_count")))
+                    .append(System.lineSeparator());
+            index += 1;
+        }
+        return builder.toString();
+    }
+
+    private String formatUserReport(Document document) {
+        if (document == null || document.isEmpty()) {
+            return "暂无用户报告";
+        }
+        StringBuilder builder = new StringBuilder();
+        builder.append("用户报告").append(System.lineSeparator()).append(System.lineSeparator())
+                .append("用户ID：").append(valueText(document.get("user_id"))).append(System.lineSeparator())
+                .append("总操作次数：").append(numberText(document.get("action_count"))).append(System.lineSeparator())
+                .append("访问景点数：").append(numberText(document.get("visited_item_count"))).append(System.lineSeparator())
+                .append("浏览次数：").append(numberText(document.get("view_count"))).append(System.lineSeparator())
+                .append("搜索次数：").append(numberText(document.get("search_count"))).append(System.lineSeparator())
+                .append("评论次数：").append(numberText(document.get("comment_count"))).append(System.lineSeparator())
+                .append("下单次数：").append(numberText(document.get("order_count"))).append(System.lineSeparator())
+                .append("总停留时长：").append(numberText(document.get("total_duration"))).append(" 秒").append(System.lineSeparator())
+                .append("平均停留时长：").append(decimalText(document.get("avg_duration"))).append(" 秒").append(System.lineSeparator())
+                .append("首次操作：").append(formatDate(document.get("first_action_time"))).append(System.lineSeparator())
+                .append("最近操作：").append(formatDate(document.get("latest_action_time"))).append(System.lineSeparator())
+                .append(System.lineSeparator())
+                .append("行为摘要：").append(System.lineSeparator())
+                .append(formatBehaviorSummary(readDocumentList(document.get("behavior_summary"))))
+                .append(System.lineSeparator())
+                .append("最近评论：").append(System.lineSeparator())
+                .append(formatComments(readDocumentList(document.get("recent_comments"))))
+                .append(System.lineSeparator())
+                .append("最近操作：").append(System.lineSeparator())
+                .append(formatRecentActions(readDocumentList(document.get("recent_actions"))));
+        return builder.toString();
+    }
+
+    private String formatRecentActions(List<Document> documents) {
+        if (documents == null || documents.isEmpty()) {
+            return "暂无最近操作";
+        }
+        StringBuilder builder = new StringBuilder();
+        int index = 1;
+        for (Document document : documents) {
+            Document clientInfo = document.get("client_info", Document.class);
+            builder.append(index).append(". 时间：").append(formatDate(document.get("created_at")))
+                    .append("  行为：").append(actionTypeName(document.getString("action_type")))
+                    .append("  景点ID：").append(valueText(document.get("item_id")))
+                    .append("  停留：").append(numberText(document.get("duration_seconds"))).append(" 秒");
+            if (clientInfo != null) {
+                builder.append("  IP：").append(valueText(clientInfo.get("ip")));
+            }
+            builder.append(System.lineSeparator());
+            index += 1;
+        }
+        return builder.toString();
     }
 
     private String formatAuditLogs(List<Document> documents) {
@@ -1084,7 +1247,14 @@ public class AppFrame extends JFrame {
     }
 
     private String documentToText(Document document) {
-        return document == null ? "{}" : document.toJson();
+        if (document == null || document.isEmpty()) {
+            return "暂无数据";
+        }
+        StringBuilder builder = new StringBuilder();
+        for (String key : document.keySet()) {
+            builder.append(fieldName(key)).append("：").append(genericValueText(document.get(key))).append(System.lineSeparator());
+        }
+        return builder.toString().trim();
     }
 
     private String formatDate(Object value) {
@@ -1100,6 +1270,58 @@ public class AppFrame extends JFrame {
 
     private String numberText(Object value) {
         return value instanceof Number number ? String.valueOf(number.longValue()) : valueText(value);
+    }
+
+    private String decimalText(Object value) {
+        if (value instanceof Number number) {
+            return String.format("%.2f", number.doubleValue());
+        }
+        return valueText(value);
+    }
+
+    private String listText(Object value) {
+        if (value instanceof List<?> values && !values.isEmpty()) {
+            return values.stream()
+                    .map(String::valueOf)
+                    .reduce((left, right) -> left + "、" + right)
+                    .orElse("-");
+        }
+        return "-";
+    }
+
+    private List<Document> readDocumentList(Object value) {
+        if (!(value instanceof List<?> values)) {
+            return List.of();
+        }
+        List<Document> documents = new ArrayList<>();
+        for (Object item : values) {
+            if (item instanceof Document document) {
+                documents.add(document);
+            }
+        }
+        return documents;
+    }
+
+    private String genericValueText(Object value) {
+        if (value instanceof Document document) {
+            return documentToText(document).replace(System.lineSeparator(), "；");
+        }
+        if (value instanceof List<?> values) {
+            if (values.isEmpty()) {
+                return "-";
+            }
+            return values.stream()
+                    .map(this::genericValueText)
+                    .reduce((left, right) -> left + "、" + right)
+                    .orElse("-");
+        }
+        if (value instanceof java.util.Date) {
+            return formatDate(value);
+        }
+        if (value instanceof Number number && !(value instanceof Integer) && !(value instanceof Long)) {
+            return decimalText(number);
+        }
+        return valueText(value);
     }
 
     private String logTypeListText(Object value) {
@@ -1125,6 +1347,61 @@ public class AppFrame extends JFrame {
             case "ITEM_UPDATE" -> "景点更新";
             case "REPORT_VIEW" -> "查看报表";
             default -> logType;
+        };
+    }
+
+    private String actionTypeName(String actionType) {
+        if (actionType == null || actionType.isBlank()) {
+            return "-";
+        }
+        return switch (actionType) {
+            case "VIEW" -> "浏览景点";
+            case "SEARCH" -> "搜索";
+            case "ORDER" -> "下单";
+            case "COMMENT" -> "评论";
+            default -> actionType;
+        };
+    }
+
+    private String fieldName(String key) {
+        return switch (key) {
+            case "_id" -> "编号";
+            case "item_id" -> "景点ID";
+            case "user_id" -> "用户ID";
+            case "action_type" -> "行为类型";
+            case "action_count" -> "操作次数";
+            case "total_actions" -> "总操作次数";
+            case "view_count" -> "浏览次数";
+            case "search_count" -> "搜索次数";
+            case "comment_count" -> "评论次数";
+            case "order_count" -> "下单次数";
+            case "duration_seconds" -> "停留时长";
+            case "total_duration" -> "总停留时长";
+            case "avg_duration" -> "平均停留时长";
+            case "latest_action_time" -> "最近操作时间";
+            case "first_action_time" -> "首次操作时间";
+            case "created_at" -> "创建时间";
+            case "updated_at" -> "更新时间";
+            case "content" -> "内容";
+            case "rating" -> "评分";
+            case "tags" -> "标签";
+            case "description" -> "详情";
+            case "images" -> "图片";
+            case "metadata" -> "扩展信息";
+            case "avg_rating" -> "平均评分";
+            case "max_rating" -> "最高评分";
+            case "min_rating" -> "最低评分";
+            case "visited_item_count" -> "访问景点数";
+            case "behavior_summary" -> "行为摘要";
+            case "recent_comments" -> "最近评论";
+            case "recent_actions" -> "最近操作";
+            case "client_info" -> "客户端信息";
+            case "client_type" -> "客户端类型";
+            case "ip" -> "IP地址";
+            case "open_time" -> "开放时间";
+            case "address" -> "地址";
+            case "language" -> "语言";
+            default -> key;
         };
     }
 
