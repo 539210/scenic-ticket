@@ -173,15 +173,15 @@ public class AppFrame extends JFrame {
     }
 
     private Component createPages() {
-        tabs.addTab("首页", createHomePanel());
-        tabs.addTab("个人档案", createProfilePanel());
-        tabs.addTab("景点浏览", createItemPanel());
-        tabs.addTab("我的订单", createOrderPanel());
-        tabs.addTab("推荐", createRecommendPanel());
-        tabs.addTab("统计报表", createReportPanel());
+        tabs.addTab("首页", scrollPage(createHomePanel()));
+        tabs.addTab("个人档案", scrollPage(createProfilePanel()));
+        tabs.addTab("景点浏览", scrollPage(createItemPanel()));
+        tabs.addTab("我的订单", scrollPage(createOrderPanel()));
+        tabs.addTab("推荐", scrollPage(createRecommendPanel()));
+        tabs.addTab("统计报表", scrollPage(createReportPanel()));
         if (isCurrentAdmin()) {
-            tabs.addTab("后台管理", createManagePanel());
-            tabs.addTab("系统审计", createAuditPanel());
+            tabs.addTab("后台管理", scrollPage(createManagePanel()));
+            tabs.addTab("系统审计", scrollPage(createAuditPanel()));
         }
         tabs.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
         tabs.setBackground(BACKGROUND);
@@ -356,31 +356,46 @@ public class AppFrame extends JFrame {
         JTextField itemIdField = new JTextField(8);
         JTextField orderAmountField = new JTextField("80.00", 8);
         JTextField ratingField = new JTextField("5", 4);
-        JTextField commentField = new JTextField(28);
-        JTextArea detailArea = createTextArea(10, 60);
+        JTextField commentField = new JTextField(24);
+        JTextArea detailArea = createTextArea(14, 70);
         DefaultTableModel tableModel = tableModel("ID", "标题", "分类", "状态", "创建时间", "更新时间");
         JTable table = createTable(tableModel);
+        detailArea.setText("先点击“查询全部”或输入关键词查询景点。选中一行后，可以查看详情、查看评论、创建订单或发表评论。");
 
-        JPanel toolbar = toolbar();
+        JPanel searchToolbar = toolbar();
         JButton searchButton = new JButton("查询景点");
+        JButton allButton = new JButton("查询全部");
+        JButton clearButton = new JButton("清空条件");
+        searchToolbar.add(new JLabel("关键词"));
+        searchToolbar.add(keywordField);
+        searchToolbar.add(new JLabel("分类ID（可不填）"));
+        searchToolbar.add(categoryField);
+        searchToolbar.add(searchButton);
+        searchToolbar.add(allButton);
+        searchToolbar.add(clearButton);
+
+        JPanel actionToolbar = toolbar();
         JButton detailButton = new JButton("查看详情");
+        JButton commentsButton = new JButton("查看评论");
         JButton orderButton = new JButton("创建订单");
         JButton commentButton = new JButton("发表评论");
-        toolbar.add(new JLabel("关键词"));
-        toolbar.add(keywordField);
-        toolbar.add(new JLabel("分类ID"));
-        toolbar.add(categoryField);
-        toolbar.add(searchButton);
-        toolbar.add(new JLabel("景点ID"));
-        toolbar.add(itemIdField);
-        toolbar.add(detailButton);
-        toolbar.add(new JLabel("金额"));
-        toolbar.add(orderAmountField);
-        toolbar.add(orderButton);
-        toolbar.add(new JLabel("评分"));
-        toolbar.add(ratingField);
-        toolbar.add(commentField);
-        toolbar.add(commentButton);
+        actionToolbar.add(new JLabel("景点ID（可点表格自动填写）"));
+        actionToolbar.add(itemIdField);
+        actionToolbar.add(detailButton);
+        actionToolbar.add(commentsButton);
+        actionToolbar.add(new JLabel("金额"));
+        actionToolbar.add(orderAmountField);
+        actionToolbar.add(orderButton);
+        actionToolbar.add(new JLabel("评分1-5"));
+        actionToolbar.add(ratingField);
+        actionToolbar.add(new JLabel("评论内容"));
+        actionToolbar.add(commentField);
+        actionToolbar.add(commentButton);
+
+        JPanel controls = new JPanel(new GridLayout(2, 1, 0, 8));
+        controls.setOpaque(false);
+        controls.add(wrapWithTitle("景点查询", searchToolbar));
+        controls.add(wrapWithTitle("购票与评论", actionToolbar));
 
         table.getSelectionModel().addListSelectionListener(event -> {
             int row = table.getSelectedRow();
@@ -390,9 +405,7 @@ public class AppFrame extends JFrame {
             }
         });
 
-        searchButton.addActionListener(event -> runTask("景点查询", () -> businessService.searchItems(
-                keywordField.getText(), parseOptionalLong(categoryField.getText()), 50, 0
-        ), items -> {
+        Consumer<List<Item>> fillItems = items -> {
             tableModel.setRowCount(0);
             for (Item item : items) {
                 tableModel.addRow(new Object[]{
@@ -400,34 +413,66 @@ public class AppFrame extends JFrame {
                         item.getCreatedAt(), item.getUpdatedAt()
                 });
             }
-            setStatus("查询到 " + items.size() + " 个景点");
-        }));
+            setStatus("查询到 " + items.size() + " 个景点。点击表格中的一行即可选择景点。");
+        };
+
+        searchButton.addActionListener(event -> runTask("景点查询", () -> businessService.searchItems(
+                keywordField.getText(), parseOptionalLong(categoryField.getText()), 50, 0
+        ), fillItems));
+
+        allButton.addActionListener(event -> {
+            keywordField.setText("");
+            categoryField.setText("");
+            runTask("查询全部景点", () -> businessService.searchItems(null, null, 50, 0), fillItems);
+        });
+
+        clearButton.addActionListener(event -> {
+            keywordField.setText("");
+            categoryField.setText("");
+            itemIdField.setText("");
+            commentField.setText("");
+            tableModel.setRowCount(0);
+            detailArea.setText("已清空条件。点击“查询全部”可以重新列出景点。");
+            setStatus("景点查询条件已清空");
+        });
 
         detailButton.addActionListener(event -> runTask("景点详情", () -> crossDatabaseQueryService.getItemDetail(
-                parseRequiredLong(itemIdField.getText(), "景点ID"), 8
+                selectedOrTypedItemId(table, itemIdField), 8
         ), dto -> detailArea.setText(formatItemDetail(dto))));
+
+        commentsButton.addActionListener(event -> runTask("查看评论", () -> crossDatabaseQueryService.getItemDetail(
+                selectedOrTypedItemId(table, itemIdField), 20
+        ), dto -> detailArea.setText(formatItemCommentsView(dto))));
 
         orderButton.addActionListener(event -> runTask("创建订单", () -> businessService.createOrder(
                 requireCurrentUserId(),
-                parseRequiredLong(itemIdField.getText(), "景点ID"),
+                selectedOrTypedItemId(table, itemIdField),
                 parseRequiredAmount(orderAmountField.getText(), "订单金额")
         ), orderId -> detailArea.setText("订单创建成功，订单ID：" + orderId)));
 
         commentButton.addActionListener(event -> runTask("发表评论", () -> {
+            String comment = commentField.getText().trim();
+            int rating = parseRequiredInt(ratingField.getText(), "评分");
+            if (rating < 1 || rating > 5) {
+                throw new IllegalArgumentException("评分必须是 1 到 5 之间的整数");
+            }
+            if (comment.isBlank()) {
+                throw new IllegalArgumentException("评论内容不能为空");
+            }
             behaviorLogService.addComment(
                     requireCurrentUserId(),
-                    parseRequiredLong(itemIdField.getText(), "景点ID"),
-                    commentField.getText(),
-                    parseRequiredInt(ratingField.getText(), "评分"),
+                    selectedOrTypedItemId(table, itemIdField),
+                    comment,
+                    rating,
                     List.of("Swing界面"),
                     "127.0.0.1"
             );
             return "评论提交成功";
         }, detailArea::setText));
 
-        JSplitPane splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, new JScrollPane(table), wrapWithTitle("景点详情", detailArea));
-        splitPane.setResizeWeight(0.62);
-        panel.add(toolbar, BorderLayout.NORTH);
+        JSplitPane splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, new JScrollPane(table), wrapWithTitle("景点详情与评论", detailArea));
+        splitPane.setResizeWeight(0.55);
+        panel.add(controls, BorderLayout.NORTH);
         panel.add(splitPane, BorderLayout.CENTER);
         return panel;
     }
@@ -441,15 +486,20 @@ public class AppFrame extends JFrame {
         JTable table = createTable(model);
 
         JPanel toolbar = toolbar();
-        JButton listButton = new JButton("查询订单");
+        JButton listButton = new JButton("查我的订单");
         JButton updateButton = new JButton("更新状态");
-        toolbar.add(new JLabel("用户ID"));
-        toolbar.add(userIdField);
+        if (isCurrentAdmin()) {
+            toolbar.add(new JLabel("用户ID（可不填）"));
+            toolbar.add(userIdField);
+            listButton.setText("查询订单");
+        }
         toolbar.add(listButton);
-        toolbar.add(new JLabel("订单ID"));
-        toolbar.add(orderIdField);
-        toolbar.add(statusBox);
-        toolbar.add(updateButton);
+        if (isCurrentAdmin()) {
+            toolbar.add(new JLabel("订单ID"));
+            toolbar.add(orderIdField);
+            toolbar.add(statusBox);
+            toolbar.add(updateButton);
+        }
 
         table.getSelectionModel().addListSelectionListener(event -> {
             int row = table.getSelectedRow();
@@ -459,7 +509,9 @@ public class AppFrame extends JFrame {
         });
 
         listButton.addActionListener(event -> runTask("订单查询", () -> businessService.listUserOrders(
-                userIdField.getText().isBlank() ? requireCurrentUserId() : parseRequiredLong(userIdField.getText(), "用户ID"),
+                isCurrentAdmin() && !userIdField.getText().isBlank()
+                        ? parseRequiredLong(userIdField.getText(), "用户ID")
+                        : requireCurrentUserId(),
                 50,
                 0
         ), orders -> {
@@ -562,17 +614,22 @@ public class AppFrame extends JFrame {
         JTable table = createTable(tableModel);
 
         JPanel toolbar = toolbar();
-        JButton personalButton = new JButton("个性化推荐");
+        JButton personalButton = new JButton("给我推荐");
         JButton hotButton = new JButton("热门推荐");
         JButton ratedButton = new JButton("高评分推荐");
-        toolbar.add(new JLabel("用户ID"));
-        toolbar.add(userIdField);
+        if (isCurrentAdmin()) {
+            toolbar.add(new JLabel("用户ID（可不填）"));
+            toolbar.add(userIdField);
+            personalButton.setText("个性化推荐");
+        }
         toolbar.add(personalButton);
         toolbar.add(hotButton);
         toolbar.add(ratedButton);
 
         personalButton.addActionListener(event -> runTask("个性化推荐", () -> recommendService.recommendForUser(
-                userIdField.getText().isBlank() ? requireCurrentUserId() : parseRequiredLong(userIdField.getText(), "用户ID"), 10
+                isCurrentAdmin() && !userIdField.getText().isBlank()
+                        ? parseRequiredLong(userIdField.getText(), "用户ID")
+                        : requireCurrentUserId(), 10
         ), recommendations -> fillRecommendationTable(tableModel, recommendations)));
 
         hotButton.addActionListener(event -> runTask("热门推荐", () -> recommendService.recommendHotItems(null, null, 10),
@@ -596,7 +653,7 @@ public class AppFrame extends JFrame {
         JPanel toolbar = toolbar();
         JButton monthlyButton = new JButton("月度订单");
         JButton hotButton = new JButton("热门排行");
-        JButton userButton = new JButton("用户报告");
+        JButton userButton = new JButton(isCurrentAdmin() ? "用户报告" : "我的报告");
         JButton dashboardButton = new JButton("仪表盘汇总");
         toolbar.add(new JLabel("年份"));
         toolbar.add(yearField);
@@ -604,10 +661,14 @@ public class AppFrame extends JFrame {
         toolbar.add(monthField);
         toolbar.add(monthlyButton);
         toolbar.add(hotButton);
-        toolbar.add(new JLabel("用户ID"));
-        toolbar.add(userIdField);
+        if (isCurrentAdmin()) {
+            toolbar.add(new JLabel("用户ID（可不填）"));
+            toolbar.add(userIdField);
+        }
         toolbar.add(userButton);
-        toolbar.add(dashboardButton);
+        if (isCurrentAdmin()) {
+            toolbar.add(dashboardButton);
+        }
 
         monthlyButton.addActionListener(event -> runTask("月度订单报表", () -> statisticsService.getMonthlyOrderReport(
                 parseRequiredInt(yearField.getText(), "年份"),
@@ -618,7 +679,9 @@ public class AppFrame extends JFrame {
                 documents -> reportArea.setText(formatHotItems(documents))));
 
         userButton.addActionListener(event -> runTask("用户报告", () -> statisticsService.getUserReport(
-                userIdField.getText().isBlank() ? requireCurrentUserId() : parseRequiredLong(userIdField.getText(), "用户ID"),
+                isCurrentAdmin() && !userIdField.getText().isBlank()
+                        ? parseRequiredLong(userIdField.getText(), "用户ID")
+                        : requireCurrentUserId(),
                 null,
                 null
         ), document -> reportArea.setText(formatUserReport(document))));
@@ -738,6 +801,14 @@ public class AppFrame extends JFrame {
         return panel;
     }
 
+    private JScrollPane scrollPage(Component content) {
+        JScrollPane scrollPane = new JScrollPane(content);
+        scrollPane.setBorder(BorderFactory.createEmptyBorder());
+        scrollPane.getVerticalScrollBar().setUnitIncrement(18);
+        scrollPane.getHorizontalScrollBar().setUnitIncrement(18);
+        return scrollPane;
+    }
+
     private JPanel formPanel(String title) {
         JPanel outer = new JPanel(new BorderLayout());
         outer.setBackground(Color.WHITE);
@@ -816,6 +887,17 @@ public class AppFrame extends JFrame {
         table.setAutoCreateRowSorter(true);
         table.getTableHeader().setReorderingAllowed(false);
         return table;
+    }
+
+    private long selectedOrTypedItemId(JTable table, JTextField itemIdField) {
+        if (itemIdField.getText() != null && !itemIdField.getText().isBlank()) {
+            return parseRequiredLong(itemIdField.getText(), "景点ID");
+        }
+        int row = table.getSelectedRow();
+        if (row >= 0) {
+            return parseRequiredLong(String.valueOf(table.getValueAt(row, 0)), "景点ID");
+        }
+        throw new IllegalArgumentException("请先在表格中选择一个景点，或手动填写景点ID");
     }
 
     private DefaultTableModel tableModel(String... columns) {
@@ -984,6 +1066,19 @@ public class AppFrame extends JFrame {
         builder.append("评分：").append(formatRatingSummary(dto.getRatingSummary())).append(System.lineSeparator());
         builder.append("评论：").append(System.lineSeparator()).append(formatComments(dto.getComments()));
         builder.append("行为摘要：").append(System.lineSeparator()).append(formatBehaviorSummary(dto.getBehaviorSummary()));
+        return builder.toString();
+    }
+
+    private String formatItemCommentsView(CrossDatabaseItemDTO dto) {
+        StringBuilder builder = new StringBuilder();
+        builder.append("评论查看").append(System.lineSeparator());
+        builder.append("景点：").append(dto.getItem().getTitle())
+                .append("（ID ").append(dto.getItem().getItemId()).append("）")
+                .append(System.lineSeparator());
+        builder.append("评分概览：").append(formatRatingSummary(dto.getRatingSummary()))
+                .append(System.lineSeparator());
+        builder.append("评论列表：").append(System.lineSeparator())
+                .append(formatComments(dto.getComments()));
         return builder.toString();
     }
 
@@ -1445,7 +1540,11 @@ public class AppFrame extends JFrame {
         if (value == null || value.isBlank()) {
             return null;
         }
-        return Long.parseLong(value.trim());
+        try {
+            return Long.parseLong(value.trim());
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException("ID 必须是数字，请检查输入内容", e);
+        }
     }
 
     private long parseRequiredLong(String value, String fieldName) {
