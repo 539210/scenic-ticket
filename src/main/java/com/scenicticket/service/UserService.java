@@ -29,12 +29,12 @@ public class UserService {
     }
 
     public long register(String username, String password, String email, String phone) {
-        validateRegisterInput(username, password, email);
-        String safeUsername = SecurityUtil.requireText(username, "Username", 50);
+        validateRegisterInput(username, password, email, phone);
+        String safeUsername = SecurityUtil.requireText(username, "用户名", 50);
         String safeEmail = SecurityUtil.normalizeEmail(email);
-        String safePhone = SecurityUtil.normalizeText(phone, 20);
+        String safePhone = SecurityUtil.normalizePhone(phone);
         if (userDAO.findByUsername(safeUsername).isPresent()) {
-            throw new BusinessException("Username already exists.");
+            throw new BusinessException("用户名已存在");
         }
         User user = new User();
         user.setUsername(safeUsername);
@@ -72,7 +72,7 @@ public class UserService {
 
     public boolean updateProfile(Profile profile) {
         if (profile.getUserId() == null) {
-            throw new BusinessException("Profile user id is required.");
+            throw new BusinessException("用户ID不能为空");
         }
         profile.setRealName(SecurityUtil.normalizeText(profile.getRealName(), 50));
         profile.setIdCard(SecurityUtil.normalizeText(profile.getIdCard(), 20));
@@ -85,16 +85,17 @@ public class UserService {
         return user != null && "ADMIN".equals(user.getRole()) && user.getStatus() != null && user.getStatus() == 1;
     }
 
-    private void validateRegisterInput(String username, String password, String email) {
+    private void validateRegisterInput(String username, String password, String email, String phone) {
         if (username == null || username.isBlank()) {
-            throw new BusinessException("Username is required.");
+            throw new BusinessException("用户名不能为空");
         }
         if (password == null || password.length() < 6) {
-            throw new BusinessException("Password length must be at least 6.");
+            throw new BusinessException("密码长度不能少于 6 位");
         }
         if (password.length() > 72) {
-            throw new BusinessException("Password length must not exceed 72 characters.");
+            throw new BusinessException("密码长度不能超过 72 位");
         }
         SecurityUtil.normalizeEmail(email);
+        SecurityUtil.normalizePhone(phone);
     }
 }

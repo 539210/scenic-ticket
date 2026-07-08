@@ -25,6 +25,13 @@ class SecurityUtilTest {
     }
 
     @Test
+    void normalizePhoneRequiresValidMainlandMobileNumber() {
+        assertEquals("13900000000", SecurityUtil.normalizePhone(" 13900000000 "));
+        assertThrows(BusinessException.class, () -> SecurityUtil.normalizePhone("12345"));
+        assertThrows(BusinessException.class, () -> SecurityUtil.normalizePhone(""));
+    }
+
+    @Test
     void normalizeIpFallsBackForMissingOrInvalidIp() {
         assertEquals("127.0.0.1", SecurityUtil.normalizeIp(null));
         assertEquals("127.0.0.1", SecurityUtil.normalizeIp("invalid ip"));

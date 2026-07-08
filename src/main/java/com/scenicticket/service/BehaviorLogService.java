@@ -44,36 +44,36 @@ public class BehaviorLogService {
     public void addComment(long userId, long itemId, String content, int rating, List<String> tags, String ip) {
         validateIds(userId, itemId);
         if (content == null || content.isBlank()) {
-            throw new BusinessException("Comment content is required.");
+            throw new BusinessException("评论内容不能为空");
         }
         if (rating < 1 || rating > 5) {
-            throw new BusinessException("Rating must be between 1 and 5.");
+            throw new BusinessException("评分必须在 1 到 5 之间");
         }
-        commentDAO.addComment(userId, itemId, SecurityUtil.requireText(content, "Comment content", 1000), rating, tags);
+        commentDAO.addComment(userId, itemId, SecurityUtil.requireText(content, "评论内容", 1000), rating, tags);
         logDAO.recordAction(userId, itemId, "COMMENT", 0, "SWING", SecurityUtil.normalizeIp(ip));
     }
 
     public List<Document> queryRecentLogs(BehaviorLogQuery query) {
         int limit = normalizeLimit(query == null ? 50 : query.getLimit());
         if (query == null || query.getUserId() == null) {
-            throw new BusinessException("User id is required for recent log query.");
+            throw new BusinessException("查询日志时用户ID不能为空");
         }
         return logDAO.findRecentByUserId(query.getUserId(), limit);
     }
 
     public List<Document> queryRecentComments(long itemId, int limit) {
         if (itemId <= 0) {
-            throw new BusinessException("Item id must be positive.");
+            throw new BusinessException("景点ID必须大于 0");
         }
         return commentDAO.findByItemId(itemId, normalizeLimit(limit));
     }
 
     private void validateIds(long userId, long itemId) {
         if (userId <= 0) {
-            throw new BusinessException("User id must be positive.");
+            throw new BusinessException("用户ID必须大于 0");
         }
         if (itemId <= 0) {
-            throw new BusinessException("Item id must be positive.");
+            throw new BusinessException("景点ID必须大于 0");
         }
     }
 

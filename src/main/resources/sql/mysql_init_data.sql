@@ -1,7 +1,7 @@
 USE scenic_ticket;
 
 INSERT INTO users (user_id, username, password_hash, email, phone, role, status) VALUES
-(1, 'admin', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'admin@example.com', '13800000001', 'ADMIN', 1),
+(1, 'kongsc', '$2a$10$MR/69uuomrtndPeQl3LZ.uXNLHRS2QkThMDTLfLjf7LAarLY4HtOi', 'kongsc@example.com', '13800000001', 'ADMIN', 1),
 (2, 'user001', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'user001@example.com', '13800000002', 'USER', 1),
 (3, 'user002', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'user002@example.com', '13800000003', 'USER', 1),
 (4, 'user003', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'user003@example.com', '13800000004', 'USER', 1),
@@ -11,7 +11,13 @@ INSERT INTO users (user_id, username, password_hash, email, phone, role, status)
 (8, 'user007', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'user007@example.com', '13800000008', 'USER', 1),
 (9, 'user008', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'user008@example.com', '13800000009', 'USER', 1),
 (10, 'user009', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'user009@example.com', '13800000010', 'USER', 1)
-ON DUPLICATE KEY UPDATE username = VALUES(username);
+ON DUPLICATE KEY UPDATE
+    username = VALUES(username),
+    password_hash = VALUES(password_hash),
+    email = VALUES(email),
+    phone = VALUES(phone),
+    role = VALUES(role),
+    status = VALUES(status);
 
 INSERT INTO categories (category_id, name, parent_id) VALUES
 (1, '自然景观', NULL),
@@ -53,7 +59,7 @@ INSERT INTO orders (order_id, user_id, item_id, amount, status, created_at) VALU
 ON DUPLICATE KEY UPDATE amount = VALUES(amount), status = VALUES(status);
 
 INSERT INTO profiles (profile_id, user_id, real_name, id_card, address, notes) VALUES
-(1, 1, '管理员', '110101199001010001', '景区管理中心', '系统管理员账号'),
+(1, 1, '孔思成', '110101199001010001', '景区管理中心', '系统管理员账号'),
 (2, 2, '张三', '110101199201010002', '北京市朝阳区示例路1号', '偏好自然景观'),
 (3, 3, '李四', '110101199301010003', '上海市浦东新区示例路2号', '偏好水上项目'),
 (4, 4, '王五', '110101199401010004', '广州市天河区示例路3号', '关注历史文化'),

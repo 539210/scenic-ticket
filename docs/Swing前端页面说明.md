@@ -18,8 +18,9 @@ src/main/java/com/scenicticket/ui/AppFrame.java
 
 | 页面 | 主要功能 | 后端服务 |
 | --- | --- | --- |
-| 首页 | 展示登录状态、系统模块和快捷入口 | 本地 UI 状态 |
-| 登录注册 | 用户登录、用户注册 | `UserService` |
+| 登录页 | 系统入口，登录成功后进入主系统 | `UserService#login` |
+| 注册页 | 从登录页跳转注册新用户，注册成功后返回登录页 | `UserService#register` |
+| 首页 | 展示当前账号、账号类型和快捷入口 | 本地 UI 状态 |
 | 个人档案 | 保存用户真实姓名、证件号、地址、备注 | `UserService#updateProfile` |
 | 景点浏览 | 查询景点、查看跨库详情、创建订单、发表评论 | `BusinessService`、`CrossDatabaseQueryService`、`BehaviorLogService` |
 | 我的订单 | 查询用户订单、更新订单状态 | `BusinessService` |
@@ -27,6 +28,10 @@ src/main/java/com/scenicticket/ui/AppFrame.java
 | 推荐 | 个性化推荐、热门推荐、高评分推荐 | `RecommendService` |
 | 统计报表 | 月度订单、热门排行、用户报告、仪表盘汇总 | `StatisticsService` |
 | 系统审计 | 系统日志查询、审计汇总、审计趋势、用户操作汇总 | `SystemLogService` |
+
+普通用户登录后只显示用户侧页面：`首页`、`个人档案`、`景点浏览`、`我的订单`、`推荐`、`统计报表`。管理员登录后显示完整页面，额外包含 `后台管理` 和 `系统审计`。
+
+注册页会校验用户名、密码、邮箱和手机号。手机号必须是 11 位大陆手机号；输入非法时界面会用中文提示具体字段。
 
 ## 新增/调整的后端接口
 
@@ -61,11 +66,22 @@ $env:Path="$env:JAVA_HOME\bin;$env:Path"
 
 也可以在 IntelliJ IDEA 中直接运行 `com.scenicticket.Main`。
 
+## 初始账号
+
+初始化脚本内置管理员账号：
+
+```text
+用户名：kongsc
+密码：ksc123456
+```
+
+应用启动后先显示登录页，登录成功才进入系统主界面。注册页通过登录页下方的“注册新账号”按钮进入，注册成功后会清空输入并返回登录页。
+
 ## 验证记录
 
 ```text
-Compiling 41 source files with javac [debug release 21]
-Tests run: 1, Failures: 0, Errors: 0, Skipped: 1
+Compiling 42 source files with javac [debug release 21]
+Tests run: 28, Failures: 0, Errors: 0, Skipped: 2
 BUILD SUCCESS
 ```
 

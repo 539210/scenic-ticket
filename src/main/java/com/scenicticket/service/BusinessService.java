@@ -52,7 +52,7 @@ public class BusinessService {
     }
 
     public long createCategory(String name, Long parentId) {
-        String safeName = SecurityUtil.requireText(name, "Category name", 50);
+        String safeName = SecurityUtil.requireText(name, "分类名称", 50);
         Category category = new Category();
         category.setName(safeName);
         category.setParentId(parentId);
@@ -64,7 +64,7 @@ public class BusinessService {
     }
 
     public long createItem(String title, long categoryId, String description, List<String> images, Document metadata) {
-        String safeTitle = SecurityUtil.requireText(title, "Item title", 200);
+        String safeTitle = SecurityUtil.requireText(title, "景点标题", 200);
         Item item = new Item();
         item.setTitle(safeTitle);
         item.setCategoryId(categoryId);
@@ -82,20 +82,20 @@ public class BusinessService {
 
     public boolean updateItemStatus(long itemId, int status) {
         if (itemId <= 0) {
-            throw new BusinessException("Item id must be positive.");
+            throw new BusinessException("景点ID必须大于 0");
         }
         if (status != 0 && status != 1) {
-            throw new BusinessException("Item status must be 0 or 1.");
+            throw new BusinessException("景点状态只能是上架或下架");
         }
         return itemDAO.updateStatus(itemId, status);
     }
 
     public ItemDetailDTO getItemDetail(long userId, long itemId, String ip) {
         if (userId <= 0 || itemId <= 0) {
-            throw new BusinessException("User id and item id must be positive.");
+            throw new BusinessException("用户ID和景点ID必须大于 0");
         }
         Item item = itemDAO.findById(itemId)
-                .orElseThrow(() -> new BusinessException("Item not found."));
+                .orElseThrow(() -> new BusinessException("景点不存在"));
         logDAO.recordAction(userId, itemId, "VIEW", 0, "SWING", SecurityUtil.normalizeIp(ip));
         ItemDetailDTO dto = new ItemDetailDTO();
         dto.setItem(item);
@@ -106,10 +106,10 @@ public class BusinessService {
 
     public long createOrder(long userId, long itemId, BigDecimal amount) {
         if (userId <= 0 || itemId <= 0) {
-            throw new BusinessException("User id and item id must be positive.");
+            throw new BusinessException("用户ID和景点ID必须大于 0");
         }
         if (amount == null || amount.compareTo(BigDecimal.ZERO) < 0) {
-            throw new BusinessException("Order amount must be non-negative.");
+            throw new BusinessException("订单金额不能小于 0");
         }
         try (Connection connection = connectionProvider.getConnection()) {
             try {
@@ -139,7 +139,7 @@ public class BusinessService {
 
     public List<Order> listUserOrders(long userId, int limit, int offset) {
         if (userId <= 0) {
-            throw new BusinessException("User id must be positive.");
+            throw new BusinessException("用户ID必须大于 0");
         }
         return orderDAO.findByUserId(userId, SecurityUtil.normalizeLimit(limit, 20, 100),
                 SecurityUtil.normalizeOffset(offset));
@@ -147,10 +147,10 @@ public class BusinessService {
 
     public boolean updateOrderStatus(long orderId, int status) {
         if (orderId <= 0) {
-            throw new BusinessException("Order id must be positive.");
+            throw new BusinessException("订单ID必须大于 0");
         }
         if (status < 0 || status > 3) {
-            throw new BusinessException("Order status must be between 0 and 3.");
+            throw new BusinessException("订单状态不正确");
         }
         return orderDAO.updateStatus(orderId, status);
     }

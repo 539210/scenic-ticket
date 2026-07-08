@@ -54,10 +54,10 @@ public class SystemLogService {
 
     private void record(long userId, String logType, String logLevel, String message, String ip, String operation) {
         if (userId <= 0) {
-            throw new BusinessException("User id must be positive.");
+            throw new BusinessException("用户ID必须大于 0");
         }
-        String safeLogType = SecurityUtil.requireText(logType, "Log type", 50);
-        String safeMessage = SecurityUtil.requireText(message, "System log message", 500);
+        String safeLogType = SecurityUtil.requireText(logType, "日志类型", 50);
+        String safeMessage = SecurityUtil.requireText(message, "系统日志内容", 500);
         String safeOperation = SecurityUtil.normalizeText(operation, 120);
         Document actionDetail = new Document()
                 .append("ip", SecurityUtil.normalizeIp(ip))

@@ -72,6 +72,8 @@ public class AppFrame extends JFrame {
     private final JLabel statusLabel = new JLabel("就绪");
     private final JTabbedPane tabs = new JTabbedPane(JTabbedPane.LEFT);
     private final JTextArea homeSummaryArea = createTextArea(10, 80);
+    private final JLabel homeUserValue = new JLabel("未登录");
+    private final JLabel homeRoleValue = new JLabel("-");
 
     private User currentUser;
 
@@ -81,13 +83,64 @@ public class AppFrame extends JFrame {
         setSize(1280, 820);
         setLocationRelativeTo(null);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        setLayout(new BorderLayout());
         getContentPane().setBackground(BACKGROUND);
+        showLoginView("请输入账号密码登录");
+    }
 
+    private void showLoginView(String message) {
+        currentUser = null;
+        updateSessionLabel();
+        statusLabel.setText(message);
+        getContentPane().removeAll();
+        setLayout(new BorderLayout());
+        add(createAuthHeader(), BorderLayout.NORTH);
+        add(createLoginPanel(), BorderLayout.CENTER);
+        add(createFooter(), BorderLayout.SOUTH);
+        revalidate();
+        repaint();
+    }
+
+    private void showRegisterView() {
+        statusLabel.setText("创建新用户账号");
+        getContentPane().removeAll();
+        setLayout(new BorderLayout());
+        add(createAuthHeader(), BorderLayout.NORTH);
+        add(createRegisterPanel(), BorderLayout.CENTER);
+        add(createFooter(), BorderLayout.SOUTH);
+        revalidate();
+        repaint();
+    }
+
+    private void showSystemView() {
+        tabs.removeAll();
+        getContentPane().removeAll();
+        setLayout(new BorderLayout());
         add(createHeader(), BorderLayout.NORTH);
         add(createPages(), BorderLayout.CENTER);
         add(createFooter(), BorderLayout.SOUTH);
         refreshHomeSummary();
+        switchTo("首页");
+        revalidate();
+        repaint();
+    }
+
+    private Component createAuthHeader() {
+        JPanel header = new JPanel(new BorderLayout());
+        header.setBorder(BorderFactory.createEmptyBorder(26, 32, 18, 32));
+        header.setBackground(Color.WHITE);
+
+        JLabel title = new JLabel("景点售票系统");
+        title.setFont(new Font("Microsoft YaHei UI", Font.BOLD, 26));
+        JLabel subtitle = new JLabel("请先登录后进入系统");
+        subtitle.setForeground(new Color(100, 110, 120));
+
+        JPanel titleBlock = new JPanel(new GridLayout(2, 1));
+        titleBlock.setOpaque(false);
+        titleBlock.add(title);
+        titleBlock.add(subtitle);
+
+        header.add(titleBlock, BorderLayout.WEST);
+        return header;
     }
 
     private Component createHeader() {
@@ -109,10 +162,7 @@ public class AppFrame extends JFrame {
         sessionBlock.setOpaque(false);
         JButton logoutButton = new JButton("退出登录");
         logoutButton.addActionListener(event -> {
-            currentUser = null;
-            updateSessionLabel();
-            refreshHomeSummary();
-            setStatus("已退出登录");
+            showLoginView("已退出登录");
         });
         sessionBlock.add(userLabel);
         sessionBlock.add(logoutButton);
@@ -124,14 +174,15 @@ public class AppFrame extends JFrame {
 
     private Component createPages() {
         tabs.addTab("首页", createHomePanel());
-        tabs.addTab("登录注册", createAuthPanel());
         tabs.addTab("个人档案", createProfilePanel());
         tabs.addTab("景点浏览", createItemPanel());
         tabs.addTab("我的订单", createOrderPanel());
-        tabs.addTab("后台管理", createManagePanel());
         tabs.addTab("推荐", createRecommendPanel());
         tabs.addTab("统计报表", createReportPanel());
-        tabs.addTab("系统审计", createAuditPanel());
+        if (isCurrentAdmin()) {
+            tabs.addTab("后台管理", createManagePanel());
+            tabs.addTab("系统审计", createAuditPanel());
+        }
         tabs.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
         tabs.setBackground(BACKGROUND);
         return tabs;
@@ -148,20 +199,22 @@ public class AppFrame extends JFrame {
     private JPanel createHomePanel() {
         JPanel panel = pagePanel(new BorderLayout(12, 12));
 
-        JPanel metrics = new JPanel(new GridLayout(1, 4, 12, 12));
+        JPanel metrics = new JPanel(new GridLayout(1, 2, 12, 12));
         metrics.setOpaque(false);
-        metrics.add(metricCard("用户状态", () -> currentUser == null ? "未登录" : currentUser.getUsername()));
-        metrics.add(metricCard("当前角色", () -> currentUser == null ? "-" : currentUser.getRole()));
-        metrics.add(metricCard("核心模块", () -> "9 个页面"));
-        metrics.add(metricCard("数据架构", () -> "MySQL + MongoDB"));
+        metrics.add(metricCard("当前账号", homeUserValue));
+        metrics.add(metricCard("账号类型", homeRoleValue));
 
         JPanel quickActions = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
         quickActions.setOpaque(false);
-        quickActions.add(navButton("登录注册", "登录注册"));
+        quickActions.add(navButton("个人档案", "个人档案"));
         quickActions.add(navButton("浏览景点", "景点浏览"));
         quickActions.add(navButton("查看订单", "我的订单"));
+        quickActions.add(navButton("推荐", "推荐"));
         quickActions.add(navButton("统计报表", "统计报表"));
-        quickActions.add(navButton("系统审计", "系统审计"));
+        if (isCurrentAdmin()) {
+            quickActions.add(navButton("后台管理", "后台管理"));
+            quickActions.add(navButton("系统审计", "系统审计"));
+        }
 
         JPanel top = new JPanel(new BorderLayout(0, 12));
         top.setOpaque(false);
@@ -174,48 +227,68 @@ public class AppFrame extends JFrame {
         return panel;
     }
 
-    private JPanel createAuthPanel() {
-        JPanel panel = pagePanel(new GridLayout(1, 2, 12, 0));
-
+    private JPanel createLoginPanel() {
         JTextField loginUsername = new JTextField(22);
         JPasswordField loginPassword = new JPasswordField(22);
-        JTextField loginIp = new JTextField("127.0.0.1", 22);
         JButton loginButton = new JButton("登录");
+        JButton registerPageButton = new JButton("注册新账号");
         JLabel loginResult = new JLabel(" ");
 
         JPanel loginPanel = formPanel("用户登录");
+        loginPanel.setPreferredSize(new Dimension(420, 220));
         addField(loginPanel, 0, "用户名", loginUsername);
         addField(loginPanel, 1, "密码", loginPassword);
-        addField(loginPanel, 2, "IP", loginIp);
-        addFormButton(loginPanel, 3, loginButton);
-        addFormMessage(loginPanel, 4, loginResult);
+        addFormButtons(loginPanel, 2, loginButton, registerPageButton);
+        addFormMessage(loginPanel, 3, loginResult);
 
+        loginButton.addActionListener(event -> runTask("用户登录", () -> userService.login(
+                loginUsername.getText(),
+                new String(loginPassword.getPassword()),
+                "127.0.0.1"
+        ), result -> {
+            loginResult.setText(result.getMessage());
+            loginPassword.setText("");
+            if (result.isSuccess()) {
+                loginUsername.setText("");
+                setCurrentUser(result);
+                showSystemView();
+            } else {
+                setStatus(result.getMessage());
+            }
+        }));
+
+        registerPageButton.addActionListener(event -> showRegisterView());
+
+        JPanel holder = pagePanel(new GridBagLayout());
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.gridx = 0;
+        gbc.gridy = 0;
+        gbc.weightx = 1;
+        gbc.weighty = 1;
+        gbc.anchor = GridBagConstraints.CENTER;
+        gbc.fill = GridBagConstraints.NONE;
+        gbc.insets = new Insets(24, 24, 24, 24);
+        holder.add(loginPanel, gbc);
+        return holder;
+    }
+
+    private JPanel createRegisterPanel() {
         JTextField registerUsername = new JTextField(22);
         JPasswordField registerPassword = new JPasswordField(22);
         JTextField registerEmail = new JTextField(22);
         JTextField registerPhone = new JTextField(22);
         JButton registerButton = new JButton("注册");
+        JButton backButton = new JButton("返回登录");
         JLabel registerResult = new JLabel(" ");
 
         JPanel registerPanel = formPanel("用户注册");
+        registerPanel.setPreferredSize(new Dimension(460, 300));
         addField(registerPanel, 0, "用户名", registerUsername);
         addField(registerPanel, 1, "密码", registerPassword);
         addField(registerPanel, 2, "邮箱", registerEmail);
         addField(registerPanel, 3, "手机号", registerPhone);
-        addFormButton(registerPanel, 4, registerButton);
+        addFormButtons(registerPanel, 4, registerButton, backButton);
         addFormMessage(registerPanel, 5, registerResult);
-
-        loginButton.addActionListener(event -> runTask("用户登录", () -> userService.login(
-                loginUsername.getText(),
-                new String(loginPassword.getPassword()),
-                loginIp.getText()
-        ), result -> {
-            loginResult.setText(result.getMessage());
-            if (result.isSuccess()) {
-                setCurrentUser(result);
-                switchTo("首页");
-            }
-        }));
 
         registerButton.addActionListener(event -> runTask("用户注册", () -> userService.register(
                 registerUsername.getText(),
@@ -223,13 +296,23 @@ public class AppFrame extends JFrame {
                 registerEmail.getText(),
                 registerPhone.getText()
         ), userId -> {
-            registerResult.setText("注册成功，用户ID：" + userId);
-            setStatus("注册成功，用户ID：" + userId);
+            clearTextFields(registerPanel);
+            showLoginView("注册成功，用户ID：" + userId + "，请登录");
         }));
 
-        panel.add(loginPanel);
-        panel.add(registerPanel);
-        return panel;
+        backButton.addActionListener(event -> showLoginView("请输入账号密码登录"));
+
+        JPanel holder = pagePanel(new GridBagLayout());
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.gridx = 0;
+        gbc.gridy = 0;
+        gbc.weightx = 1;
+        gbc.weighty = 1;
+        gbc.anchor = GridBagConstraints.CENTER;
+        gbc.fill = GridBagConstraints.NONE;
+        gbc.insets = new Insets(24, 24, 24, 24);
+        holder.add(registerPanel, gbc);
+        return holder;
     }
 
     private JPanel createProfilePanel() {
@@ -327,7 +410,7 @@ public class AppFrame extends JFrame {
         orderButton.addActionListener(event -> runTask("创建订单", () -> businessService.createOrder(
                 requireCurrentUserId(),
                 parseRequiredLong(itemIdField.getText(), "景点ID"),
-                new BigDecimal(orderAmountField.getText().trim())
+                parseRequiredAmount(orderAmountField.getText(), "订单金额")
         ), orderId -> detailArea.setText("订单创建成功，订单ID：" + orderId)));
 
         commentButton.addActionListener(event -> runTask("发表评论", () -> {
@@ -335,7 +418,7 @@ public class AppFrame extends JFrame {
                     requireCurrentUserId(),
                     parseRequiredLong(itemIdField.getText(), "景点ID"),
                     commentField.getText(),
-                    Integer.parseInt(ratingField.getText().trim()),
+                    parseRequiredInt(ratingField.getText(), "评分"),
                     List.of("Swing界面"),
                     "127.0.0.1"
             );
@@ -520,8 +603,8 @@ public class AppFrame extends JFrame {
         toolbar.add(dashboardButton);
 
         monthlyButton.addActionListener(event -> runTask("月度订单报表", () -> statisticsService.getMonthlyOrderReport(
-                Integer.parseInt(yearField.getText().trim()),
-                Integer.parseInt(monthField.getText().trim())
+                parseRequiredInt(yearField.getText(), "年份"),
+                parseRequiredInt(monthField.getText(), "月份")
         ), reports -> reportArea.setText(formatMonthlyReports(reports))));
 
         hotButton.addActionListener(event -> runTask("热门排行", () -> statisticsService.getHotItemRanking(null, null, 10),
@@ -534,7 +617,7 @@ public class AppFrame extends JFrame {
         ), document -> reportArea.setText(documentToText(document))));
 
         dashboardButton.addActionListener(event -> runTask("仪表盘汇总", () -> statisticsService.buildDashboardReport(
-                null, null, Integer.parseInt(yearField.getText().trim()), Integer.parseInt(monthField.getText().trim())
+                null, null, parseRequiredInt(yearField.getText(), "年份"), parseRequiredInt(monthField.getText(), "月份")
         ), dto -> reportArea.setText(new StringBuilder()
                 .append("热门景点：").append(System.lineSeparator()).append(formatDocuments(dto.getHotItems()))
                 .append(System.lineSeparator()).append("行为类型：").append(System.lineSeparator()).append(formatDocuments(dto.getActionTypeSummary()))
@@ -607,20 +690,28 @@ public class AppFrame extends JFrame {
             userLabel.setText("未登录");
             return;
         }
-        userLabel.setText("当前用户：" + currentUser.getUsername() + " / " + currentUser.getRole()
+        userLabel.setText("当前用户：" + currentUser.getUsername() + " / " + roleDisplay(currentUser.getRole())
                 + " / ID " + currentUser.getUserId());
     }
 
     private void refreshHomeSummary() {
+        if (currentUser == null) {
+            homeUserValue.setText("未登录");
+            homeRoleValue.setText("-");
+        } else {
+            homeUserValue.setText(currentUser.getUsername() + " / ID " + currentUser.getUserId());
+            homeRoleValue.setText(roleDisplay(currentUser.getRole()));
+        }
         StringBuilder builder = new StringBuilder();
-        builder.append("当前进度：项目已接入 Swing 前端页面。").append(System.lineSeparator());
-        builder.append("页面范围：登录注册、个人档案、景点浏览、订单管理、后台管理、推荐、统计报表、系统审计。")
+        builder.append("欢迎使用景点售票系统。").append(System.lineSeparator());
+        builder.append("当前账号：")
+                .append(currentUser == null ? "未登录" : currentUser.getUsername() + " / " + roleDisplay(currentUser.getRole()))
                 .append(System.lineSeparator());
-        builder.append("当前登录：")
-                .append(currentUser == null ? "未登录" : currentUser.getUsername() + " / " + currentUser.getRole())
+        builder.append("可用功能：个人档案、景点浏览、我的订单、推荐、统计报表。")
                 .append(System.lineSeparator());
-        builder.append("后端服务：UserService、BusinessService、RecommendService、StatisticsService、SystemLogService。")
-                .append(System.lineSeparator());
+        if (currentUser != null && "ADMIN".equals(currentUser.getRole())) {
+            builder.append("管理员功能：后台管理、系统审计。").append(System.lineSeparator());
+        }
         homeSummaryArea.setText(builder.toString());
     }
 
@@ -672,7 +763,7 @@ public class AppFrame extends JFrame {
         return panel;
     }
 
-    private JPanel metricCard(String title, java.util.function.Supplier<String> valueSupplier) {
+    private JPanel metricCard(String title, JLabel valueLabel) {
         JPanel panel = new JPanel(new BorderLayout());
         panel.setBackground(Color.WHITE);
         panel.setBorder(BorderFactory.createCompoundBorder(
@@ -681,7 +772,6 @@ public class AppFrame extends JFrame {
         ));
         JLabel titleLabel = new JLabel(title);
         titleLabel.setForeground(new Color(100, 110, 120));
-        JLabel valueLabel = new JLabel(valueSupplier.get());
         valueLabel.setFont(new Font("Microsoft YaHei UI", Font.BOLD, 18));
         valueLabel.setHorizontalAlignment(SwingConstants.LEFT);
         panel.add(titleLabel, BorderLayout.NORTH);
@@ -751,6 +841,18 @@ public class AppFrame extends JFrame {
         fields.add(button, gbc);
     }
 
+    private void addFormButtons(JPanel formPanel, int row, JButton... buttons) {
+        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+        buttonPanel.setOpaque(false);
+        for (JButton button : buttons) {
+            buttonPanel.add(button);
+        }
+        JPanel fields = (JPanel) formPanel.getComponent(1);
+        GridBagConstraints gbc = formConstraints(row, 1);
+        gbc.fill = GridBagConstraints.NONE;
+        fields.add(buttonPanel, gbc);
+    }
+
     private void addFormMessage(JPanel formPanel, int row, JLabel message) {
         JPanel fields = (JPanel) formPanel.getComponent(1);
         GridBagConstraints gbc = formConstraints(row, 1);
@@ -768,7 +870,7 @@ public class AppFrame extends JFrame {
     }
 
     private <T> void runAdminTask(String name, Callable<T> task, Consumer<T> onSuccess) {
-        if (currentUser == null || !"ADMIN".equals(currentUser.getRole())) {
+        if (!isCurrentAdmin()) {
             showError(new IllegalStateException("请先使用管理员账号登录"));
             return;
         }
@@ -776,7 +878,8 @@ public class AppFrame extends JFrame {
     }
 
     private <T> void runTask(String name, Callable<T> task, Consumer<T> onSuccess) {
-        setStatus(name + "处理中...");
+        String processingStatus = name + "处理中...";
+        setStatus(processingStatus);
         new SwingWorker<T, Void>() {
             @Override
             protected T doInBackground() throws Exception {
@@ -788,7 +891,9 @@ public class AppFrame extends JFrame {
                 try {
                     T result = get();
                     onSuccess.accept(result);
-                    setStatus(name + "完成");
+                    if (processingStatus.equals(statusLabel.getText())) {
+                        setStatus(name + "完成");
+                    }
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                     setStatus(name + "已中断");
@@ -812,6 +917,30 @@ public class AppFrame extends JFrame {
 
     private void setStatus(String message) {
         statusLabel.setText(message);
+    }
+
+    private void clearTextFields(Component component) {
+        if (component instanceof JTextField textField) {
+            textField.setText("");
+            return;
+        }
+        if (component instanceof java.awt.Container container) {
+            for (Component child : container.getComponents()) {
+                clearTextFields(child);
+            }
+        }
+    }
+
+    private String roleDisplay(String role) {
+        return switch (role == null ? "" : role) {
+            case "ADMIN" -> "管理员";
+            case "USER" -> "普通用户";
+            default -> "未知";
+        };
+    }
+
+    private boolean isCurrentAdmin() {
+        return currentUser != null && "ADMIN".equals(currentUser.getRole());
     }
 
     private void switchTo(String title) {
@@ -909,7 +1038,37 @@ public class AppFrame extends JFrame {
         if (value == null || value.isBlank()) {
             throw new IllegalArgumentException(fieldName + "不能为空");
         }
-        return Long.parseLong(value.trim());
+        try {
+            return Long.parseLong(value.trim());
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException(fieldName + "必须是数字", e);
+        }
+    }
+
+    private int parseRequiredInt(String value, String fieldName) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException(fieldName + "不能为空");
+        }
+        try {
+            return Integer.parseInt(value.trim());
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException(fieldName + "必须是整数", e);
+        }
+    }
+
+    private BigDecimal parseRequiredAmount(String value, String fieldName) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException(fieldName + "不能为空");
+        }
+        try {
+            BigDecimal amount = new BigDecimal(value.trim());
+            if (amount.compareTo(BigDecimal.ZERO) < 0) {
+                throw new IllegalArgumentException(fieldName + "不能小于 0");
+            }
+            return amount;
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException(fieldName + "必须是有效金额", e);
+        }
     }
 
     private String blankToNull(String value) {

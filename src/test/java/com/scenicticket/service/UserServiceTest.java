@@ -41,17 +41,19 @@ class UserServiceTest {
 
     @Test
     void registerRejectsDuplicateUsernameAndInvalidEmail() {
-        service.register("alice", "password123", "alice@example.com", null);
+        service.register("alice", "password123", "alice@example.com", "13900000000");
 
         assertThrows(BusinessException.class,
-                () -> service.register("alice", "password123", "alice2@example.com", null));
+                () -> service.register("alice", "password123", "alice2@example.com", "13900000001"));
         assertThrows(BusinessException.class,
-                () -> service.register("bob", "password123", "bad-email", null));
+                () -> service.register("bob", "password123", "bad-email", "13900000002"));
+        assertThrows(BusinessException.class,
+                () -> service.register("bob", "password123", "bob@example.com", "12345"));
     }
 
     @Test
     void loginRecordsWarningOnWrongPasswordAndInfoOnSuccess() {
-        long userId = service.register("alice", "password123", "alice@example.com", null);
+        long userId = service.register("alice", "password123", "alice@example.com", "13900000000");
 
         LoginResult failed = service.login("alice", "wrong", "invalid ip");
         assertFalse(failed.isSuccess());
@@ -68,7 +70,7 @@ class UserServiceTest {
 
     @Test
     void loginRejectsDisabledUsersWithoutAuditWrite() {
-        service.register("alice", "password123", "alice@example.com", null);
+        service.register("alice", "password123", "alice@example.com", "13900000000");
         userDAO.usersByName.get("alice").setStatus(0);
         systemLogDAO.clear();
 
