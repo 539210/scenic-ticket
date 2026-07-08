@@ -497,28 +497,35 @@ public class AppFrame extends JFrame {
         JTextField itemStatusIdField = new JTextField(8);
         JComboBox<String> itemStatusBox = new JComboBox<>(new String[]{"0-下架", "1-上架"});
 
-        JPanel toolbar = toolbar();
+        JPanel categoryToolbar = toolbar();
         JButton refreshCategoryButton = new JButton("刷新分类");
         JButton createCategoryButton = new JButton("新增分类");
+        categoryToolbar.add(refreshCategoryButton);
+        categoryToolbar.add(new JLabel("分类名"));
+        categoryToolbar.add(categoryNameField);
+        categoryToolbar.add(new JLabel("父ID"));
+        categoryToolbar.add(parentIdField);
+        categoryToolbar.add(createCategoryButton);
+
+        JPanel itemToolbar = toolbar();
         JButton createItemButton = new JButton("新增景点");
-        JButton itemStatusButton = new JButton("更新景点状态");
-        toolbar.add(refreshCategoryButton);
-        toolbar.add(new JLabel("分类名"));
-        toolbar.add(categoryNameField);
-        toolbar.add(new JLabel("父ID"));
-        toolbar.add(parentIdField);
-        toolbar.add(createCategoryButton);
-        toolbar.add(new JLabel("景点标题"));
-        toolbar.add(itemTitleField);
-        toolbar.add(new JLabel("分类ID"));
-        toolbar.add(itemCategoryField);
-        toolbar.add(new JLabel("描述"));
-        toolbar.add(itemDescField);
-        toolbar.add(createItemButton);
-        toolbar.add(new JLabel("景点ID"));
-        toolbar.add(itemStatusIdField);
-        toolbar.add(itemStatusBox);
-        toolbar.add(itemStatusButton);
+        JButton itemStatusButton = new JButton("更新状态");
+        itemToolbar.add(new JLabel("景点标题"));
+        itemToolbar.add(itemTitleField);
+        itemToolbar.add(new JLabel("分类ID"));
+        itemToolbar.add(itemCategoryField);
+        itemToolbar.add(new JLabel("描述"));
+        itemToolbar.add(itemDescField);
+        itemToolbar.add(createItemButton);
+        itemToolbar.add(new JLabel("景点ID"));
+        itemToolbar.add(itemStatusIdField);
+        itemToolbar.add(itemStatusBox);
+        itemToolbar.add(itemStatusButton);
+
+        JPanel controls = new JPanel(new GridLayout(2, 1, 0, 8));
+        controls.setOpaque(false);
+        controls.add(wrapWithTitle("分类管理", categoryToolbar));
+        controls.add(wrapWithTitle("景点管理", itemToolbar));
 
         refreshCategoryButton.addActionListener(event -> refreshCategories(categoryModel));
         createCategoryButton.addActionListener(event -> runAdminTask("新增分类", () -> businessService.createCategory(
@@ -543,7 +550,7 @@ public class AppFrame extends JFrame {
 
         JSplitPane splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, new JScrollPane(categoryTable), wrapWithTitle("操作结果", resultArea));
         splitPane.setResizeWeight(0.68);
-        panel.add(toolbar, BorderLayout.NORTH);
+        panel.add(controls, BorderLayout.NORTH);
         panel.add(splitPane, BorderLayout.CENTER);
         return panel;
     }
@@ -622,7 +629,7 @@ public class AppFrame extends JFrame {
                 .append("热门景点：").append(System.lineSeparator()).append(formatDocuments(dto.getHotItems()))
                 .append(System.lineSeparator()).append("行为类型：").append(System.lineSeparator()).append(formatDocuments(dto.getActionTypeSummary()))
                 .append(System.lineSeparator()).append("热门标签：").append(System.lineSeparator()).append(formatDocuments(dto.getHotTags()))
-                .append(System.lineSeparator()).append("系统审计：").append(System.lineSeparator()).append(formatDocuments(dto.getSystemAuditSummary()))
+                .append(System.lineSeparator()).append("系统审计：").append(System.lineSeparator()).append(formatAuditSummary(dto.getSystemAuditSummary()))
                 .append(System.lineSeparator()).append("月度订单：").append(System.lineSeparator()).append(formatMonthlyReports(dto.getMonthlyOrderReport()))
                 .toString())));
 
@@ -661,17 +668,17 @@ public class AppFrame extends JFrame {
                 null,
                 null,
                 80
-        ), documents -> auditArea.setText(formatDocuments(documents))));
+        ), documents -> auditArea.setText(formatAuditLogs(documents))));
 
         summaryButton.addActionListener(event -> runAdminTask("审计汇总", () -> systemLogService.getAuditSummary(null, null),
-                documents -> auditArea.setText(formatDocuments(documents))));
+                documents -> auditArea.setText(formatAuditSummary(documents))));
 
         trendButton.addActionListener(event -> runAdminTask("审计趋势", () -> systemLogService.getDailyAuditTrend(null, null),
-                documents -> auditArea.setText(formatDocuments(documents))));
+                documents -> auditArea.setText(formatAuditTrend(documents))));
 
         userSummaryButton.addActionListener(event -> runAdminTask("用户操作汇总",
                 () -> systemLogService.getUserOperationSummary(null, null, 50),
-                documents -> auditArea.setText(formatDocuments(documents))));
+                documents -> auditArea.setText(formatUserOperationSummary(documents))));
 
         panel.add(toolbar, BorderLayout.NORTH);
         panel.add(wrapWithTitle("审计结果", auditArea), BorderLayout.CENTER);
@@ -999,8 +1006,138 @@ public class AppFrame extends JFrame {
         return builder.isEmpty() ? "暂无数据" : builder.toString();
     }
 
+    private String formatAuditLogs(List<Document> documents) {
+        if (documents == null || documents.isEmpty()) {
+            return "暂无审计日志";
+        }
+        StringBuilder builder = new StringBuilder();
+        int index = 1;
+        for (Document document : documents) {
+            Document detail = document.get("action_detail", Document.class);
+            builder.append(index).append(". ")
+                    .append(formatDate(document.get("timestamp")))
+                    .append("  用户ID：").append(valueText(document.get("user_id")))
+                    .append("  类型：").append(logTypeName(document.getString("log_type")))
+                    .append("  级别：").append(logLevelName(document.getString("log_level")))
+                    .append(System.lineSeparator())
+                    .append("   内容：").append(valueText(document.get("message")))
+                    .append(System.lineSeparator());
+            if (detail != null && !detail.isEmpty()) {
+                builder.append("   操作：").append(valueText(detail.get("operation")))
+                        .append("  IP：").append(valueText(detail.get("ip")))
+                        .append(System.lineSeparator());
+            }
+            builder.append(System.lineSeparator());
+            index += 1;
+        }
+        return builder.toString();
+    }
+
+    private String formatAuditSummary(List<Document> documents) {
+        if (documents == null || documents.isEmpty()) {
+            return "暂无审计汇总数据";
+        }
+        StringBuilder builder = new StringBuilder("审计汇总").append(System.lineSeparator()).append(System.lineSeparator());
+        for (Document document : documents) {
+            builder.append("类型：").append(logTypeName(document.getString("log_type")))
+                    .append("  级别：").append(logLevelName(document.getString("log_level")))
+                    .append("  操作次数：").append(numberText(document.get("operation_count")))
+                    .append("  涉及用户：").append(numberText(document.get("user_count")))
+                    .append("  最近时间：").append(formatDate(document.get("latest_timestamp")))
+                    .append(System.lineSeparator());
+        }
+        return builder.toString();
+    }
+
+    private String formatAuditTrend(List<Document> documents) {
+        if (documents == null || documents.isEmpty()) {
+            return "暂无审计趋势数据";
+        }
+        StringBuilder builder = new StringBuilder("审计趋势").append(System.lineSeparator()).append(System.lineSeparator());
+        for (Document document : documents) {
+            builder.append("日期：").append(valueText(document.get("date")))
+                    .append("  类型：").append(logTypeName(document.getString("log_type")))
+                    .append("  级别：").append(logLevelName(document.getString("log_level")))
+                    .append("  次数：").append(numberText(document.get("operation_count")))
+                    .append(System.lineSeparator());
+        }
+        return builder.toString();
+    }
+
+    private String formatUserOperationSummary(List<Document> documents) {
+        if (documents == null || documents.isEmpty()) {
+            return "暂无用户操作汇总数据";
+        }
+        StringBuilder builder = new StringBuilder("用户操作汇总").append(System.lineSeparator()).append(System.lineSeparator());
+        for (Document document : documents) {
+            builder.append("用户ID：").append(valueText(document.get("user_id")))
+                    .append("  操作次数：").append(numberText(document.get("operation_count")))
+                    .append("  警告：").append(numberText(document.get("warn_count")))
+                    .append("  错误：").append(numberText(document.get("error_count")))
+                    .append("  最近时间：").append(formatDate(document.get("latest_timestamp")))
+                    .append(System.lineSeparator())
+                    .append("   操作类型：").append(logTypeListText(document.get("log_types")))
+                    .append(System.lineSeparator())
+                    .append(System.lineSeparator());
+        }
+        return builder.toString();
+    }
+
     private String documentToText(Document document) {
         return document == null ? "{}" : document.toJson();
+    }
+
+    private String formatDate(Object value) {
+        if (value instanceof java.util.Date date) {
+            return new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(date);
+        }
+        return valueText(value);
+    }
+
+    private String valueText(Object value) {
+        return value == null ? "-" : String.valueOf(value);
+    }
+
+    private String numberText(Object value) {
+        return value instanceof Number number ? String.valueOf(number.longValue()) : valueText(value);
+    }
+
+    private String logTypeListText(Object value) {
+        if (value instanceof List<?> values) {
+            return values.stream()
+                    .map(item -> logTypeName(String.valueOf(item)))
+                    .distinct()
+                    .reduce((left, right) -> left + "、" + right)
+                    .orElse("-");
+        }
+        return valueText(value);
+    }
+
+    private String logTypeName(String logType) {
+        if (logType == null || logType.isBlank()) {
+            return "-";
+        }
+        return switch (logType) {
+            case "LOGIN" -> "登录";
+            case "LOGOUT" -> "退出";
+            case "REGISTER" -> "注册";
+            case "ORDER_CREATE", "ORDER" -> "创建订单";
+            case "ITEM_UPDATE" -> "景点更新";
+            case "REPORT_VIEW" -> "查看报表";
+            default -> logType;
+        };
+    }
+
+    private String logLevelName(String logLevel) {
+        if (logLevel == null || logLevel.isBlank()) {
+            return "-";
+        }
+        return switch (logLevel) {
+            case "INFO" -> "正常";
+            case "WARN" -> "警告";
+            case "ERROR" -> "错误";
+            default -> logLevel;
+        };
     }
 
     private String formatItemStatus(Integer status) {

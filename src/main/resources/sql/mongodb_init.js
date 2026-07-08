@@ -46,10 +46,10 @@ db.item_details.insertMany(itemDetails);
 
 const comments = [];
 const tags = [["环境好", "适合亲子"], ["服务好", "交通方便"], ["景色美", "拍照推荐"], ["排队少", "体验好"]];
-for (let i = 1; i <= 20; i += 1) {
+for (let i = 1; i <= 30; i += 1) {
   comments.push({
     user_id: (i % 10) + 1,
-    item_id: (i % 10) + 1,
+    item_id: (i % 20) + 1,
     content: `第 ${i} 条评论：景区体验良好，购票流程顺畅。`,
     rating: (i % 5) + 1,
     tags: tags[i % tags.length],
@@ -63,7 +63,7 @@ const actionTypes = ["VIEW", "SEARCH", "ORDER", "COMMENT"];
 for (let i = 1; i <= 120; i += 1) {
   actionLogs.push({
     user_id: (i % 10) + 1,
-    item_id: (i % 10) + 1,
+    item_id: (i % 20) + 1,
     action_type: actionTypes[i % actionTypes.length],
     duration_seconds: 30 + (i % 240),
     client_info: {
