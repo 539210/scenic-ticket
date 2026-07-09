@@ -9,7 +9,7 @@
 | 跨库详情 | Swing 详情按钮调用 `CrossDatabaseQueryService#getItemDetail` |
 | 下单 | Swing 下单按钮调用 `BusinessService#createOrder` |
 | 评论 | Swing 评论按钮调用 `BehaviorLogService#addComment` |
-| 推荐 | Swing 景点浏览页的“为你推荐/热门/高分”入口调用 `RecommendService` |
+| 推荐 | Swing 景点浏览页的“推荐”按钮展开“为你推荐/高分/热门”选项并调用 `RecommendService` |
 | 统计报表 | Swing 统计页调用 `StatisticsService` |
 | 系统审计 | Swing 审计页调用 `SystemLogService` |
 

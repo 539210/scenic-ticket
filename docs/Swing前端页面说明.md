@@ -22,7 +22,7 @@ src/main/java/com/scenicticket/ui/AppFrame.java
 | 注册页 | 从登录页跳转注册新用户，注册成功后返回登录页 | `UserService#register` |
 | 首页 | 展示当前账号、账号类型和快捷入口 | 本地 UI 状态 |
 | 个人档案 | 保存用户真实姓名、证件号、地址、备注 | `UserService#updateProfile` |
-| 景点浏览 | 按预设关键词/类型查询景点、查看详情和评论、在查询区查看为你推荐/热门/高分推荐、按票数购票、模拟付款、购买后发表评论 | `BusinessService`、`CrossDatabaseQueryService`、`RecommendService`、`BehaviorLogService` |
+| 景点浏览 | 按预设关键词/类型查询景点、查看详情和评论、通过“推荐”按钮展开为你推荐/高分/热门选项、按票数购票、模拟付款、购买后发表评论 | `BusinessService`、`CrossDatabaseQueryService`、`RecommendService`、`BehaviorLogService` |
 | 我的订单 | 查询用户订单、更新订单状态 | `BusinessService` |
 | 后台管理 | 分类列表、新增分类、新增景点、景点上下架、维护景点票价和折扣 | `BusinessService` |
 | 统计报表 | 月度订单、热门排行、用户报告、仪表盘汇总 | `StatisticsService` |

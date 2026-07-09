@@ -26,6 +26,8 @@ import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JPasswordField;
+import javax.swing.JMenuItem;
+import javax.swing.JPopupMenu;
 import javax.swing.JScrollBar;
 import javax.swing.JScrollPane;
 import javax.swing.JSplitPane;
@@ -408,9 +410,14 @@ public class AppFrame extends JFrame {
 
         JPanel searchToolbar = toolbar();
         JButton searchButton = new JButton("查询景点");
-        JButton recommendButton = new JButton("为你推荐");
-        JButton hotRecommendButton = new JButton("热门");
-        JButton ratedRecommendButton = new JButton("高分");
+        JButton recommendButton = new JButton("推荐");
+        JPopupMenu recommendMenu = new JPopupMenu();
+        JMenuItem personalRecommendItem = new JMenuItem("为你推荐");
+        JMenuItem ratedRecommendItem = new JMenuItem("高分");
+        JMenuItem hotRecommendItem = new JMenuItem("热门");
+        recommendMenu.add(personalRecommendItem);
+        recommendMenu.add(ratedRecommendItem);
+        recommendMenu.add(hotRecommendItem);
         JButton allButton = new JButton("查询全部");
         JButton refreshButton = new JButton("刷新列表");
         JButton clearButton = new JButton("清空条件");
@@ -422,8 +429,6 @@ public class AppFrame extends JFrame {
         searchToolbar.add(categoryBox);
         searchToolbar.add(searchButton);
         searchToolbar.add(recommendButton);
-        searchToolbar.add(hotRecommendButton);
-        searchToolbar.add(ratedRecommendButton);
         searchToolbar.add(allButton);
         searchToolbar.add(refreshButton);
         searchToolbar.add(clearButton);
@@ -498,14 +503,16 @@ public class AppFrame extends JFrame {
                 selectedCategoryId(categoryBox), 50, 0
         ), fillItems));
 
-        recommendButton.addActionListener(event -> runTask("为你推荐", () -> recommendService.recommendForUser(
+        recommendButton.addActionListener(event -> recommendMenu.show(recommendButton, 0, recommendButton.getHeight()));
+
+        personalRecommendItem.addActionListener(event -> runTask("为你推荐", () -> recommendService.recommendForUser(
                 requireCurrentUserId(), 10
         ), fillRecommendations));
 
-        hotRecommendButton.addActionListener(event -> runTask("热门推荐", () -> recommendService.recommendHotItems(null, null, 10),
+        ratedRecommendItem.addActionListener(event -> runTask("高分推荐", () -> recommendService.recommendTopRatedItems(10),
                 fillRecommendations));
 
-        ratedRecommendButton.addActionListener(event -> runTask("高分推荐", () -> recommendService.recommendTopRatedItems(10),
+        hotRecommendItem.addActionListener(event -> runTask("热门推荐", () -> recommendService.recommendHotItems(null, null, 10),
                 fillRecommendations));
 
         refreshButton.addActionListener(event -> runTask("刷新景点列表", () -> businessService.searchItems(
