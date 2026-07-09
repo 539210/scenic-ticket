@@ -74,6 +74,7 @@ mysql -uroot -p < src/main/resources/sql/mysql_views.sql
 mysql -uroot -p < src/main/resources/sql/mysql_procedures.sql
 mysql -uroot -p < src/main/resources/sql/mysql_triggers.sql
 mysql -uroot -p < src/main/resources/sql/mysql_day07_optimization.sql
+mysql -uroot -p < src/main/resources/sql/mysql_day08_pricing_update.sql
 ```
 
 MongoDB 初始化：
@@ -113,6 +114,7 @@ mvn test
 
 Swing 前端当前包含：登录入口、独立注册页、首页、个人档案、景点浏览、我的订单、后台管理、推荐、统计报表、系统审计。
 普通用户登录后只显示用户侧页面；管理员登录后显示完整页面，并额外包含后台管理和系统审计。
+景点票价和折扣由管理员维护，普通用户购买时只填写票数并选择模拟付款方式，订单金额由系统自动计算。
 
 初始化管理员账号：
 

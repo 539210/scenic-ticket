@@ -35,6 +35,8 @@ CREATE TABLE IF NOT EXISTS items (
     item_id BIGINT PRIMARY KEY AUTO_INCREMENT,
     title VARCHAR(200) NOT NULL,
     category_id BIGINT NOT NULL,
+    price DECIMAL(10, 2) NOT NULL DEFAULT 0.00 COMMENT 'ticket price controlled by admin',
+    discount_rate DECIMAL(5, 2) NOT NULL DEFAULT 0.00 COMMENT 'discount percent, 0 means no discount',
     status TINYINT NOT NULL DEFAULT 1 COMMENT '1=available, 0=offline',
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -45,7 +47,9 @@ CREATE TABLE IF NOT EXISTS items (
     INDEX idx_items_category_status (category_id, status),
     INDEX idx_items_title (title),
     INDEX idx_items_created_at (created_at),
-    INDEX idx_items_status_updated_at (status, updated_at DESC, item_id DESC)
+    INDEX idx_items_status_updated_at (status, updated_at DESC, item_id DESC),
+    CONSTRAINT chk_items_price CHECK (price >= 0),
+    CONSTRAINT chk_items_discount_rate CHECK (discount_rate >= 0 AND discount_rate <= 100)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE IF NOT EXISTS orders (
@@ -53,6 +57,10 @@ CREATE TABLE IF NOT EXISTS orders (
     user_id BIGINT NOT NULL,
     item_id BIGINT NOT NULL,
     amount DECIMAL(10, 2) NOT NULL,
+    quantity INT NOT NULL DEFAULT 1,
+    unit_price DECIMAL(10, 2) NOT NULL DEFAULT 0.00,
+    discount_rate DECIMAL(5, 2) NOT NULL DEFAULT 0.00,
+    payment_method VARCHAR(20) NOT NULL DEFAULT '微信',
     status TINYINT NOT NULL DEFAULT 0 COMMENT '0=pending, 1=paid, 2=cancelled, 3=completed',
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_orders_user
@@ -64,6 +72,9 @@ CREATE TABLE IF NOT EXISTS orders (
         ON DELETE RESTRICT
         ON UPDATE CASCADE,
     CONSTRAINT chk_orders_amount CHECK (amount >= 0),
+    CONSTRAINT chk_orders_quantity CHECK (quantity > 0),
+    CONSTRAINT chk_orders_unit_price CHECK (unit_price >= 0),
+    CONSTRAINT chk_orders_discount_rate CHECK (discount_rate >= 0 AND discount_rate <= 100),
     INDEX idx_orders_user_created_at (user_id, created_at),
     INDEX idx_orders_item_status (item_id, status),
     INDEX idx_orders_status_created_at (status, created_at),

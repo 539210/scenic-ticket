@@ -8,6 +8,7 @@ import com.scenicticket.dao.mysql.ItemDAO;
 import com.scenicticket.dao.mysql.OrderDAO;
 import com.scenicticket.exception.BusinessException;
 import com.scenicticket.exception.DBException;
+import com.scenicticket.model.Item;
 import com.scenicticket.model.Order;
 import org.junit.jupiter.api.Test;
 
@@ -17,6 +18,7 @@ import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -32,7 +34,7 @@ class BusinessServiceTransactionTest {
         CapturingLogDAO logDAO = new CapturingLogDAO();
         BusinessService service = newService(orderDAO, logDAO, trackingConnection);
 
-        long orderId = service.createOrder(1L, 2L, new BigDecimal("88.00"));
+        long orderId = service.createOrder(1L, 2L, 2, "微信");
 
         assertEquals(77L, orderId);
         assertSame(trackingConnection.connection, orderDAO.connection);
@@ -52,7 +54,7 @@ class BusinessServiceTransactionTest {
         BusinessService service = newService(orderDAO, logDAO, trackingConnection);
 
         DBException exception = assertThrows(DBException.class,
-                () -> service.createOrder(1L, 2L, new BigDecimal("88.00")));
+                () -> service.createOrder(1L, 2L, 2, "微信"));
 
         assertSame(cause, exception.getCause());
         assertSame(trackingConnection.connection, orderDAO.connection);
@@ -69,17 +71,31 @@ class BusinessServiceTransactionTest {
         BusinessService service = newService(new SucceedingOrderDAO(1L), new CapturingLogDAO(), trackingConnection);
 
         assertThrows(BusinessException.class,
-                () -> service.createOrder(0L, 2L, new BigDecimal("1.00")));
+                () -> service.createOrder(0L, 2L, 1, "微信"));
         assertThrows(BusinessException.class,
-                () -> service.createOrder(1L, 2L, new BigDecimal("-1.00")));
+                () -> service.createOrder(1L, 2L, 0, "微信"));
         assertFalse(trackingConnection.closed);
         assertEquals(List.of(), trackingConnection.autoCommitValues);
     }
 
     private static BusinessService newService(OrderDAO orderDAO, LogDAO logDAO,
                                               TrackingConnection trackingConnection) {
-        return new BusinessService(new CategoryDAO(), new ItemDAO(), orderDAO, new DetailDAO(), logDAO,
+        return new BusinessService(new CategoryDAO(), new PricingItemDAO(), orderDAO, new DetailDAO(), logDAO,
                 new CommentDAO(), () -> trackingConnection.connection);
+    }
+
+    private static class PricingItemDAO extends ItemDAO {
+        @Override
+        public Optional<Item> findById(long itemId) {
+            Item item = new Item();
+            item.setItemId(itemId);
+            item.setTitle("测试景点");
+            item.setCategoryId(1L);
+            item.setPrice(new BigDecimal("88.00"));
+            item.setDiscountRate(BigDecimal.ZERO);
+            item.setStatus(1);
+            return Optional.of(item);
+        }
     }
 
     private static class SucceedingOrderDAO extends OrderDAO {
@@ -95,8 +111,12 @@ class BusinessServiceTransactionTest {
             this.connection = connection;
             assertEquals(1L, order.getUserId());
             assertEquals(2L, order.getItemId());
-            assertEquals(new BigDecimal("88.00"), order.getAmount());
-            assertEquals(0, order.getStatus());
+            assertEquals(new BigDecimal("176.00"), order.getAmount());
+            assertEquals(2, order.getQuantity());
+            assertEquals(new BigDecimal("88.00"), order.getUnitPrice());
+            assertEquals(new BigDecimal("0.00"), order.getDiscountRate());
+            assertEquals("微信", order.getPaymentMethod());
+            assertEquals(1, order.getStatus());
             return orderId;
         }
     }

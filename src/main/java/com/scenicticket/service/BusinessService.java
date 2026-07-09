@@ -18,6 +18,7 @@ import com.scenicticket.util.SecurityUtil;
 import org.bson.Document;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.List;
@@ -64,10 +65,17 @@ public class BusinessService {
     }
 
     public long createItem(String title, long categoryId, String description, List<String> images, Document metadata) {
+        return createItem(title, categoryId, description, images, metadata, new BigDecimal("80.00"), BigDecimal.ZERO);
+    }
+
+    public long createItem(String title, long categoryId, String description, List<String> images, Document metadata,
+                           BigDecimal price, BigDecimal discountRate) {
         String safeTitle = SecurityUtil.requireText(title, "景点标题", 200);
         Item item = new Item();
         item.setTitle(safeTitle);
         item.setCategoryId(categoryId);
+        item.setPrice(normalizePrice(price));
+        item.setDiscountRate(normalizeDiscount(discountRate));
         item.setStatus(1);
         long itemId = itemDAO.create(item);
         detailDAO.upsertDetail(itemId, SecurityUtil.normalizeText(description, 2000),
@@ -90,6 +98,13 @@ public class BusinessService {
         return itemDAO.updateStatus(itemId, status);
     }
 
+    public boolean updateItemPricing(long itemId, BigDecimal price, BigDecimal discountRate) {
+        if (itemId <= 0) {
+            throw new BusinessException("景点ID必须大于 0");
+        }
+        return itemDAO.updatePricing(itemId, normalizePrice(price), normalizeDiscount(discountRate));
+    }
+
     public ItemDetailDTO getItemDetail(long userId, long itemId, String ip) {
         if (userId <= 0 || itemId <= 0) {
             throw new BusinessException("用户ID和景点ID必须大于 0");
@@ -104,13 +119,22 @@ public class BusinessService {
         return dto;
     }
 
-    public long createOrder(long userId, long itemId, BigDecimal amount) {
+    public long createOrder(long userId, long itemId, int quantity, String paymentMethod) {
         if (userId <= 0 || itemId <= 0) {
             throw new BusinessException("用户ID和景点ID必须大于 0");
         }
-        if (amount == null || amount.compareTo(BigDecimal.ZERO) < 0) {
-            throw new BusinessException("订单金额不能小于 0");
+        if (quantity <= 0 || quantity > 99) {
+            throw new BusinessException("购买票数必须是 1 到 99 之间的整数");
         }
+        String safePaymentMethod = normalizePaymentMethod(paymentMethod);
+        Item item = itemDAO.findById(itemId)
+                .orElseThrow(() -> new BusinessException("景点不存在"));
+        if (item.getStatus() == null || item.getStatus() != 1) {
+            throw new BusinessException("该景点未上架，暂不能购买");
+        }
+        BigDecimal unitPrice = normalizePrice(item.getPrice());
+        BigDecimal discountRate = normalizeDiscount(item.getDiscountRate());
+        BigDecimal amount = calculateOrderAmount(unitPrice, discountRate, quantity);
         try (Connection connection = connectionProvider.getConnection()) {
             try {
                 connection.setAutoCommit(false);
@@ -118,7 +142,11 @@ public class BusinessService {
                 order.setUserId(userId);
                 order.setItemId(itemId);
                 order.setAmount(amount);
-                order.setStatus(0);
+                order.setQuantity(quantity);
+                order.setUnitPrice(unitPrice);
+                order.setDiscountRate(discountRate);
+                order.setPaymentMethod(safePaymentMethod);
+                order.setStatus(1);
                 long orderId = orderDAO.create(connection, order);
                 connection.commit();
                 logDAO.recordAction(userId, itemId, "ORDER", 0, "SWING", "127.0.0.1");
@@ -135,6 +163,13 @@ public class BusinessService {
         } catch (SQLException e) {
             throw new DBException("Failed to create order transaction.", e);
         }
+    }
+
+    public boolean canComment(long userId, long itemId) {
+        if (userId <= 0 || itemId <= 0) {
+            throw new BusinessException("用户ID和景点ID必须大于 0");
+        }
+        return orderDAO.existsPaidOrder(userId, itemId);
     }
 
     public List<Order> listUserOrders(long userId, int limit, int offset) {
@@ -161,5 +196,34 @@ public class BusinessService {
         } catch (SQLException rollbackException) {
             throw new DBException("Failed to rollback order transaction.", rollbackException);
         }
+    }
+
+    private BigDecimal normalizePrice(BigDecimal price) {
+        if (price == null || price.compareTo(BigDecimal.ZERO) < 0) {
+            throw new BusinessException("票价不能小于 0");
+        }
+        return price.setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private BigDecimal normalizeDiscount(BigDecimal discountRate) {
+        BigDecimal safeDiscount = discountRate == null ? BigDecimal.ZERO : discountRate;
+        if (safeDiscount.compareTo(BigDecimal.ZERO) < 0 || safeDiscount.compareTo(new BigDecimal("100")) > 0) {
+            throw new BusinessException("折扣必须在 0 到 100 之间，0 表示不打折");
+        }
+        return safeDiscount.setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private BigDecimal calculateOrderAmount(BigDecimal unitPrice, BigDecimal discountRate, int quantity) {
+        BigDecimal discountMultiplier = BigDecimal.ONE.subtract(discountRate.divide(new BigDecimal("100"), 4, RoundingMode.HALF_UP));
+        return unitPrice.multiply(BigDecimal.valueOf(quantity)).multiply(discountMultiplier)
+                .setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private String normalizePaymentMethod(String paymentMethod) {
+        String value = SecurityUtil.requireText(paymentMethod, "付款方式", 20);
+        if (!List.of("微信", "支付宝", "银行卡", "现金").contains(value)) {
+            throw new BusinessException("付款方式只能选择微信、支付宝、银行卡或现金");
+        }
+        return value;
     }
 }

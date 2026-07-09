@@ -59,6 +59,23 @@ public class AppFrame extends JFrame {
     private static final Color PANEL_BORDER = new Color(220, 225, 230);
     private static final Font TITLE_FONT = new Font("Microsoft YaHei UI", Font.BOLD, 22);
     private static final Font SECTION_FONT = new Font("Microsoft YaHei UI", Font.BOLD, 15);
+    private static final String ALL_OPTION = "全部";
+    private static final String[] KEYWORD_OPTIONS = {
+            ALL_OPTION, "南山", "云岭", "青河", "古城", "海湾", "星湖", "观景", "博物馆", "亲子", "水上", "森林"
+    };
+    private static final CategoryChoice[] CATEGORY_OPTIONS = {
+            new CategoryChoice("全部类型", null),
+            new CategoryChoice("自然景观", 1L),
+            new CategoryChoice("历史文化", 2L),
+            new CategoryChoice("主题乐园", 3L),
+            new CategoryChoice("山水风光", 4L),
+            new CategoryChoice("森林公园", 5L),
+            new CategoryChoice("古镇古街", 6L),
+            new CategoryChoice("博物展馆", 7L),
+            new CategoryChoice("亲子乐园", 8L),
+            new CategoryChoice("水上乐园", 9L),
+            new CategoryChoice("城市观光", 10L)
+    };
 
     private final UserService userService = new UserService();
     private final BusinessService businessService = new BusinessService();
@@ -351,51 +368,60 @@ public class AppFrame extends JFrame {
     private JPanel createItemPanel() {
         JPanel panel = pagePanel(new BorderLayout(12, 12));
 
-        JTextField keywordField = new JTextField(18);
-        JTextField categoryField = new JTextField(8);
+        JComboBox<String> keywordBox = new JComboBox<>(KEYWORD_OPTIONS);
+        JTextField keywordField = new JTextField(14);
+        JComboBox<CategoryChoice> categoryBox = new JComboBox<>(CATEGORY_OPTIONS);
         JTextField itemIdField = new JTextField(8);
-        JTextField orderAmountField = new JTextField("80.00", 8);
+        JTextField ticketCountField = new JTextField("1", 4);
+        JComboBox<String> paymentBox = new JComboBox<>(new String[]{"微信", "支付宝", "银行卡", "现金"});
         JTextField ratingField = new JTextField("5", 4);
         JTextField commentField = new JTextField(24);
         JTextArea detailArea = createTextArea(14, 70);
-        DefaultTableModel tableModel = tableModel("ID", "标题", "分类", "状态", "创建时间", "更新时间");
+        DefaultTableModel tableModel = tableModel("ID", "标题", "类型", "票价", "折扣", "状态", "更新时间");
         JTable table = createTable(tableModel);
-        detailArea.setText("先点击“查询全部”或输入关键词查询景点。选中一行后，可以查看详情、查看评论、创建订单或发表评论。");
+        detailArea.setText("先选择预设关键词或景点类型查询。选中景点后可以查看详情、购买门票；购买成功后可在详情评论区发表评论。");
 
         JPanel searchToolbar = toolbar();
         JButton searchButton = new JButton("查询景点");
         JButton allButton = new JButton("查询全部");
         JButton clearButton = new JButton("清空条件");
-        searchToolbar.add(new JLabel("关键词"));
+        searchToolbar.add(new JLabel("预设关键词"));
+        searchToolbar.add(keywordBox);
+        searchToolbar.add(new JLabel("补充关键词"));
         searchToolbar.add(keywordField);
-        searchToolbar.add(new JLabel("分类ID（可不填）"));
-        searchToolbar.add(categoryField);
+        searchToolbar.add(new JLabel("景点类型"));
+        searchToolbar.add(categoryBox);
         searchToolbar.add(searchButton);
         searchToolbar.add(allButton);
         searchToolbar.add(clearButton);
 
-        JPanel actionToolbar = toolbar();
+        JPanel purchaseToolbar = toolbar();
         JButton detailButton = new JButton("查看详情");
         JButton commentsButton = new JButton("查看评论");
         JButton orderButton = new JButton("创建订单");
-        JButton commentButton = new JButton("发表评论");
-        actionToolbar.add(new JLabel("景点ID（可点表格自动填写）"));
-        actionToolbar.add(itemIdField);
-        actionToolbar.add(detailButton);
-        actionToolbar.add(commentsButton);
-        actionToolbar.add(new JLabel("金额"));
-        actionToolbar.add(orderAmountField);
-        actionToolbar.add(orderButton);
-        actionToolbar.add(new JLabel("评分1-5"));
-        actionToolbar.add(ratingField);
-        actionToolbar.add(new JLabel("评论内容"));
-        actionToolbar.add(commentField);
-        actionToolbar.add(commentButton);
+        purchaseToolbar.add(new JLabel("景点ID（可点表格自动填写）"));
+        purchaseToolbar.add(itemIdField);
+        purchaseToolbar.add(detailButton);
+        purchaseToolbar.add(commentsButton);
+        purchaseToolbar.add(new JLabel("购买票数"));
+        purchaseToolbar.add(ticketCountField);
+        purchaseToolbar.add(new JLabel("付款方式"));
+        purchaseToolbar.add(paymentBox);
+        purchaseToolbar.add(orderButton);
 
-        JPanel controls = new JPanel(new GridLayout(2, 1, 0, 8));
+        JPanel commentToolbar = toolbar();
+        JButton commentButton = new JButton("发表评论");
+        commentToolbar.add(new JLabel("评分1-5"));
+        commentToolbar.add(ratingField);
+        commentToolbar.add(new JLabel("评论内容"));
+        commentToolbar.add(commentField);
+        commentToolbar.add(commentButton);
+
+        JPanel controls = new JPanel(new GridLayout(3, 1, 0, 8));
         controls.setOpaque(false);
         controls.add(wrapWithTitle("景点查询", searchToolbar));
-        controls.add(wrapWithTitle("购票与评论", actionToolbar));
+        controls.add(wrapWithTitle("购票", purchaseToolbar));
+        controls.add(wrapWithTitle("详情页评论（购买后可评论）", commentToolbar));
 
         table.getSelectionModel().addListSelectionListener(event -> {
             int row = table.getSelectedRow();
@@ -409,26 +435,29 @@ public class AppFrame extends JFrame {
             tableModel.setRowCount(0);
             for (Item item : items) {
                 tableModel.addRow(new Object[]{
-                        item.getItemId(), item.getTitle(), item.getCategoryId(), formatItemStatus(item.getStatus()),
-                        item.getCreatedAt(), item.getUpdatedAt()
+                        item.getItemId(), item.getTitle(), categoryName(item.getCategoryId()), item.getPrice(),
+                        discountText(item.getDiscountRate()), formatItemStatus(item.getStatus()), item.getUpdatedAt()
                 });
             }
             setStatus("查询到 " + items.size() + " 个景点。点击表格中的一行即可选择景点。");
         };
 
         searchButton.addActionListener(event -> runTask("景点查询", () -> businessService.searchItems(
-                keywordField.getText(), parseOptionalLong(categoryField.getText()), 50, 0
+                buildSearchKeyword((String) keywordBox.getSelectedItem(), keywordField.getText()),
+                selectedCategoryId(categoryBox), 50, 0
         ), fillItems));
 
         allButton.addActionListener(event -> {
+            keywordBox.setSelectedItem(ALL_OPTION);
             keywordField.setText("");
-            categoryField.setText("");
+            categoryBox.setSelectedIndex(0);
             runTask("查询全部景点", () -> businessService.searchItems(null, null, 50, 0), fillItems);
         });
 
         clearButton.addActionListener(event -> {
+            keywordBox.setSelectedItem(ALL_OPTION);
             keywordField.setText("");
-            categoryField.setText("");
+            categoryBox.setSelectedIndex(0);
             itemIdField.setText("");
             commentField.setText("");
             tableModel.setRowCount(0);
@@ -447,10 +476,15 @@ public class AppFrame extends JFrame {
         orderButton.addActionListener(event -> runTask("创建订单", () -> businessService.createOrder(
                 requireCurrentUserId(),
                 selectedOrTypedItemId(table, itemIdField),
-                parseRequiredAmount(orderAmountField.getText(), "订单金额")
-        ), orderId -> detailArea.setText("订单创建成功，订单ID：" + orderId)));
+                parseRequiredInt(ticketCountField.getText(), "购买票数"),
+                (String) paymentBox.getSelectedItem()
+        ), orderId -> detailArea.setText("模拟付款成功，订单ID：" + orderId + "。现在可以在本页面下方发表评论。")));
 
         commentButton.addActionListener(event -> runTask("发表评论", () -> {
+            long itemId = selectedOrTypedItemId(table, itemIdField);
+            if (!businessService.canComment(requireCurrentUserId(), itemId)) {
+                throw new IllegalArgumentException("购买成功后才能评论该景点，请先创建订单并完成模拟付款");
+            }
             String comment = commentField.getText().trim();
             int rating = parseRequiredInt(ratingField.getText(), "评分");
             if (rating < 1 || rating > 5) {
@@ -461,7 +495,7 @@ public class AppFrame extends JFrame {
             }
             behaviorLogService.addComment(
                     requireCurrentUserId(),
-                    selectedOrTypedItemId(table, itemIdField),
+                    itemId,
                     comment,
                     rating,
                     List.of("Swing界面"),
@@ -482,7 +516,7 @@ public class AppFrame extends JFrame {
         JTextField userIdField = new JTextField(10);
         JTextField orderIdField = new JTextField(10);
         JComboBox<String> statusBox = new JComboBox<>(new String[]{"0-待支付", "1-已支付", "2-已取消", "3-已完成"});
-        DefaultTableModel model = tableModel("订单ID", "用户ID", "景点ID", "金额", "状态", "创建时间");
+        DefaultTableModel model = tableModel("订单ID", "用户ID", "景点ID", "票数", "单价", "折扣", "实付金额", "付款方式", "状态", "创建时间");
         JTable table = createTable(model);
 
         JPanel toolbar = toolbar();
@@ -518,8 +552,9 @@ public class AppFrame extends JFrame {
             model.setRowCount(0);
             for (Order order : orders) {
                 model.addRow(new Object[]{
-                        order.getOrderId(), order.getUserId(), order.getItemId(), order.getAmount(),
-                        formatOrderStatus(order.getStatus()), order.getCreatedAt()
+                        order.getOrderId(), order.getUserId(), order.getItemId(), order.getQuantity(),
+                        order.getUnitPrice(), discountText(order.getDiscountRate()), order.getAmount(),
+                        order.getPaymentMethod(), formatOrderStatus(order.getStatus()), order.getCreatedAt()
                 });
             }
             setStatus("查询到 " + orders.size() + " 条订单");
@@ -544,8 +579,10 @@ public class AppFrame extends JFrame {
         JTextField categoryNameField = new JTextField(12);
         JTextField parentIdField = new JTextField(8);
         JTextField itemTitleField = new JTextField(16);
-        JTextField itemCategoryField = new JTextField(8);
+        JComboBox<CategoryChoice> itemCategoryBox = new JComboBox<>(categoryChoicesWithoutAll());
         JTextField itemDescField = new JTextField(20);
+        JTextField itemPriceField = new JTextField("80.00", 8);
+        JTextField itemDiscountField = new JTextField("0", 5);
         JTextField itemStatusIdField = new JTextField(8);
         JComboBox<String> itemStatusBox = new JComboBox<>(new String[]{"0-下架", "1-上架"});
 
@@ -562,17 +599,23 @@ public class AppFrame extends JFrame {
         JPanel itemToolbar = toolbar();
         JButton createItemButton = new JButton("新增景点");
         JButton itemStatusButton = new JButton("更新状态");
+        JButton pricingButton = new JButton("修改价格折扣");
         itemToolbar.add(new JLabel("景点标题"));
         itemToolbar.add(itemTitleField);
-        itemToolbar.add(new JLabel("分类ID"));
-        itemToolbar.add(itemCategoryField);
+        itemToolbar.add(new JLabel("预设类型"));
+        itemToolbar.add(itemCategoryBox);
         itemToolbar.add(new JLabel("描述"));
         itemToolbar.add(itemDescField);
+        itemToolbar.add(new JLabel("票价"));
+        itemToolbar.add(itemPriceField);
+        itemToolbar.add(new JLabel("折扣%"));
+        itemToolbar.add(itemDiscountField);
         itemToolbar.add(createItemButton);
         itemToolbar.add(new JLabel("景点ID"));
         itemToolbar.add(itemStatusIdField);
         itemToolbar.add(itemStatusBox);
         itemToolbar.add(itemStatusButton);
+        itemToolbar.add(pricingButton);
 
         JPanel controls = new JPanel(new GridLayout(2, 1, 0, 8));
         controls.setOpaque(false);
@@ -589,16 +632,24 @@ public class AppFrame extends JFrame {
 
         createItemButton.addActionListener(event -> runAdminTask("新增景点", () -> businessService.createItem(
                 itemTitleField.getText(),
-                parseRequiredLong(itemCategoryField.getText(), "分类ID"),
+                requireCategoryId(itemCategoryBox),
                 itemDescField.getText(),
                 List.of(),
-                new Document("source", "Swing后台")
+                new Document("source", "Swing后台"),
+                parseRequiredAmount(itemPriceField.getText(), "票价"),
+                parseRequiredAmount(itemDiscountField.getText(), "折扣")
         ), id -> resultArea.setText("景点创建成功，ID：" + id)));
 
         itemStatusButton.addActionListener(event -> runAdminTask("更新景点状态", () -> businessService.updateItemStatus(
                 parseRequiredLong(itemStatusIdField.getText(), "景点ID"),
                 itemStatusBox.getSelectedIndex()
         ), updated -> resultArea.setText(updated ? "景点状态已更新" : "景点状态未变化")));
+
+        pricingButton.addActionListener(event -> runAdminTask("修改价格折扣", () -> businessService.updateItemPricing(
+                parseRequiredLong(itemStatusIdField.getText(), "景点ID"),
+                parseRequiredAmount(itemPriceField.getText(), "票价"),
+                parseRequiredAmount(itemDiscountField.getText(), "折扣")
+        ), updated -> resultArea.setText(updated ? "景点票价和折扣已更新" : "景点票价和折扣未变化")));
 
         JSplitPane splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, new JScrollPane(categoryTable), wrapWithTitle("操作结果", resultArea));
         splitPane.setResizeWeight(0.68);
@@ -900,6 +951,50 @@ public class AppFrame extends JFrame {
         throw new IllegalArgumentException("请先在表格中选择一个景点，或手动填写景点ID");
     }
 
+    private CategoryChoice[] categoryChoicesWithoutAll() {
+        CategoryChoice[] choices = new CategoryChoice[CATEGORY_OPTIONS.length - 1];
+        System.arraycopy(CATEGORY_OPTIONS, 1, choices, 0, choices.length);
+        return choices;
+    }
+
+    private Long selectedCategoryId(JComboBox<CategoryChoice> categoryBox) {
+        CategoryChoice choice = (CategoryChoice) categoryBox.getSelectedItem();
+        return choice == null ? null : choice.categoryId();
+    }
+
+    private long requireCategoryId(JComboBox<CategoryChoice> categoryBox) {
+        Long categoryId = selectedCategoryId(categoryBox);
+        if (categoryId == null || categoryId <= 0) {
+            throw new IllegalArgumentException("请选择景点类型");
+        }
+        return categoryId;
+    }
+
+    private String buildSearchKeyword(String presetKeyword, String customKeyword) {
+        String preset = presetKeyword == null || ALL_OPTION.equals(presetKeyword) ? "" : presetKeyword.trim();
+        String custom = customKeyword == null ? "" : customKeyword.trim();
+        return custom.isBlank() ? preset : custom;
+    }
+
+    private String categoryName(Long categoryId) {
+        if (categoryId == null) {
+            return "-";
+        }
+        for (CategoryChoice choice : CATEGORY_OPTIONS) {
+            if (categoryId.equals(choice.categoryId())) {
+                return choice.label();
+            }
+        }
+        return "类型ID " + categoryId;
+    }
+
+    private String discountText(BigDecimal discountRate) {
+        if (discountRate == null || discountRate.compareTo(BigDecimal.ZERO) == 0) {
+            return "无折扣";
+        }
+        return discountRate.stripTrailingZeros().toPlainString() + "%";
+    }
+
     private DefaultTableModel tableModel(String... columns) {
         return new DefaultTableModel(columns, 0) {
             @Override
@@ -1059,7 +1154,9 @@ public class AppFrame extends JFrame {
         StringBuilder builder = new StringBuilder();
         builder.append(dto.getItem().getTitle()).append(System.lineSeparator());
         builder.append("基础信息：ID ").append(dto.getItem().getItemId())
-                .append(" / 分类 ").append(dto.getItem().getCategoryId())
+                .append(" / 类型 ").append(categoryName(dto.getItem().getCategoryId()))
+                .append(" / 票价 ").append(dto.getItem().getPrice())
+                .append(" / 折扣 ").append(discountText(dto.getItem().getDiscountRate()))
                 .append(" / 状态 ").append(formatItemStatus(dto.getItem().getStatus()))
                 .append(System.lineSeparator());
         builder.append("详情：").append(formatItemDetailDocument(dto.getDetail())).append(System.lineSeparator());
@@ -1589,5 +1686,12 @@ public class AppFrame extends JFrame {
             return null;
         }
         return value.trim();
+    }
+
+    private record CategoryChoice(String label, Long categoryId) {
+        @Override
+        public String toString() {
+            return label;
+        }
     }
 }

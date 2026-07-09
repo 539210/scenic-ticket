@@ -8,6 +8,10 @@ public class Order {
     private Long userId;
     private Long itemId;
     private BigDecimal amount;
+    private Integer quantity;
+    private BigDecimal unitPrice;
+    private BigDecimal discountRate;
+    private String paymentMethod;
     private Integer status;
     private LocalDateTime createdAt;
 
@@ -41,6 +45,38 @@ public class Order {
 
     public void setAmount(BigDecimal amount) {
         this.amount = amount;
+    }
+
+    public Integer getQuantity() {
+        return quantity;
+    }
+
+    public void setQuantity(Integer quantity) {
+        this.quantity = quantity;
+    }
+
+    public BigDecimal getUnitPrice() {
+        return unitPrice;
+    }
+
+    public void setUnitPrice(BigDecimal unitPrice) {
+        this.unitPrice = unitPrice;
+    }
+
+    public BigDecimal getDiscountRate() {
+        return discountRate;
+    }
+
+    public void setDiscountRate(BigDecimal discountRate) {
+        this.discountRate = discountRate;
+    }
+
+    public String getPaymentMethod() {
+        return paymentMethod;
+    }
+
+    public void setPaymentMethod(String paymentMethod) {
+        this.paymentMethod = paymentMethod;
     }
 
     public Integer getStatus() {

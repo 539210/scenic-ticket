@@ -24,12 +24,19 @@ public class OrderDAO extends BaseDAO {
     }
 
     public long create(Connection connection, Order order) throws SQLException {
-        String sql = "INSERT INTO orders (user_id, item_id, amount, status) VALUES (?, ?, ?, ?)";
+        String sql = """
+                INSERT INTO orders (user_id, item_id, amount, quantity, unit_price, discount_rate, payment_method, status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """;
         try (PreparedStatement statement = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             statement.setLong(1, order.getUserId());
             statement.setLong(2, order.getItemId());
             statement.setBigDecimal(3, order.getAmount());
-            statement.setInt(4, order.getStatus() == null ? 0 : order.getStatus());
+            statement.setInt(4, order.getQuantity());
+            statement.setBigDecimal(5, order.getUnitPrice());
+            statement.setBigDecimal(6, order.getDiscountRate());
+            statement.setString(7, order.getPaymentMethod());
+            statement.setInt(8, order.getStatus() == null ? 1 : order.getStatus());
             statement.executeUpdate();
             try (ResultSet generatedKeys = statement.getGeneratedKeys()) {
                 if (generatedKeys.next()) {
@@ -42,7 +49,7 @@ public class OrderDAO extends BaseDAO {
 
     public Optional<Order> findById(long orderId) {
         String sql = """
-                SELECT order_id, user_id, item_id, amount, status, created_at
+                SELECT order_id, user_id, item_id, amount, quantity, unit_price, discount_rate, payment_method, status, created_at
                 FROM orders
                 WHERE order_id = ?
                 """;
@@ -62,7 +69,7 @@ public class OrderDAO extends BaseDAO {
 
     public List<Order> findByUserId(long userId, int limit, int offset) {
         String sql = """
-                SELECT order_id, user_id, item_id, amount, status, created_at
+                SELECT order_id, user_id, item_id, amount, quantity, unit_price, discount_rate, payment_method, status, created_at
                 FROM orders
                 WHERE user_id = ?
                 ORDER BY created_at DESC
@@ -97,12 +104,37 @@ public class OrderDAO extends BaseDAO {
         }
     }
 
+    public boolean existsPaidOrder(long userId, long itemId) {
+        String sql = """
+                SELECT 1
+                FROM orders
+                WHERE user_id = ?
+                  AND item_id = ?
+                  AND status IN (1, 3)
+                LIMIT 1
+                """;
+        try (Connection connection = getConnection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setLong(1, userId);
+            statement.setLong(2, itemId);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                return resultSet.next();
+            }
+        } catch (SQLException e) {
+            throw new DBException("Failed to check paid order.", e);
+        }
+    }
+
     private Order mapOrder(ResultSet resultSet) throws SQLException {
         Order order = new Order();
         order.setOrderId(resultSet.getLong("order_id"));
         order.setUserId(resultSet.getLong("user_id"));
         order.setItemId(resultSet.getLong("item_id"));
         order.setAmount(resultSet.getBigDecimal("amount"));
+        order.setQuantity(resultSet.getInt("quantity"));
+        order.setUnitPrice(resultSet.getBigDecimal("unit_price"));
+        order.setDiscountRate(resultSet.getBigDecimal("discount_rate"));
+        order.setPaymentMethod(resultSet.getString("payment_method"));
         order.setStatus(resultSet.getInt("status"));
         order.setCreatedAt(toLocalDateTime(resultSet.getTimestamp("created_at")));
         return order;

@@ -20,12 +20,14 @@ import java.util.stream.Collectors;
 
 public class ItemDAO extends BaseDAO {
     public long create(Item item) {
-        String sql = "INSERT INTO items (title, category_id, status) VALUES (?, ?, ?)";
+        String sql = "INSERT INTO items (title, category_id, price, discount_rate, status) VALUES (?, ?, ?, ?, ?)";
         try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             statement.setString(1, item.getTitle());
             statement.setLong(2, item.getCategoryId());
-            statement.setInt(3, item.getStatus() == null ? 1 : item.getStatus());
+            statement.setBigDecimal(3, item.getPrice());
+            statement.setBigDecimal(4, item.getDiscountRate());
+            statement.setInt(5, item.getStatus() == null ? 1 : item.getStatus());
             statement.executeUpdate();
             try (ResultSet generatedKeys = statement.getGeneratedKeys()) {
                 if (generatedKeys.next()) {
@@ -40,7 +42,7 @@ public class ItemDAO extends BaseDAO {
 
     public Optional<Item> findById(long itemId) {
         String sql = """
-                SELECT item_id, title, category_id, status, created_at, updated_at
+                SELECT item_id, title, category_id, price, discount_rate, status, created_at, updated_at
                 FROM items
                 WHERE item_id = ?
                 """;
@@ -60,7 +62,7 @@ public class ItemDAO extends BaseDAO {
 
     public List<Item> search(String keyword, Long categoryId, Integer status, int limit, int offset) {
         StringBuilder sql = new StringBuilder("""
-                SELECT item_id, title, category_id, status, created_at, updated_at
+                SELECT item_id, title, category_id, price, discount_rate, status, created_at, updated_at
                 FROM items
                 WHERE 1 = 1
                 """);
@@ -103,7 +105,7 @@ public class ItemDAO extends BaseDAO {
         List<Long> distinctIds = itemIds.stream().distinct().toList();
         String placeholders = distinctIds.stream().map(id -> "?").collect(Collectors.joining(", "));
         String sql = """
-                SELECT item_id, title, category_id, status, created_at, updated_at
+                SELECT item_id, title, category_id, price, discount_rate, status, created_at, updated_at
                 FROM items
                 WHERE item_id IN (%s)
                 """.formatted(placeholders);
@@ -131,7 +133,7 @@ public class ItemDAO extends BaseDAO {
         Set<Long> safeExcludedIds = excludedItemIds == null ? Collections.emptySet() : new HashSet<>(excludedItemIds);
         String categoryPlaceholders = categoryIds.stream().map(id -> "?").collect(Collectors.joining(", "));
         StringBuilder sql = new StringBuilder("""
-                SELECT item_id, title, category_id, status, created_at, updated_at
+                SELECT item_id, title, category_id, price, discount_rate, status, created_at, updated_at
                 FROM items
                 WHERE status = 1
                   AND category_id IN (
@@ -169,7 +171,7 @@ public class ItemDAO extends BaseDAO {
 
     public List<Item> findLatestActive(int limit) {
         String sql = """
-                SELECT item_id, title, category_id, status, created_at, updated_at
+                SELECT item_id, title, category_id, price, discount_rate, status, created_at, updated_at
                 FROM items
                 WHERE status = 1
                 ORDER BY updated_at DESC, item_id DESC
@@ -193,18 +195,37 @@ public class ItemDAO extends BaseDAO {
     public boolean update(Item item) {
         String sql = """
                 UPDATE items
-                SET title = ?, category_id = ?, status = ?, updated_at = CURRENT_TIMESTAMP
+                SET title = ?, category_id = ?, price = ?, discount_rate = ?, status = ?, updated_at = CURRENT_TIMESTAMP
                 WHERE item_id = ?
                 """;
         try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setString(1, item.getTitle());
             statement.setLong(2, item.getCategoryId());
-            statement.setInt(3, item.getStatus() == null ? 1 : item.getStatus());
-            statement.setLong(4, item.getItemId());
+            statement.setBigDecimal(3, item.getPrice());
+            statement.setBigDecimal(4, item.getDiscountRate());
+            statement.setInt(5, item.getStatus() == null ? 1 : item.getStatus());
+            statement.setLong(6, item.getItemId());
             return statement.executeUpdate() == 1;
         } catch (SQLException e) {
             throw new DBException("Failed to update item.", e);
+        }
+    }
+
+    public boolean updatePricing(long itemId, java.math.BigDecimal price, java.math.BigDecimal discountRate) {
+        String sql = """
+                UPDATE items
+                SET price = ?, discount_rate = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE item_id = ?
+                """;
+        try (Connection connection = getConnection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setBigDecimal(1, price);
+            statement.setBigDecimal(2, discountRate);
+            statement.setLong(3, itemId);
+            return statement.executeUpdate() == 1;
+        } catch (SQLException e) {
+            throw new DBException("Failed to update item pricing.", e);
         }
     }
 
@@ -238,6 +259,8 @@ public class ItemDAO extends BaseDAO {
         item.setItemId(resultSet.getLong("item_id"));
         item.setTitle(resultSet.getString("title"));
         item.setCategoryId(resultSet.getLong("category_id"));
+        item.setPrice(resultSet.getBigDecimal("price"));
+        item.setDiscountRate(resultSet.getBigDecimal("discount_rate"));
         item.setStatus(resultSet.getInt("status"));
         item.setCreatedAt(toLocalDateTime(resultSet.getTimestamp("created_at")));
         item.setUpdatedAt(toLocalDateTime(resultSet.getTimestamp("updated_at")));
