@@ -231,6 +231,12 @@ public class AppFrame extends JFrame {
         quickActions.add(navButton("查看订单", "我的订单"));
         quickActions.add(navButton("推荐", "推荐"));
         quickActions.add(navButton("统计报表", "统计报表"));
+        JButton refreshButton = new JButton("刷新首页");
+        refreshButton.addActionListener(event -> {
+            refreshHomeSummary();
+            setStatus("首页已刷新");
+        });
+        quickActions.add(refreshButton);
         if (isCurrentAdmin()) {
             quickActions.add(navButton("后台管理", "后台管理"));
             quickActions.add(navButton("系统审计", "系统审计"));
@@ -342,6 +348,7 @@ public class AppFrame extends JFrame {
         JTextField idCardField = new JTextField(24);
         JTextField addressField = new JTextField(32);
         JTextArea notesArea = new JTextArea(5, 32);
+        JButton refreshButton = new JButton("刷新档案");
         JButton saveButton = new JButton("保存档案");
         JLabel message = new JLabel(" ");
 
@@ -351,8 +358,23 @@ public class AppFrame extends JFrame {
         addField(form, 2, "证件号", idCardField);
         addField(form, 3, "地址", addressField);
         addTextAreaField(form, 4, "备注", notesArea);
-        addFormButton(form, 5, saveButton);
+        addFormButtons(form, 5, refreshButton, saveButton);
         addFormMessage(form, 6, message);
+
+        refreshButton.addActionListener(event -> runTask("刷新档案", () -> userService.getProfile(
+                userIdField.getText().isBlank() ? requireCurrentUserId() : parseRequiredLong(userIdField.getText(), "用户ID")
+        ), profile -> {
+            if (profile.isPresent()) {
+                fillProfileForm(profile.get(), userIdField, realNameField, idCardField, addressField, notesArea);
+                message.setText("档案已刷新");
+            } else {
+                realNameField.setText("");
+                idCardField.setText("");
+                addressField.setText("");
+                notesArea.setText("");
+                message.setText("暂无档案信息，可以填写后保存");
+            }
+        }));
 
         saveButton.addActionListener(event -> runTask("保存档案", () -> {
             Profile profile = new Profile();
@@ -387,6 +409,7 @@ public class AppFrame extends JFrame {
         JPanel searchToolbar = toolbar();
         JButton searchButton = new JButton("查询景点");
         JButton allButton = new JButton("查询全部");
+        JButton refreshButton = new JButton("刷新列表");
         JButton clearButton = new JButton("清空条件");
         searchToolbar.add(new JLabel("预设关键词"));
         searchToolbar.add(keywordBox);
@@ -396,6 +419,7 @@ public class AppFrame extends JFrame {
         searchToolbar.add(categoryBox);
         searchToolbar.add(searchButton);
         searchToolbar.add(allButton);
+        searchToolbar.add(refreshButton);
         searchToolbar.add(clearButton);
 
         JPanel purchaseToolbar = toolbar();
@@ -446,6 +470,11 @@ public class AppFrame extends JFrame {
         };
 
         searchButton.addActionListener(event -> runTask("景点查询", () -> businessService.searchItems(
+                buildSearchKeyword((String) keywordBox.getSelectedItem(), keywordField.getText()),
+                selectedCategoryId(categoryBox), 50, 0
+        ), fillItems));
+
+        refreshButton.addActionListener(event -> runTask("刷新景点列表", () -> businessService.searchItems(
                 buildSearchKeyword((String) keywordBox.getSelectedItem(), keywordField.getText()),
                 selectedCategoryId(categoryBox), 50, 0
         ), fillItems));
@@ -527,6 +556,7 @@ public class AppFrame extends JFrame {
 
         JPanel queryToolbar = toolbar();
         JButton listButton = new JButton("查我的订单");
+        JButton refreshButton = new JButton("刷新订单");
         JButton updateButton = new JButton("更新状态");
         if (isCurrentAdmin()) {
             queryToolbar.add(new JLabel("用户ID（可不填）"));
@@ -538,6 +568,7 @@ public class AppFrame extends JFrame {
         queryToolbar.add(new JLabel("订单状态"));
         queryToolbar.add(queryStatusBox);
         queryToolbar.add(listButton);
+        queryToolbar.add(refreshButton);
 
         JPanel controls = new JPanel(new GridLayout(isCurrentAdmin() ? 2 : 1, 1, 0, 8));
         controls.setOpaque(false);
@@ -559,7 +590,7 @@ public class AppFrame extends JFrame {
             }
         });
 
-        listButton.addActionListener(event -> runTask("订单查询", () -> {
+        Runnable refreshOrders = () -> runTask("订单查询", () -> {
             Long queryUserId = isCurrentAdmin()
                     ? parseOptionalLong(userIdField.getText())
                     : Long.valueOf(requireCurrentUserId());
@@ -580,7 +611,9 @@ public class AppFrame extends JFrame {
                 });
             }
             setStatus("查询到 " + orders.size() + " 条订单");
-        }));
+        });
+        listButton.addActionListener(event -> refreshOrders.run());
+        refreshButton.addActionListener(event -> refreshOrders.run());
 
         updateButton.addActionListener(event -> runTask("更新订单状态", () -> businessService.updateOrderStatus(
                 parseRequiredLong(updateOrderIdField.getText(), "订单ID"),
@@ -691,6 +724,7 @@ public class AppFrame extends JFrame {
         JButton personalButton = new JButton("给我推荐");
         JButton hotButton = new JButton("热门推荐");
         JButton ratedButton = new JButton("高评分推荐");
+        JButton refreshButton = new JButton("刷新推荐");
         if (isCurrentAdmin()) {
             toolbar.add(new JLabel("用户ID（可不填）"));
             toolbar.add(userIdField);
@@ -699,12 +733,15 @@ public class AppFrame extends JFrame {
         toolbar.add(personalButton);
         toolbar.add(hotButton);
         toolbar.add(ratedButton);
+        toolbar.add(refreshButton);
 
-        personalButton.addActionListener(event -> runTask("个性化推荐", () -> recommendService.recommendForUser(
+        Runnable refreshRecommendations = () -> runTask("个性化推荐", () -> recommendService.recommendForUser(
                 isCurrentAdmin() && !userIdField.getText().isBlank()
                         ? parseRequiredLong(userIdField.getText(), "用户ID")
                         : requireCurrentUserId(), 10
-        ), recommendations -> fillRecommendationTable(tableModel, recommendations)));
+        ), recommendations -> fillRecommendationTable(tableModel, recommendations));
+        personalButton.addActionListener(event -> refreshRecommendations.run());
+        refreshButton.addActionListener(event -> refreshRecommendations.run());
 
         hotButton.addActionListener(event -> runTask("热门推荐", () -> recommendService.recommendHotItems(null, null, 10),
                 recommendations -> fillRecommendationTable(tableModel, recommendations)));
@@ -729,6 +766,7 @@ public class AppFrame extends JFrame {
         JButton hotButton = new JButton("热门排行");
         JButton userButton = new JButton(isCurrentAdmin() ? "用户报告" : "我的报告");
         JButton dashboardButton = new JButton("仪表盘汇总");
+        JButton refreshButton = new JButton("刷新报表");
         toolbar.add(new JLabel("年份"));
         toolbar.add(yearField);
         toolbar.add(new JLabel("月份"));
@@ -740,6 +778,7 @@ public class AppFrame extends JFrame {
             toolbar.add(userIdField);
         }
         toolbar.add(userButton);
+        toolbar.add(refreshButton);
         if (isCurrentAdmin()) {
             toolbar.add(dashboardButton);
         }
@@ -752,13 +791,15 @@ public class AppFrame extends JFrame {
         hotButton.addActionListener(event -> runTask("热门排行", () -> statisticsService.getHotItemRanking(null, null, 10),
                 documents -> reportArea.setText(formatHotItems(documents))));
 
-        userButton.addActionListener(event -> runTask("用户报告", () -> statisticsService.getUserReport(
+        Runnable refreshUserReport = () -> runTask("用户报告", () -> statisticsService.getUserReport(
                 isCurrentAdmin() && !userIdField.getText().isBlank()
                         ? parseRequiredLong(userIdField.getText(), "用户ID")
                         : requireCurrentUserId(),
                 null,
                 null
-        ), document -> reportArea.setText(formatUserReport(document))));
+        ), document -> reportArea.setText(formatUserReport(document)));
+        userButton.addActionListener(event -> refreshUserReport.run());
+        refreshButton.addActionListener(event -> refreshUserReport.run());
 
         dashboardButton.addActionListener(event -> runTask("仪表盘汇总", () -> statisticsService.buildDashboardReport(
                 null, null, parseRequiredInt(yearField.getText(), "年份"), parseRequiredInt(monthField.getText(), "月份")
@@ -787,6 +828,7 @@ public class AppFrame extends JFrame {
         JButton summaryButton = new JButton("审计汇总");
         JButton trendButton = new JButton("审计趋势");
         JButton userSummaryButton = new JButton("用户操作汇总");
+        JButton refreshButton = new JButton("刷新日志");
         toolbar.add(new JLabel("用户ID"));
         toolbar.add(userIdField);
         toolbar.add(new JLabel("类型"));
@@ -797,15 +839,18 @@ public class AppFrame extends JFrame {
         toolbar.add(summaryButton);
         toolbar.add(trendButton);
         toolbar.add(userSummaryButton);
+        toolbar.add(refreshButton);
 
-        queryButton.addActionListener(event -> runAdminTask("审计日志查询", () -> systemLogService.queryAuditLogs(
+        Runnable refreshAuditLogs = () -> runAdminTask("审计日志查询", () -> systemLogService.queryAuditLogs(
                 parseOptionalLong(userIdField.getText()),
                 blankToNull(logTypeField.getText()),
                 blankToNull((String) levelBox.getSelectedItem()),
                 null,
                 null,
                 80
-        ), documents -> auditArea.setText(formatAuditLogs(documents))));
+        ), documents -> auditArea.setText(formatAuditLogs(documents)));
+        queryButton.addActionListener(event -> refreshAuditLogs.run());
+        refreshButton.addActionListener(event -> refreshAuditLogs.run());
 
         summaryButton.addActionListener(event -> runAdminTask("审计汇总", () -> systemLogService.getAuditSummary(null, null),
                 documents -> auditArea.setText(formatAuditSummary(documents))));
@@ -857,6 +902,15 @@ public class AppFrame extends JFrame {
             builder.append("管理员功能：后台管理、系统审计。").append(System.lineSeparator());
         }
         homeSummaryArea.setText(builder.toString());
+    }
+
+    private void fillProfileForm(Profile profile, JTextField userIdField, JTextField realNameField,
+                                 JTextField idCardField, JTextField addressField, JTextArea notesArea) {
+        userIdField.setText(valueText(profile.getUserId()));
+        realNameField.setText(fieldText(profile.getRealName()));
+        idCardField.setText(fieldText(profile.getIdCard()));
+        addressField.setText(fieldText(profile.getAddress()));
+        notesArea.setText(fieldText(profile.getNotes()));
     }
 
     private void refreshCategories(DefaultTableModel model) {
@@ -1497,6 +1551,10 @@ public class AppFrame extends JFrame {
 
     private String valueText(Object value) {
         return value == null ? "-" : String.valueOf(value);
+    }
+
+    private String fieldText(Object value) {
+        return value == null ? "" : String.valueOf(value);
     }
 
     private String numberText(Object value) {

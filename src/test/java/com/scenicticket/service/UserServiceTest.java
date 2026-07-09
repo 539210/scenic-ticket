@@ -97,6 +97,21 @@ class UserServiceTest {
     }
 
     @Test
+    void getProfileRequiresValidUserIdAndReadsProfile() {
+        Profile profile = new Profile();
+        profile.setUserId(8L);
+        profile.setRealName("Alice");
+        profileDAO.profile = profile;
+
+        Optional<Profile> result = service.getProfile(8L);
+
+        assertTrue(result.isPresent());
+        assertEquals("Alice", result.get().getRealName());
+        assertEquals(8L, profileDAO.lastFindUserId);
+        assertThrows(BusinessException.class, () -> service.getProfile(0L));
+    }
+
+    @Test
     void isAdminRequiresAdminRoleAndActiveStatus() {
         User admin = new User();
         admin.setRole("ADMIN");
@@ -131,11 +146,18 @@ class UserServiceTest {
 
     private static class CapturingProfileDAO extends ProfileDAO {
         private Profile profile;
+        private long lastFindUserId;
 
         @Override
         public boolean upsert(Profile profile) {
             this.profile = profile;
             return true;
+        }
+
+        @Override
+        public Optional<Profile> findByUserId(long userId) {
+            lastFindUserId = userId;
+            return Optional.ofNullable(profile);
         }
     }
 

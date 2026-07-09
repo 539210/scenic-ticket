@@ -81,6 +81,13 @@ public class UserService {
         return profileDAO.upsert(profile);
     }
 
+    public Optional<Profile> getProfile(long userId) {
+        if (userId <= 0) {
+            throw new BusinessException("用户ID必须大于 0");
+        }
+        return profileDAO.findByUserId(userId);
+    }
+
     public boolean isAdmin(User user) {
         return user != null && "ADMIN".equals(user.getRole()) && user.getStatus() != null && user.getStatus() == 1;
     }
