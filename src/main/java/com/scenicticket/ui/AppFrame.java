@@ -48,6 +48,8 @@ import java.awt.GridLayout;
 import java.awt.Insets;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Callable;
@@ -59,6 +61,7 @@ public class AppFrame extends JFrame {
     private static final Color PANEL_BORDER = new Color(220, 225, 230);
     private static final Font TITLE_FONT = new Font("Microsoft YaHei UI", Font.BOLD, 22);
     private static final Font SECTION_FONT = new Font("Microsoft YaHei UI", Font.BOLD, 15);
+    private static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
     private static final String ALL_OPTION = "全部";
     private static final String[] KEYWORD_OPTIONS = {
             ALL_OPTION, "南山", "云岭", "青河", "古城", "海湾", "星湖", "观景", "博物馆", "亲子", "水上", "森林"
@@ -515,9 +518,11 @@ public class AppFrame extends JFrame {
         JPanel panel = pagePanel(new BorderLayout(12, 12));
         JTextField userIdField = new JTextField(10);
         JTextField orderIdField = new JTextField(10);
-        JComboBox<String> statusBox = new JComboBox<>(new String[]{"0-待支付", "1-已支付", "2-已取消", "3-已完成"});
+        JComboBox<String> queryStatusBox = new JComboBox<>(new String[]{"全部状态", "0-待支付", "1-已支付", "2-已取消", "3-已完成"});
+        JComboBox<String> updateStatusBox = new JComboBox<>(new String[]{"0-待支付", "1-已支付", "2-已取消", "3-已完成"});
         DefaultTableModel model = tableModel("订单ID", "用户ID", "景点ID", "票数", "单价", "折扣", "实付金额", "付款方式", "状态", "创建时间");
         JTable table = createTable(model);
+        setColumnWidths(table, 90, 90, 90, 70, 90, 90, 110, 110, 100, 180);
 
         JPanel toolbar = toolbar();
         JButton listButton = new JButton("查我的订单");
@@ -527,11 +532,14 @@ public class AppFrame extends JFrame {
             toolbar.add(userIdField);
             listButton.setText("查询订单");
         }
+        toolbar.add(new JLabel("订单ID（可不填）"));
+        toolbar.add(orderIdField);
+        toolbar.add(new JLabel("订单状态"));
+        toolbar.add(queryStatusBox);
         toolbar.add(listButton);
         if (isCurrentAdmin()) {
-            toolbar.add(new JLabel("订单ID"));
-            toolbar.add(orderIdField);
-            toolbar.add(statusBox);
+            toolbar.add(new JLabel("改为"));
+            toolbar.add(updateStatusBox);
             toolbar.add(updateButton);
         }
 
@@ -542,10 +550,10 @@ public class AppFrame extends JFrame {
             }
         });
 
-        listButton.addActionListener(event -> runTask("订单查询", () -> businessService.listUserOrders(
-                isCurrentAdmin() && !userIdField.getText().isBlank()
-                        ? parseRequiredLong(userIdField.getText(), "用户ID")
-                        : requireCurrentUserId(),
+        listButton.addActionListener(event -> runTask("订单查询", () -> businessService.searchOrders(
+                isCurrentAdmin() ? parseOptionalLong(userIdField.getText()) : requireCurrentUserId(),
+                parseOptionalLong(orderIdField.getText()),
+                selectedOrderStatus(queryStatusBox),
                 50,
                 0
         ), orders -> {
@@ -554,7 +562,7 @@ public class AppFrame extends JFrame {
                 model.addRow(new Object[]{
                         order.getOrderId(), order.getUserId(), order.getItemId(), order.getQuantity(),
                         order.getUnitPrice(), discountText(order.getDiscountRate()), order.getAmount(),
-                        order.getPaymentMethod(), formatOrderStatus(order.getStatus()), order.getCreatedAt()
+                        order.getPaymentMethod(), formatOrderStatus(order.getStatus()), formatDate(order.getCreatedAt())
                 });
             }
             setStatus("查询到 " + orders.size() + " 条订单");
@@ -562,7 +570,7 @@ public class AppFrame extends JFrame {
 
         updateButton.addActionListener(event -> runTask("更新订单状态", () -> businessService.updateOrderStatus(
                 parseRequiredLong(orderIdField.getText(), "订单ID"),
-                statusBox.getSelectedIndex()
+                updateStatusBox.getSelectedIndex()
         ), updated -> setStatus(updated ? "订单状态已更新" : "订单状态未变化")));
 
         panel.add(toolbar, BorderLayout.NORTH);
@@ -663,6 +671,7 @@ public class AppFrame extends JFrame {
         JTextField userIdField = new JTextField(10);
         DefaultTableModel tableModel = tableModel("景点ID", "标题", "分数", "原因", "评分摘要");
         JTable table = createTable(tableModel);
+        setColumnWidths(table, 90, 260, 90, 430, 520);
 
         JPanel toolbar = toolbar();
         JButton personalButton = new JButton("给我推荐");
@@ -936,8 +945,16 @@ public class AppFrame extends JFrame {
         JTable table = new JTable(model);
         table.setRowHeight(28);
         table.setAutoCreateRowSorter(true);
+        table.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
         table.getTableHeader().setReorderingAllowed(false);
         return table;
+    }
+
+    private void setColumnWidths(JTable table, int... widths) {
+        int columnCount = Math.min(table.getColumnCount(), widths.length);
+        for (int i = 0; i < columnCount; i += 1) {
+            table.getColumnModel().getColumn(i).setPreferredWidth(widths[i]);
+        }
     }
 
     private long selectedOrTypedItemId(JTable table, JTextField itemIdField) {
@@ -993,6 +1010,11 @@ public class AppFrame extends JFrame {
             return "无折扣";
         }
         return discountRate.stripTrailingZeros().toPlainString() + "%";
+    }
+
+    private Integer selectedOrderStatus(JComboBox<String> statusBox) {
+        int selectedIndex = statusBox.getSelectedIndex();
+        return selectedIndex <= 0 ? null : selectedIndex - 1;
     }
 
     private DefaultTableModel tableModel(String... columns) {
@@ -1452,6 +1474,9 @@ public class AppFrame extends JFrame {
     private String formatDate(Object value) {
         if (value instanceof java.util.Date date) {
             return new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(date);
+        }
+        if (value instanceof LocalDateTime dateTime) {
+            return dateTime.format(DATE_TIME_FORMATTER);
         }
         return valueText(value);
     }

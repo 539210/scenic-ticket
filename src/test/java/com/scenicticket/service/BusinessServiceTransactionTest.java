@@ -78,6 +78,21 @@ class BusinessServiceTransactionTest {
         assertEquals(List.of(), trackingConnection.autoCommitValues);
     }
 
+    @Test
+    void searchOrdersPassesAllFiltersToOrderDao() {
+        CapturingSearchOrderDAO orderDAO = new CapturingSearchOrderDAO();
+        BusinessService service = newService(orderDAO, new CapturingLogDAO(), TrackingConnection.create());
+
+        List<Order> orders = service.searchOrders(1L, 23L, 1, 50, 0);
+
+        assertEquals(1, orders.size());
+        assertEquals(1L, orderDAO.userId);
+        assertEquals(23L, orderDAO.orderId);
+        assertEquals(1, orderDAO.status);
+        assertEquals(50, orderDAO.limit);
+        assertEquals(0, orderDAO.offset);
+    }
+
     private static BusinessService newService(OrderDAO orderDAO, LogDAO logDAO,
                                               TrackingConnection trackingConnection) {
         return new BusinessService(new CategoryDAO(), new PricingItemDAO(), orderDAO, new DetailDAO(), logDAO,
@@ -133,6 +148,26 @@ class BusinessServiceTransactionTest {
         public long create(Connection connection, Order order) throws SQLException {
             this.connection = connection;
             throw exception;
+        }
+    }
+
+    private static class CapturingSearchOrderDAO extends OrderDAO {
+        private Long userId;
+        private Long orderId;
+        private Integer status;
+        private int limit;
+        private int offset;
+
+        @Override
+        public List<Order> search(Long userId, Long orderId, Integer status, int limit, int offset) {
+            this.userId = userId;
+            this.orderId = orderId;
+            this.status = status;
+            this.limit = limit;
+            this.offset = offset;
+            Order order = new Order();
+            order.setOrderId(orderId);
+            return List.of(order);
         }
     }
 

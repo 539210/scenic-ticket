@@ -92,6 +92,52 @@ public class OrderDAO extends BaseDAO {
         }
     }
 
+    public List<Order> search(Long userId, Long orderId, Integer status, int limit, int offset) {
+        StringBuilder sql = new StringBuilder("""
+                SELECT order_id, user_id, item_id, amount, quantity, unit_price, discount_rate, payment_method, status, created_at
+                FROM orders
+                WHERE 1 = 1
+                """);
+        List<Object> parameters = new ArrayList<>();
+        if (userId != null) {
+            sql.append(" AND user_id = ?");
+            parameters.add(userId);
+        }
+        if (orderId != null) {
+            sql.append(" AND order_id = ?");
+            parameters.add(orderId);
+        }
+        if (status != null) {
+            sql.append(" AND status = ?");
+            parameters.add(status);
+        }
+        sql.append(" ORDER BY created_at DESC LIMIT ? OFFSET ?");
+
+        try (Connection connection = getConnection();
+             PreparedStatement statement = connection.prepareStatement(sql.toString())) {
+            int parameterIndex = 1;
+            for (Object parameter : parameters) {
+                if (parameter instanceof Long longValue) {
+                    statement.setLong(parameterIndex, longValue);
+                } else if (parameter instanceof Integer intValue) {
+                    statement.setInt(parameterIndex, intValue);
+                }
+                parameterIndex += 1;
+            }
+            statement.setInt(parameterIndex, limit);
+            statement.setInt(parameterIndex + 1, offset);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                List<Order> orders = new ArrayList<>();
+                while (resultSet.next()) {
+                    orders.add(mapOrder(resultSet));
+                }
+                return orders;
+            }
+        } catch (SQLException e) {
+            throw new DBException("Failed to search orders.", e);
+        }
+    }
+
     public boolean updateStatus(long orderId, int status) {
         String sql = "UPDATE orders SET status = ? WHERE order_id = ?";
         try (Connection connection = getConnection();

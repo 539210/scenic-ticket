@@ -180,6 +180,20 @@ public class BusinessService {
                 SecurityUtil.normalizeOffset(offset));
     }
 
+    public List<Order> searchOrders(Long userId, Long orderId, Integer status, int limit, int offset) {
+        if (userId != null && userId <= 0) {
+            throw new BusinessException("用户ID必须大于 0");
+        }
+        if (orderId != null && orderId <= 0) {
+            throw new BusinessException("订单ID必须大于 0");
+        }
+        if (status != null && (status < 0 || status > 3)) {
+            throw new BusinessException("订单状态不正确");
+        }
+        return orderDAO.search(userId, orderId, status, SecurityUtil.normalizeLimit(limit, 20, 100),
+                SecurityUtil.normalizeOffset(offset));
+    }
+
     public boolean updateOrderStatus(long orderId, int status) {
         if (orderId <= 0) {
             throw new BusinessException("订单ID必须大于 0");
