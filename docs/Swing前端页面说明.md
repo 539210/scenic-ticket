@@ -22,14 +22,13 @@ src/main/java/com/scenicticket/ui/AppFrame.java
 | 注册页 | 从登录页跳转注册新用户，注册成功后返回登录页 | `UserService#register` |
 | 首页 | 展示当前账号、账号类型和快捷入口 | 本地 UI 状态 |
 | 个人档案 | 保存用户真实姓名、证件号、地址、备注 | `UserService#updateProfile` |
-| 景点浏览 | 按预设关键词/类型查询景点、查看详情和评论、按票数购票、模拟付款、购买后发表评论 | `BusinessService`、`CrossDatabaseQueryService`、`BehaviorLogService` |
+| 景点浏览 | 按预设关键词/类型查询景点、查看详情和评论、在查询区查看为你推荐/热门/高分推荐、按票数购票、模拟付款、购买后发表评论 | `BusinessService`、`CrossDatabaseQueryService`、`RecommendService`、`BehaviorLogService` |
 | 我的订单 | 查询用户订单、更新订单状态 | `BusinessService` |
 | 后台管理 | 分类列表、新增分类、新增景点、景点上下架、维护景点票价和折扣 | `BusinessService` |
-| 推荐 | 个性化推荐、热门推荐、高评分推荐 | `RecommendService` |
 | 统计报表 | 月度订单、热门排行、用户报告、仪表盘汇总 | `StatisticsService` |
 | 系统审计 | 系统日志查询、审计汇总、审计趋势、用户操作汇总 | `SystemLogService` |
 
-普通用户登录后只显示用户侧页面：`首页`、`个人档案`、`景点浏览`、`我的订单`、`推荐`、`统计报表`。管理员登录后显示完整页面，额外包含 `后台管理` 和 `系统审计`。
+普通用户登录后只显示用户侧页面：`首页`、`个人档案`、`景点浏览`、`我的订单`、`统计报表`。推荐入口已合并到 `景点浏览` 页。管理员登录后显示完整页面，额外包含 `后台管理` 和 `系统审计`。
 
 注册页会校验用户名、密码、邮箱和手机号。手机号必须是 11 位大陆手机号；输入非法时界面会用中文提示具体字段。
 

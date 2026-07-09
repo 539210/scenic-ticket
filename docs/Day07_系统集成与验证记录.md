@@ -9,7 +9,7 @@
 | 跨库详情 | Swing 详情按钮调用 `CrossDatabaseQueryService#getItemDetail` |
 | 下单 | Swing 下单按钮调用 `BusinessService#createOrder` |
 | 评论 | Swing 评论按钮调用 `BehaviorLogService#addComment` |
-| 推荐 | Swing 推荐页调用 `RecommendService` |
+| 推荐 | Swing 景点浏览页的“为你推荐/热门/高分”入口调用 `RecommendService` |
 | 统计报表 | Swing 统计页调用 `StatisticsService` |
 | 系统审计 | Swing 审计页调用 `SystemLogService` |
 
@@ -47,4 +47,4 @@ BUILD SUCCESS
 
 ## 说明
 
-本次完成编译级系统集成验证。`UserDAOTest` 仍默认跳过数据库集成测试。完整端到端演示需要本地 MySQL 和 MongoDB 启动，并执行初始化脚本后，通过 Swing 界面按“登录/注册 -> 景点查询 -> 详情 -> 下单/评论 -> 推荐 -> 报表 -> 审计”路径验证。
+本次完成编译级系统集成验证。`UserDAOTest` 仍默认跳过数据库集成测试。完整端到端演示需要本地 MySQL 和 MongoDB 启动，并执行初始化脚本后，通过 Swing 界面按“登录/注册 -> 景点查询/推荐 -> 详情 -> 下单/评论 -> 报表 -> 审计”路径验证。

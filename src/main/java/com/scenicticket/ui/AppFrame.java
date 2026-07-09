@@ -26,6 +26,7 @@ import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JPasswordField;
+import javax.swing.JScrollBar;
 import javax.swing.JScrollPane;
 import javax.swing.JSplitPane;
 import javax.swing.JTabbedPane;
@@ -197,7 +198,6 @@ public class AppFrame extends JFrame {
         tabs.addTab("个人档案", scrollPage(createProfilePanel()));
         tabs.addTab("景点浏览", scrollPage(createItemPanel()));
         tabs.addTab("我的订单", scrollPage(createOrderPanel()));
-        tabs.addTab("推荐", scrollPage(createRecommendPanel()));
         tabs.addTab("统计报表", scrollPage(createReportPanel()));
         if (isCurrentAdmin()) {
             tabs.addTab("后台管理", scrollPage(createManagePanel()));
@@ -229,7 +229,6 @@ public class AppFrame extends JFrame {
         quickActions.add(navButton("个人档案", "个人档案"));
         quickActions.add(navButton("浏览景点", "景点浏览"));
         quickActions.add(navButton("查看订单", "我的订单"));
-        quickActions.add(navButton("推荐", "推荐"));
         quickActions.add(navButton("统计报表", "统计报表"));
         JButton refreshButton = new JButton("刷新首页");
         refreshButton.addActionListener(event -> {
@@ -402,12 +401,16 @@ public class AppFrame extends JFrame {
         JTextField ratingField = new JTextField("5", 4);
         JTextField commentField = new JTextField(24);
         JTextArea detailArea = createTextArea(14, 70);
-        DefaultTableModel tableModel = tableModel("ID", "标题", "类型", "票价", "折扣", "状态", "更新时间");
+        DefaultTableModel tableModel = tableModel("ID", "标题", "类型", "票价", "折扣", "状态", "推荐分", "推荐理由", "更新时间");
         JTable table = createTable(tableModel);
+        setColumnWidths(table, 80, 240, 120, 90, 90, 90, 90, 260, 180);
         detailArea.setText("先选择预设关键词或景点类型查询。选中景点后可以查看详情、购买门票；购买成功后可在详情评论区发表评论。");
 
         JPanel searchToolbar = toolbar();
         JButton searchButton = new JButton("查询景点");
+        JButton recommendButton = new JButton("为你推荐");
+        JButton hotRecommendButton = new JButton("热门");
+        JButton ratedRecommendButton = new JButton("高分");
         JButton allButton = new JButton("查询全部");
         JButton refreshButton = new JButton("刷新列表");
         JButton clearButton = new JButton("清空条件");
@@ -418,6 +421,9 @@ public class AppFrame extends JFrame {
         searchToolbar.add(new JLabel("景点类型"));
         searchToolbar.add(categoryBox);
         searchToolbar.add(searchButton);
+        searchToolbar.add(recommendButton);
+        searchToolbar.add(hotRecommendButton);
+        searchToolbar.add(ratedRecommendButton);
         searchToolbar.add(allButton);
         searchToolbar.add(refreshButton);
         searchToolbar.add(clearButton);
@@ -463,16 +469,44 @@ public class AppFrame extends JFrame {
             for (Item item : items) {
                 tableModel.addRow(new Object[]{
                         item.getItemId(), item.getTitle(), categoryName(item.getCategoryId()), item.getPrice(),
-                        discountText(item.getDiscountRate()), formatItemStatus(item.getStatus()), item.getUpdatedAt()
+                        discountText(item.getDiscountRate()), formatItemStatus(item.getStatus()), "", "",
+                        formatDate(item.getUpdatedAt())
                 });
             }
             setStatus("查询到 " + items.size() + " 个景点。点击表格中的一行即可选择景点。");
+        };
+
+        Consumer<List<RecommendationDTO>> fillRecommendations = recommendations -> {
+            tableModel.setRowCount(0);
+            for (RecommendationDTO recommendation : recommendations) {
+                Item item = recommendation.getItem();
+                if (item == null) {
+                    continue;
+                }
+                tableModel.addRow(new Object[]{
+                        item.getItemId(), item.getTitle(), categoryName(item.getCategoryId()), item.getPrice(),
+                        discountText(item.getDiscountRate()), formatItemStatus(item.getStatus()),
+                        formatRecommendationScore(recommendation.getScore()), recommendation.getReason(),
+                        formatDate(item.getUpdatedAt())
+                });
+            }
+            setStatus("为你找到 " + recommendations.size() + " 个推荐景点。点击表格中的一行即可选择景点。");
         };
 
         searchButton.addActionListener(event -> runTask("景点查询", () -> businessService.searchItems(
                 buildSearchKeyword((String) keywordBox.getSelectedItem(), keywordField.getText()),
                 selectedCategoryId(categoryBox), 50, 0
         ), fillItems));
+
+        recommendButton.addActionListener(event -> runTask("为你推荐", () -> recommendService.recommendForUser(
+                requireCurrentUserId(), 10
+        ), fillRecommendations));
+
+        hotRecommendButton.addActionListener(event -> runTask("热门推荐", () -> recommendService.recommendHotItems(null, null, 10),
+                fillRecommendations));
+
+        ratedRecommendButton.addActionListener(event -> runTask("高分推荐", () -> recommendService.recommendTopRatedItems(10),
+                fillRecommendations));
 
         refreshButton.addActionListener(event -> runTask("刷新景点列表", () -> businessService.searchItems(
                 buildSearchKeyword((String) keywordBox.getSelectedItem(), keywordField.getText()),
@@ -713,47 +747,6 @@ public class AppFrame extends JFrame {
         return panel;
     }
 
-    private JPanel createRecommendPanel() {
-        JPanel panel = pagePanel(new BorderLayout(12, 12));
-        JTextField userIdField = new JTextField(10);
-        DefaultTableModel tableModel = tableModel("景点ID", "标题", "分数", "原因", "评分摘要");
-        JTable table = createTable(tableModel);
-        setColumnWidths(table, 90, 260, 90, 430, 520);
-
-        JPanel toolbar = toolbar();
-        JButton personalButton = new JButton("给我推荐");
-        JButton hotButton = new JButton("热门推荐");
-        JButton ratedButton = new JButton("高评分推荐");
-        JButton refreshButton = new JButton("刷新推荐");
-        if (isCurrentAdmin()) {
-            toolbar.add(new JLabel("用户ID（可不填）"));
-            toolbar.add(userIdField);
-            personalButton.setText("个性化推荐");
-        }
-        toolbar.add(personalButton);
-        toolbar.add(hotButton);
-        toolbar.add(ratedButton);
-        toolbar.add(refreshButton);
-
-        Runnable refreshRecommendations = () -> runTask("个性化推荐", () -> recommendService.recommendForUser(
-                isCurrentAdmin() && !userIdField.getText().isBlank()
-                        ? parseRequiredLong(userIdField.getText(), "用户ID")
-                        : requireCurrentUserId(), 10
-        ), recommendations -> fillRecommendationTable(tableModel, recommendations));
-        personalButton.addActionListener(event -> refreshRecommendations.run());
-        refreshButton.addActionListener(event -> refreshRecommendations.run());
-
-        hotButton.addActionListener(event -> runTask("热门推荐", () -> recommendService.recommendHotItems(null, null, 10),
-                recommendations -> fillRecommendationTable(tableModel, recommendations)));
-
-        ratedButton.addActionListener(event -> runTask("高评分推荐", () -> recommendService.recommendTopRatedItems(10),
-                recommendations -> fillRecommendationTable(tableModel, recommendations)));
-
-        panel.add(toolbar, BorderLayout.NORTH);
-        panel.add(new JScrollPane(table), BorderLayout.CENTER);
-        return panel;
-    }
-
     private JPanel createReportPanel() {
         JPanel panel = pagePanel(new BorderLayout(12, 12));
         JTextField yearField = new JTextField(String.valueOf(LocalDate.now().getYear()), 6);
@@ -848,19 +841,19 @@ public class AppFrame extends JFrame {
                 null,
                 null,
                 80
-        ), documents -> auditArea.setText(formatAuditLogs(documents)));
+        ), documents -> setTextKeepingScroll(auditArea, formatAuditLogs(documents)));
         queryButton.addActionListener(event -> refreshAuditLogs.run());
         refreshButton.addActionListener(event -> refreshAuditLogs.run());
 
         summaryButton.addActionListener(event -> runAdminTask("审计汇总", () -> systemLogService.getAuditSummary(null, null),
-                documents -> auditArea.setText(formatAuditSummary(documents))));
+                documents -> setTextKeepingScroll(auditArea, formatAuditSummary(documents))));
 
         trendButton.addActionListener(event -> runAdminTask("审计趋势", () -> systemLogService.getDailyAuditTrend(null, null),
-                documents -> auditArea.setText(formatAuditTrend(documents))));
+                documents -> setTextKeepingScroll(auditArea, formatAuditTrend(documents))));
 
         userSummaryButton.addActionListener(event -> runAdminTask("用户操作汇总",
                 () -> systemLogService.getUserOperationSummary(null, null, 50),
-                documents -> auditArea.setText(formatUserOperationSummary(documents))));
+                documents -> setTextKeepingScroll(auditArea, formatUserOperationSummary(documents))));
 
         panel.add(toolbar, BorderLayout.NORTH);
         panel.add(wrapWithTitle("审计结果", auditArea), BorderLayout.CENTER);
@@ -896,7 +889,7 @@ public class AppFrame extends JFrame {
         builder.append("当前账号：")
                 .append(currentUser == null ? "未登录" : currentUser.getUsername() + " / " + roleDisplay(currentUser.getRole()))
                 .append(System.lineSeparator());
-        builder.append("可用功能：个人档案、景点浏览、我的订单、推荐、统计报表。")
+        builder.append("可用功能：个人档案、景点浏览、我的订单、统计报表。推荐入口已合并到景点浏览页。")
                 .append(System.lineSeparator());
         if (currentUser != null && "ADMIN".equals(currentUser.getRole())) {
             builder.append("管理员功能：后台管理、系统审计。").append(System.lineSeparator());
@@ -1080,6 +1073,10 @@ public class AppFrame extends JFrame {
         return discountRate.stripTrailingZeros().toPlainString() + "%";
     }
 
+    private String formatRecommendationScore(double score) {
+        return String.format("%.1f", Math.max(0.0, Math.min(100.0, score)));
+    }
+
     private Integer selectedOrderStatus(JComboBox<String> statusBox) {
         int selectedIndex = statusBox.getSelectedIndex();
         return selectedIndex <= 0 ? null : selectedIndex - 1;
@@ -1193,6 +1190,23 @@ public class AppFrame extends JFrame {
         statusLabel.setText(message);
     }
 
+    private void setTextKeepingScroll(JTextArea textArea, String text) {
+        JScrollPane scrollPane = (JScrollPane) SwingUtilities.getAncestorOfClass(JScrollPane.class, textArea);
+        if (scrollPane == null) {
+            textArea.setText(text);
+            return;
+        }
+        JScrollBar verticalBar = scrollPane.getVerticalScrollBar();
+        JScrollBar horizontalBar = scrollPane.getHorizontalScrollBar();
+        int verticalValue = verticalBar.getValue();
+        int horizontalValue = horizontalBar.getValue();
+        textArea.setText(text);
+        SwingUtilities.invokeLater(() -> {
+            verticalBar.setValue(Math.min(verticalValue, verticalBar.getMaximum()));
+            horizontalBar.setValue(Math.min(horizontalValue, horizontalBar.getMaximum()));
+        });
+    }
+
     private void clearTextFields(Component component) {
         if (component instanceof JTextField textField) {
             textField.setText("");
@@ -1223,20 +1237,6 @@ public class AppFrame extends JFrame {
                 tabs.setSelectedIndex(i);
                 return;
             }
-        }
-    }
-
-    private void fillRecommendationTable(DefaultTableModel tableModel, List<RecommendationDTO> recommendations) {
-        tableModel.setRowCount(0);
-        for (RecommendationDTO recommendation : recommendations) {
-            Item item = recommendation.getItem();
-            tableModel.addRow(new Object[]{
-                    item == null ? "" : item.getItemId(),
-                    item == null ? "" : item.getTitle(),
-                    recommendation.getScore(),
-                    recommendation.getReason(),
-                    formatRatingSummary(recommendation.getRatingSummary())
-            });
         }
     }
 

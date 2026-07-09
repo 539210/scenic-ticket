@@ -49,7 +49,7 @@ public class RecommendService {
         List<RecommendationDTO> recommendations = new ArrayList<>();
         List<Item> sameCategoryItems = itemDAO.findActiveByCategoryIds(categoryIds, excludedItemIds, safeLimit);
         for (Item item : sameCategoryItems) {
-            recommendations.add(toRecommendation(item, 80.0, "根据你的浏览、评论或下单偏好推荐同类景点"));
+            recommendations.add(toRecommendation(item, 85.0, "根据你的浏览、评论或下单偏好推荐同类景点"));
         }
 
         if (recommendations.size() < safeLimit) {
@@ -58,7 +58,7 @@ public class RecommendService {
         if (recommendations.size() < safeLimit) {
             for (Item item : itemDAO.findLatestActive(safeLimit - recommendations.size())) {
                 if (!containsItem(recommendations, item.getItemId()) && !excludedItemIds.contains(item.getItemId())) {
-                    recommendations.add(toRecommendation(item, 30.0, "最新上架景点推荐"));
+                    recommendations.add(toRecommendation(item, 60.0, "最新上架景点推荐"));
                 }
             }
         }
@@ -78,7 +78,7 @@ public class RecommendService {
         for (Document document : ratedItems) {
             Long itemId = readLong(document.get("_id"));
             if (itemId != null) {
-                scores.put(itemId, readDouble(document.get("avg_rating")) * 20);
+                scores.put(itemId, toPercentScore(readDouble(document.get("avg_rating")), 5.0));
             }
         }
         List<Item> items = itemDAO.findByIds(new ArrayList<>(scores.keySet()));
@@ -92,10 +92,14 @@ public class RecommendService {
     private List<RecommendationDTO> fillWithHotItems(Date startTime, Date endTime, int limit, Set<Long> excludedItemIds, String reason) {
         List<Document> hotItems = logDAO.aggregateHotItems(startTime, endTime, Math.max(limit * 2, 10));
         Map<Long, Double> scores = new LinkedHashMap<>();
+        double maxActions = hotItems.stream()
+                .mapToDouble(document -> readDouble(document.get("total_actions")))
+                .max()
+                .orElse(0.0);
         for (Document document : hotItems) {
             Long itemId = readLong(document.get("_id"));
             if (itemId != null && !excludedItemIds.contains(itemId)) {
-                scores.put(itemId, readDouble(document.get("total_actions")));
+                scores.put(itemId, toPercentScore(readDouble(document.get("total_actions")), maxActions));
             }
         }
         List<Item> items = itemDAO.findByIds(new ArrayList<>(scores.keySet()));
@@ -145,6 +149,13 @@ public class RecommendService {
             return number.doubleValue();
         }
         return 0.0;
+    }
+
+    private double toPercentScore(double value, double maxValue) {
+        if (value <= 0 || maxValue <= 0) {
+            return 0.0;
+        }
+        return Math.min(100.0, value / maxValue * 100.0);
     }
 
     private int normalizeLimit(int limit) {
