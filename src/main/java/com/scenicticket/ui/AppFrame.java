@@ -517,46 +517,60 @@ public class AppFrame extends JFrame {
     private JPanel createOrderPanel() {
         JPanel panel = pagePanel(new BorderLayout(12, 12));
         JTextField userIdField = new JTextField(10);
-        JTextField orderIdField = new JTextField(10);
+        JTextField queryOrderIdField = new JTextField(10);
+        JTextField updateOrderIdField = new JTextField(10);
         JComboBox<String> queryStatusBox = new JComboBox<>(new String[]{"全部状态", "0-待支付", "1-已支付", "2-已取消", "3-已完成"});
         JComboBox<String> updateStatusBox = new JComboBox<>(new String[]{"0-待支付", "1-已支付", "2-已取消", "3-已完成"});
         DefaultTableModel model = tableModel("订单ID", "用户ID", "景点ID", "票数", "单价", "折扣", "实付金额", "付款方式", "状态", "创建时间");
         JTable table = createTable(model);
         setColumnWidths(table, 90, 90, 90, 70, 90, 90, 110, 110, 100, 180);
 
-        JPanel toolbar = toolbar();
+        JPanel queryToolbar = toolbar();
         JButton listButton = new JButton("查我的订单");
         JButton updateButton = new JButton("更新状态");
         if (isCurrentAdmin()) {
-            toolbar.add(new JLabel("用户ID（可不填）"));
-            toolbar.add(userIdField);
+            queryToolbar.add(new JLabel("用户ID（可不填）"));
+            queryToolbar.add(userIdField);
             listButton.setText("查询订单");
         }
-        toolbar.add(new JLabel("订单ID（可不填）"));
-        toolbar.add(orderIdField);
-        toolbar.add(new JLabel("订单状态"));
-        toolbar.add(queryStatusBox);
-        toolbar.add(listButton);
+        queryToolbar.add(new JLabel("订单ID（可不填）"));
+        queryToolbar.add(queryOrderIdField);
+        queryToolbar.add(new JLabel("订单状态"));
+        queryToolbar.add(queryStatusBox);
+        queryToolbar.add(listButton);
+
+        JPanel controls = new JPanel(new GridLayout(isCurrentAdmin() ? 2 : 1, 1, 0, 8));
+        controls.setOpaque(false);
+        controls.add(wrapWithTitle("订单查询", queryToolbar));
         if (isCurrentAdmin()) {
-            toolbar.add(new JLabel("改为"));
-            toolbar.add(updateStatusBox);
-            toolbar.add(updateButton);
+            JPanel updateToolbar = toolbar();
+            updateToolbar.add(new JLabel("订单ID（选择表格自动填）"));
+            updateToolbar.add(updateOrderIdField);
+            updateToolbar.add(new JLabel("改为"));
+            updateToolbar.add(updateStatusBox);
+            updateToolbar.add(updateButton);
+            controls.add(wrapWithTitle("订单状态更新", updateToolbar));
         }
 
         table.getSelectionModel().addListSelectionListener(event -> {
             int row = table.getSelectedRow();
             if (!event.getValueIsAdjusting() && row >= 0) {
-                orderIdField.setText(String.valueOf(table.getValueAt(row, 0)));
+                updateOrderIdField.setText(String.valueOf(table.getValueAt(row, 0)));
             }
         });
 
-        listButton.addActionListener(event -> runTask("订单查询", () -> businessService.searchOrders(
-                isCurrentAdmin() ? parseOptionalLong(userIdField.getText()) : requireCurrentUserId(),
-                parseOptionalLong(orderIdField.getText()),
-                selectedOrderStatus(queryStatusBox),
-                50,
-                0
-        ), orders -> {
+        listButton.addActionListener(event -> runTask("订单查询", () -> {
+            Long queryUserId = isCurrentAdmin()
+                    ? parseOptionalLong(userIdField.getText())
+                    : Long.valueOf(requireCurrentUserId());
+            return businessService.searchOrders(
+                    queryUserId,
+                    parseOptionalLong(queryOrderIdField.getText()),
+                    selectedOrderStatus(queryStatusBox),
+                    50,
+                    0
+            );
+        }, orders -> {
             model.setRowCount(0);
             for (Order order : orders) {
                 model.addRow(new Object[]{
@@ -569,11 +583,11 @@ public class AppFrame extends JFrame {
         }));
 
         updateButton.addActionListener(event -> runTask("更新订单状态", () -> businessService.updateOrderStatus(
-                parseRequiredLong(orderIdField.getText(), "订单ID"),
+                parseRequiredLong(updateOrderIdField.getText(), "订单ID"),
                 updateStatusBox.getSelectedIndex()
         ), updated -> setStatus(updated ? "订单状态已更新" : "订单状态未变化")));
 
-        panel.add(toolbar, BorderLayout.NORTH);
+        panel.add(controls, BorderLayout.NORTH);
         panel.add(new JScrollPane(table), BorderLayout.CENTER);
         return panel;
     }
