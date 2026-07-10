@@ -1,0 +1,54 @@
+# Bug Backlog
+
+更新时间：2026-07-10
+
+状态：`OPEN` / `IN PROGRESS` / `BLOCKED` / `FIXED` / `VERIFIED` / `CLOSED`
+
+## P0
+
+| ID | 状态 | 问题 | 复现证据/根因 | 验收 |
+| --- | --- | --- | --- | --- |
+| BUG-P0-001 | OPEN | 普通调用者可绕过管理员权限执行管理操作 | `BusinessService` 的分类/景点/价格/状态/订单状态方法不接收当前 actor，也不校验角色；权限只在 `AppFrame.runAdminTask` | 服务层拒绝普通用户，覆盖直接调用测试 |
+| BUG-P0-002 | OPEN | 订单状态可被任意改写，允许非法转换 | `BusinessService.updateOrderStatus` 只校验 0..3 后直接 UPDATE；可已取消→已支付、已完成→已取消 | 集中状态机，非法转换测试全部拒绝 |
+
+## P1
+
+| ID | 状态 | 问题 | 复现证据/根因 | 验收 |
+| --- | --- | --- | --- | --- |
+| BUG-P1-001 | OPEN | 创建订单直接变为已支付 | `BusinessService.createOrder` 明确 `order.setStatus(1)`，DAO 默认也为 1；与确定流程冲突 | 创建后待支付，主动确认支付后才已支付 |
+| BUG-P1-002 | OPEN | 无票种、游玩日期和每日库存，无法防超卖 | 全仓库无 ticket_types/ticket_inventory/visit_date | 多票种、未来日期、库存行锁与并发测试通过 |
+| BUG-P1-003 | OPEN | 无退款与库存恢复 | 无 refunds 表/服务/UI | 合法退款同事务恢复库存，非法退款被拒绝 |
+| BUG-P1-004 | OPEN | 无门票核销 | 无 admissions 表/服务/UI | 合法核销、数量与完成状态测试通过 |
+| BUG-P1-005 | OPEN | MySQL 提交成功后 Mongo 日志失败会向用户显示整体失败 | `createOrder` 在 commit 后同步 `logDAO.recordAction`，异常直接传播 | 已提交业务明确成功并带警告/待补偿记录，不重复下单 |
+| BUG-P1-006 | OPEN | 真实集成测试没有隔离测试数据库 | 本地配置指向 `scenic_ticket`，现有 `UserDAOTest` 会写当前配置库 | 测试强制校验数据库名为 `scenic_ticket_test` |
+| BUG-P1-007 | OPEN | Mongo 初始化脚本无保护地 drop 四个集合 | `mongodb_init.js` 开头直接 drop | 全新安装与升级脚本分离，升级不破坏已有数据 |
+
+## P2
+
+| ID | 状态 | 问题 | 复现证据/根因 | 验收 |
+| --- | --- | --- | --- | --- |
+| BUG-P2-001 | IN PROGRESS | 已知：评论区内容显示错误或混乱 | 已只读复现：Mongo `content` 已存为问号；ID 全为数值且查询能返回。UI 还缺用户名/标签并复用详情文本区 | 独立评论组件/表格，字段完整，编码迁移报告和 ID 兼容测试通过 |
+| BUG-P2-002 | IN PROGRESS | 已知：景点简介显示错误 | 已只读复现：item 1 `description` 已存为问号；不是当前 ID 类型不匹配。UI 仅用提示掩盖损坏并复用文本区 | 独立简介区域、测试数据 UTF-8、切换无旧数据、ID 兼容测试通过 |
+| BUG-P2-003 | IN PROGRESS | 已知：推荐分不显示 | 当前只读 probe 返回 10 个非零分数，DTO 和列映射静态正确；旧症状未在 Service 层复现，Swing 手工验证仍待执行 | 推荐列表固定列显示分数和理由，三类推荐/空历史/手工点击验证通过 |
+| BUG-P2-004 | IN PROGRESS | 已知：系统审计条件查询不能正常使用 | 现有空/类型/级别/双条件查询返回 31/28/25/22 条；但 UI/Service 缺日期、关键词、limit、清空，组合测试不足 | 单/双/多条件、空条件、清空、时区、关键词和 limit 测试通过 |
+| BUG-P2-005 | OPEN | 评论规则允许同一用户对同一景点重复插入 | `CommentDAO.addComment` 永远 insert，无唯一索引/upsert/updated_at | 唯一索引或等效约束；再次评论更新原记录 |
+| BUG-P2-006 | OPEN | 评论展示缺用户信息、标签和更新时间 | `formatComments` 只显示评分、时间、内容 | 展示脱敏用户名、评分、正文、标签、时间 |
+| BUG-P2-007 | OPEN | 管理员用户管理完全缺失 | UI 无对应页面；服务/DAO 不完整 | 查询、档案、启禁、角色、订单/行为概况及安全限制完成 |
+| BUG-P2-008 | OPEN | 退出没有写 LOGOUT 审计，异步任务可能跨会话回写 | 退出按钮直接 `showLoginView`；没有任务取消/session token | 退出审计、旧任务不能污染新会话、回归测试通过 |
+| BUG-P2-009 | OPEN | 热门排行只显示景点 ID | 报表直接展示 Mongo `_id`，没有跨库映射名称 | 显示景点名称且缺失主数据有明确降级 |
+| BUG-P2-010 | OPEN | 第二个存储过程和两个视图未在系统/测试中证明实际用途 | 静态脚本存在但无调用/验证 | 每个对象都有实际调用或真实集成测试并可解释 |
+
+## P3
+
+| ID | 状态 | 问题 | 说明 |
+| --- | --- | --- | --- |
+| BUG-P3-001 | OPEN | 启动脚本硬编码本机绝对 JDK/Maven 路径 | 应优先通用 PATH/环境变量并将本机路径仅作为兼容 fallback |
+| BUG-P3-002 | OPEN | `AppFrame` 过大 | 2206 行，需按里程碑渐进拆分，避免一次性重写 |
+| BUG-P3-003 | OPEN | 文档数据库版本写成 MySQL 8.0.45 / MongoDB 8.3.2 | 目标要求兼容 MySQL 8.0+ / MongoDB 5.0+，文档不应暗示仅支持本机版本 |
+| BUG-P3-004 | OPEN | 错误提示过度归一为“检查数据库连接” | 非 BusinessException 的技术错误全部同一文案，排障信息不足；应记录日志并给用户明确类别 |
+
+## 已知四问题复现纪律
+
+- 不把最近提交或静态代码看起来已修复当作验证完成。
+- 每个问题必须记录：输入数据、操作步骤、失败现象、根因、失败测试、修复提交、相关测试、完整测试和需要的 Swing 手工步骤。
+- 当前四项均为 `IN PROGRESS`，尚未关闭。
