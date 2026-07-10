@@ -4,7 +4,7 @@
 
 ## 当前状态
 
-- 当前里程碑：M2 用户、会话和权限（实现与验收完成，等待 Git 检查点）
+- 当前里程碑：M3 分类、景点和详情（审计与失败测试阶段）
 - 当前分支：`codex/scenic-ticket-stabilization`
 - 基线提交：`90f254ca42fa47a95cfe3f5b936ae7270bba10f2`
 - 工作树基线：干净；未覆盖或撤销用户修改
@@ -86,3 +86,20 @@ BUILD SUCCESS
 - 退出和账号切换递增会话代次，旧 `SwingWorker` 回调不能回写新会话；退出写入 `LOGOUT` 审计。
 - M2 真实集成套件显式使用 MySQL/MongoDB `scenic_ticket_test`：66 tests，0 failures，0 errors，1 skipped（仅 opt-in 压力测试）。
 - M2 默认 Java 21 `mvn clean test`：61 tests，0 failures，0 errors，2 skipped（真实数据库测试和 opt-in 压力测试）；`BUILD SUCCESS`。
+- M2 检查点已完成：`0847777 [Day 09] 加固权限与用户管理`。
+
+## M3 分类、景点和详情起始审计（2026-07-11）
+
+- 分类 DAO 已有新增、查询、子级查询和更新，但服务/UI 仅暴露新增与平铺列表，尚缺修改、树形展示、父级存在性与循环保护。
+- 景点 DAO 已有新增、查询、定价和状态更新，尚需核对名称/分类修改、关联有效性和 MongoDB 详情写入失败的一致性策略。
+- `item_details` 当前只按数值 `item_id` 查询；需补充历史字符串 ID 兼容读取/迁移验证，并确保简介、图片和扩展属性独立展示。
+- 已知简介问题的历史数据根因是 MongoDB 中文内容已损坏为问号；M3 将以 UTF-8 测试数据、兼容查询和切换清空回归验证修复路径，不伪造原始文本恢复。
+
+## M3 分类、景点和详情验收（2026-07-11）
+
+- 分类新增和修改均校验父级存在性，拒绝自身父级、后代父级和已有损坏循环；后台列表展示完整层级路径。
+- 景点后台可修改名称、分类、票价、优惠、上下架、简介、图片地址和 JSON 扩展属性；更新名称/分类会保留原价格、优惠和状态。
+- 用户侧将景点概览、景点简介和游客评论拆为独立页签；切换景点会清空旧内容，异步详情回调仅能更新发起时仍被选中的景点。
+- `DetailDAO` 优先读取数值 `item_id` 并兼容历史字符串 ID；再次保存时原位规范为数值 ID，避免产生第二份详情。
+- 新建景点的 MongoDB 详情写入失败时，服务会尝试立即把 MySQL 景点下架并返回明确恢复提示，避免无详情景点继续售卖。
+- 默认 Java 21 `mvn clean test`：67 tests，0 failures，0 errors，2 skipped；真实 MySQL/MongoDB `scenic_ticket_test` 完整套件：74 tests，0 failures，0 errors，1 skipped。

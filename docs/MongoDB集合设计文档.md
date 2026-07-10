@@ -96,6 +96,8 @@ scenic_ticket
 | item_id | 唯一索引 | 按景点查询详情 |
 | metadata.language | 普通索引 | 多语言扩展查询 |
 
+`item_id` 的规范 BSON 类型为 64 位数值。为兼容早期数据，Java DAO 会先查询数值 ID，再查询等值数字字符串；管理员再次保存详情时按原文档 `_id` 原位替换，并把 `item_id` 规范为数值，避免新增重复详情。`description` 使用 UTF-8 字符串，`images` 使用字符串数组，`metadata` 保持嵌套文档结构。
+
 ### 3.4 system_logs
 
 用途：记录登录、后台管理、系统错误等操作审计日志。

@@ -4,6 +4,7 @@ import com.mongodb.client.MongoCollection;
 import com.mongodb.client.MongoDatabase;
 import com.mongodb.client.model.IndexOptions;
 import com.mongodb.client.model.Indexes;
+import com.mongodb.client.model.Filters;
 import com.scenicticket.config.DBConfig;
 import com.scenicticket.config.DatabaseTargetGuard;
 import com.scenicticket.dao.mongo.CommentDAO;
@@ -85,6 +86,28 @@ class MongoSchemaIntegrationTest {
         assertTrue(comments.get(0).get("user_id") instanceof Number);
         assertTrue(comments.get(0).get("item_id") instanceof Number);
         assertTrue(comments.get(0).getString("content").contains("景区体验良好"));
+    }
+
+    @Test
+    void readsAndNormalizesLegacyStringItemIdDetails() {
+        long itemId = 900001L;
+        database.getCollection("item_details").insertOne(new Document("item_id", String.valueOf(itemId))
+                .append("description", "旧字符串 ID 简介")
+                .append("images", List.of("legacy.jpg"))
+                .append("metadata", new Document("source", "legacy"))
+                .append("updated_at", new Date()));
+
+        DetailDAO detailDAO = new DetailDAO();
+        assertEquals("旧字符串 ID 简介", detailDAO.findByItemId(itemId).getString("description"));
+
+        detailDAO.upsertDetail(itemId, "已迁移的中文简介", List.of("current.jpg"),
+                new Document("source", "migrated"));
+
+        List<Document> compatibleRows = database.getCollection("item_details")
+                .find(Filters.in("item_id", itemId, String.valueOf(itemId))).into(new ArrayList<>());
+        assertEquals(1, compatibleRows.size());
+        assertTrue(compatibleRows.get(0).get("item_id") instanceof Number);
+        assertEquals("已迁移的中文简介", compatibleRows.get(0).getString("description"));
     }
 
     @Test

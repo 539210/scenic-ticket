@@ -22,7 +22,12 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.sql.Connection;
 import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 public class BusinessService {
     private final CategoryDAO categoryDAO;
@@ -65,10 +70,25 @@ public class BusinessService {
     public long createCategory(long actorUserId, String name, Long parentId) {
         authorizationService.requireAdmin(actorUserId);
         String safeName = SecurityUtil.requireText(name, "分类名称", 50);
+        validateCategoryParent(null, parentId);
         Category category = new Category();
         category.setName(safeName);
         category.setParentId(parentId);
         return categoryDAO.create(category);
+    }
+
+    public boolean updateCategory(long actorUserId, long categoryId, String name, Long parentId) {
+        authorizationService.requireAdmin(actorUserId);
+        if (categoryId <= 0) {
+            throw new BusinessException("分类ID必须大于 0");
+        }
+        categoryDAO.findById(categoryId).orElseThrow(() -> new BusinessException("分类不存在"));
+        validateCategoryParent(categoryId, parentId);
+        Category category = new Category();
+        category.setCategoryId(categoryId);
+        category.setName(SecurityUtil.requireText(name, "分类名称", 50));
+        category.setParentId(parentId);
+        return categoryDAO.update(category);
     }
 
     public List<Category> listCategories() {
@@ -86,6 +106,7 @@ public class BusinessService {
                            BigDecimal price, BigDecimal discountRate) {
         authorizationService.requireAdmin(actorUserId);
         String safeTitle = SecurityUtil.requireText(title, "景点标题", 200);
+        requireCategory(categoryId);
         Item item = new Item();
         item.setTitle(safeTitle);
         item.setCategoryId(categoryId);
@@ -93,8 +114,21 @@ public class BusinessService {
         item.setDiscountRate(normalizeDiscount(discountRate));
         item.setStatus(1);
         long itemId = itemDAO.create(item);
-        detailDAO.upsertDetail(itemId, SecurityUtil.normalizeText(description, 2000),
-                images == null ? List.of() : images, metadata == null ? new Document() : metadata);
+        try {
+            detailDAO.upsertDetail(itemId, SecurityUtil.normalizeText(description, 2000),
+                    normalizeImages(images), normalizeMetadata(metadata));
+        } catch (RuntimeException detailFailure) {
+            boolean takenOffline = false;
+            try {
+                takenOffline = itemDAO.updateStatus(itemId, 0);
+            } catch (RuntimeException compensationFailure) {
+                detailFailure.addSuppressed(compensationFailure);
+            }
+            String message = takenOffline
+                    ? "景点基础数据已创建并自动下架，详情保存失败，请重试详情维护"
+                    : "景点详情保存失败且自动下架未完成，请管理员立即检查该景点";
+            throw new DBException(message, detailFailure);
+        }
         return itemId;
     }
 
@@ -128,6 +162,18 @@ public class BusinessService {
         return itemDAO.updatePricing(itemId, normalizePrice(price), normalizeDiscount(discountRate));
     }
 
+    public boolean updateItem(long actorUserId, long itemId, String title, long categoryId) {
+        authorizationService.requireAdmin(actorUserId);
+        if (itemId <= 0) {
+            throw new BusinessException("景点ID必须大于 0");
+        }
+        requireCategory(categoryId);
+        Item item = itemDAO.findById(itemId).orElseThrow(() -> new BusinessException("景点不存在"));
+        item.setTitle(SecurityUtil.requireText(title, "景点标题", 200));
+        item.setCategoryId(categoryId);
+        return itemDAO.update(item);
+    }
+
     public String getItemDescription(long itemId) {
         if (itemId <= 0) {
             throw new BusinessException("景点ID必须大于 0");
@@ -136,19 +182,110 @@ public class BusinessService {
         return detail == null ? "" : SecurityUtil.normalizeText(detail.getString("description"), 2000);
     }
 
+    public Document getItemDetailForAdmin(long actorUserId, long itemId) {
+        authorizationService.requireAdmin(actorUserId);
+        if (itemId <= 0) {
+            throw new BusinessException("景点ID必须大于 0");
+        }
+        itemDAO.findById(itemId).orElseThrow(() -> new BusinessException("景点不存在"));
+        Document detail = detailDAO.findByItemId(itemId);
+        return detail == null ? new Document() : new Document(detail);
+    }
+
     public boolean updateItemDescription(long actorUserId, long itemId, String description) {
         authorizationService.requireAdmin(actorUserId);
         if (itemId <= 0) {
             throw new BusinessException("景点ID必须大于 0");
         }
         itemDAO.findById(itemId).orElseThrow(() -> new BusinessException("景点不存在"));
-        String safeDescription = SecurityUtil.requireText(description, "景点简介", 2000);
         Document existing = detailDAO.findByItemId(itemId);
         List<String> images = existing == null ? null : existing.getList("images", String.class);
         Document metadata = existing == null ? null : existing.get("metadata", Document.class);
-        detailDAO.upsertDetail(itemId, safeDescription, images == null ? List.of() : images,
-                metadata == null ? new Document() : metadata);
+        detailDAO.upsertDetail(itemId, SecurityUtil.requireText(description, "景点简介", 2000),
+                normalizeImages(images), normalizeMetadata(metadata));
         return true;
+    }
+
+    public boolean updateItemDetail(long actorUserId, long itemId, String description,
+                                    List<String> images, Document metadata) {
+        authorizationService.requireAdmin(actorUserId);
+        if (itemId <= 0) {
+            throw new BusinessException("景点ID必须大于 0");
+        }
+        itemDAO.findById(itemId).orElseThrow(() -> new BusinessException("景点不存在"));
+        detailDAO.upsertDetail(itemId, SecurityUtil.requireText(description, "景点简介", 2000),
+                normalizeImages(images), normalizeMetadata(metadata));
+        return true;
+    }
+
+    private void validateCategoryParent(Long categoryId, Long parentId) {
+        if (parentId == null) {
+            return;
+        }
+        if (parentId <= 0) {
+            throw new BusinessException("上级分类ID必须大于 0");
+        }
+        requireCategory(parentId);
+        if (categoryId == null) {
+            return;
+        }
+        if (categoryId.equals(parentId)) {
+            throw new BusinessException("分类不能把自己设为上级分类");
+        }
+        Map<Long, Long> parents = new HashMap<>();
+        for (Category category : categoryDAO.findAll()) {
+            parents.put(category.getCategoryId(), category.getParentId());
+        }
+        Set<Long> visited = new HashSet<>();
+        Long cursor = parentId;
+        while (cursor != null && visited.add(cursor)) {
+            if (categoryId.equals(cursor)) {
+                throw new BusinessException("分类层级不能形成循环");
+            }
+            cursor = parents.get(cursor);
+        }
+        if (cursor != null) {
+            throw new BusinessException("现有分类层级包含循环，请先修复分类数据");
+        }
+    }
+
+    private Category requireCategory(long categoryId) {
+        if (categoryId <= 0) {
+            throw new BusinessException("分类ID必须大于 0");
+        }
+        return categoryDAO.findById(categoryId).orElseThrow(() -> new BusinessException("分类不存在"));
+    }
+
+    private List<String> normalizeImages(List<String> images) {
+        if (images == null || images.isEmpty()) {
+            return List.of();
+        }
+        List<String> normalized = new ArrayList<>();
+        for (String image : images) {
+            String value = SecurityUtil.normalizeText(image, 500);
+            if (value != null && !value.isBlank() && !normalized.contains(value)) {
+                normalized.add(value);
+            }
+            if (normalized.size() > 20) {
+                throw new BusinessException("景点图片最多保存 20 个地址");
+            }
+        }
+        return List.copyOf(normalized);
+    }
+
+    private Document normalizeMetadata(Document metadata) {
+        if (metadata == null || metadata.isEmpty()) {
+            return new Document();
+        }
+        if (metadata.size() > 50) {
+            throw new BusinessException("景点扩展属性最多保存 50 项");
+        }
+        Document normalized = new Document();
+        for (Map.Entry<String, Object> entry : metadata.entrySet()) {
+            String key = SecurityUtil.requireText(entry.getKey(), "扩展属性名称", 100);
+            normalized.put(key, entry.getValue());
+        }
+        return normalized;
     }
 
     public ItemDetailDTO getItemDetail(long userId, long itemId, String ip) {

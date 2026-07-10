@@ -5,10 +5,10 @@
 - [ ] 1. `PLAN.md` 必需里程碑全部完成。
 - [ ] 2. 所有 P0、P1 Bug 关闭。
 - [ ] 3. 四个已知 Bug 均已复现、修复并验证。
-- [x] 4. M2 默认 clean 套件通过（61 tests，0 failures，0 errors，2 skipped），真实集成套件通过（66 tests，0 failures，0 errors，1 skipped）；最终版本仍需再次执行。
+- [x] 4. M3 默认 clean 套件通过（67 tests，0 failures，0 errors，2 skipped），真实集成套件通过（74 tests，0 failures，0 errors，1 skipped）；最终版本仍需再次执行。
 - [x] 5. M1 MySQL `scenic_ticket_test` 安装/升级与现有 DAO 集成测试通过；最终业务集成需 M10 重跑。
 - [x] 6. M1 MongoDB `scenic_ticket_test` 四集合/索引/中文/聚合真实测试通过；最终业务集成需 M10 重跑。
-- [ ] 7. 跨数据库关键测试通过。
+- [ ] 7. M3 景点 MySQL/MongoDB 创建、更新、兼容 ID 与清理测试通过；订单/库存/退款等关键跨库流程仍待后续里程碑。
 - [ ] 8. MySQL 全部脚本可从空测试库执行；Mongo 脚本因缺 `mongosh` 由 Java Driver 等效验证，待客户端环境补执行。
 - [x] 9. 静态检查确认课程原表/字段仍存在；最终迁移后需真实复核。
 - [ ] 10. 两个视图已创建验证，待应用实际使用验证。
