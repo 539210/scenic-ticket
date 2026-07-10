@@ -1,5 +1,14 @@
 use("scenic_ticket");
 
+const managedCollections = ["action_logs", "comments", "item_details", "system_logs"];
+const existingManagedCollections = db.getCollectionNames().filter(name => managedCollections.includes(name));
+if (existingManagedCollections.length > 0) {
+  throw new Error(
+    `Refusing destructive initialization because collections already exist: ${existingManagedCollections.join(", ")}. `
+    + "Use the versioned mongodb_day09 migration scripts for an existing database."
+  );
+}
+
 db.action_logs.drop();
 db.comments.drop();
 db.item_details.drop();
@@ -19,6 +28,7 @@ db.comments.createIndex({ item_id: 1, created_at: -1 });
 db.comments.createIndex({ item_id: 1, rating: 1 });
 db.comments.createIndex({ user_id: 1 });
 db.comments.createIndex({ rating: -1, item_id: 1 });
+db.comments.createIndex({ user_id: 1, item_id: 1 }, { unique: true });
 
 db.item_details.createIndex({ item_id: 1 }, { unique: true });
 db.item_details.createIndex({ "metadata.language": 1 });
@@ -48,12 +58,13 @@ const comments = [];
 const tags = [["环境好", "适合亲子"], ["服务好", "交通方便"], ["景色美", "拍照推荐"], ["排队少", "体验好"]];
 for (let i = 1; i <= 30; i += 1) {
   comments.push({
-    user_id: (i % 10) + 1,
-    item_id: (i % 20) + 1,
+    user_id: Math.floor((i - 1) / 20) + 1,
+    item_id: ((i - 1) % 20) + 1,
     content: `第 ${i} 条评论：景区体验良好，购票流程顺畅。`,
     rating: (i % 5) + 1,
     tags: tags[i % tags.length],
-    created_at: new Date(Date.now() - i * 3600 * 1000)
+    created_at: new Date(Date.now() - i * 3600 * 1000),
+    updated_at: new Date(Date.now() - i * 3600 * 1000)
   });
 }
 db.comments.insertMany(comments);

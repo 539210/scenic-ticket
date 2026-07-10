@@ -25,7 +25,10 @@ public final class DBConfig {
     }
 
     public static String get(String key) {
-        String value = PROPERTIES.getProperty(key);
+        String value = overrideValue(key);
+        if (value == null || value.isBlank()) {
+            value = PROPERTIES.getProperty(key);
+        }
         if (value == null || value.isBlank()) {
             throw new DBException("Missing required database configuration: " + key);
         }
@@ -41,7 +44,10 @@ public final class DBConfig {
     }
 
     public static int getInt(String key, int defaultValue) {
-        String value = PROPERTIES.getProperty(key);
+        String value = overrideValue(key);
+        if (value == null || value.isBlank()) {
+            value = PROPERTIES.getProperty(key);
+        }
         if (value == null || value.isBlank()) {
             return defaultValue;
         }
@@ -50,5 +56,15 @@ public final class DBConfig {
         } catch (NumberFormatException e) {
             throw new DBException("Invalid integer database configuration: " + key, e);
         }
+    }
+
+    private static String overrideValue(String key) {
+        String systemValue = System.getProperty("scenic.ticket." + key);
+        if (systemValue != null && !systemValue.isBlank()) {
+            return systemValue;
+        }
+        String environmentKey = "SCENIC_TICKET_" + key.toUpperCase(java.util.Locale.ROOT)
+                .replaceAll("[^A-Z0-9]", "_");
+        return System.getenv(environmentKey);
     }
 }

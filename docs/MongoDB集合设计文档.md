@@ -53,7 +53,8 @@ scenic_ticket
   "content": "景区环境很好，入园很方便。",
   "rating": 5,
   "tags": ["环境好", "适合亲子"],
-  "created_at": "ISODate(...)"
+  "created_at": "ISODate(...)",
+  "updated_at": "ISODate(...)"
 }
 ```
 
@@ -64,6 +65,7 @@ scenic_ticket
 | item_id, created_at | 复合索引 | 景点评论列表 |
 | item_id, rating | 复合索引 | 评分统计 |
 | user_id | 普通索引 | 用户评论历史 |
+| user_id, item_id | 唯一索引 | 每个用户对同一景点只保留一条评论 |
 
 ### 3.3 item_details
 
@@ -145,3 +147,11 @@ scenic_ticket
 | item_id | items.item_id | 关联景点 |
 
 跨数据库查询由 Java Service 层完成：先从 MySQL 查询结构化主数据，再使用 `user_id` 或 `item_id` 查询 MongoDB 扩展文档，最后组装 DTO 返回给界面层。
+
+## 7. 初始化与迁移
+
+- `mongodb_init.js` 仅用于空数据库全新安装；检测到四个受管集合中的任意一个已存在时会拒绝执行，避免误删数据。
+- `mongodb_day09_id_compatibility.js` 将可安全识别的数字字符串 ID 转为 long，并为历史评论补 `updated_at`；不会删除重复评论。
+- `mongodb_day09_indexes.js` 增加审计文本/复合索引。只有不存在重复 user_id + item_id 评论时才创建唯一索引；否则报告并跳过，不自动删用户数据。
+- 真实集成测试只重建 `scenic_ticket_test`，不会清理 `scenic_ticket`。
+- Java Driver 集成测试已验证四集合、唯一/复合/文本索引、中文 UTF-8 往返、数值 ID，以及热门、用户行为、评分和审计聚合。

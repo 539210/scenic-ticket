@@ -20,8 +20,8 @@
 | BUG-P1-003 | OPEN | 无退款与库存恢复 | 无 refunds 表/服务/UI | 合法退款同事务恢复库存，非法退款被拒绝 |
 | BUG-P1-004 | OPEN | 无门票核销 | 无 admissions 表/服务/UI | 合法核销、数量与完成状态测试通过 |
 | BUG-P1-005 | OPEN | MySQL 提交成功后 Mongo 日志失败会向用户显示整体失败 | `createOrder` 在 commit 后同步 `logDAO.recordAction`，异常直接传播 | 已提交业务明确成功并带警告/待补偿记录，不重复下单 |
-| BUG-P1-006 | OPEN | 真实集成测试没有隔离测试数据库 | 本地配置指向 `scenic_ticket`，现有 `UserDAOTest` 会写当前配置库 | 测试强制校验数据库名为 `scenic_ticket_test` |
-| BUG-P1-007 | OPEN | Mongo 初始化脚本无保护地 drop 四个集合 | `mongodb_init.js` 开头直接 drop | 全新安装与升级脚本分离，升级不破坏已有数据 |
+| BUG-P1-006 | VERIFIED | 真实集成测试没有隔离测试数据库 | 已增加配置覆盖和 `DatabaseTargetGuard`；完整集成套件显式使用两个 `scenic_ticket_test` | 51 tests，0 failures/errors，MySQL/MongoDB 真实测试通过 |
+| BUG-P1-007 | VERIFIED | Mongo 初始化脚本无保护地 drop 四个集合 | 全新安装脚本检测已有集合并拒绝；升级使用非破坏 Day09 脚本 | 静态审计与 Java Driver 测试库初始化通过；mongosh 执行仍待有客户端环境复核 |
 
 ## P2
 

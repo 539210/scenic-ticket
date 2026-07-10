@@ -60,6 +60,31 @@ ON DUPLICATE KEY UPDATE
     discount_rate = VALUES(discount_rate),
     status = VALUES(status);
 
+INSERT INTO ticket_types (item_id, name, original_price, discount_rate, status)
+SELECT item_id, '成人票', price, discount_rate, status FROM items
+ON DUPLICATE KEY UPDATE original_price = VALUES(original_price), discount_rate = VALUES(discount_rate), status = VALUES(status);
+
+INSERT INTO ticket_types (item_id, name, original_price, discount_rate, status)
+SELECT item_id, '儿童票', ROUND(price * 0.50, 2), discount_rate, status FROM items
+ON DUPLICATE KEY UPDATE original_price = VALUES(original_price), discount_rate = VALUES(discount_rate), status = VALUES(status);
+
+INSERT INTO ticket_types (item_id, name, original_price, discount_rate, status)
+SELECT item_id, '学生票', ROUND(price * 0.80, 2), discount_rate, status FROM items
+ON DUPLICATE KEY UPDATE original_price = VALUES(original_price), discount_rate = VALUES(discount_rate), status = VALUES(status);
+
+INSERT INTO ticket_inventory (
+    ticket_type_id, visit_date, total_stock, available_stock, reserved_stock, sold_stock
+)
+SELECT tt.ticket_type_id, DATE_ADD(CURRENT_DATE, INTERVAL offsets.day_offset DAY), 100, 100, 0, 0
+FROM ticket_types tt
+JOIN (
+    SELECT 1 AS day_offset UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4
+    UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7
+) offsets ON 1 = 1
+ON DUPLICATE KEY UPDATE
+    total_stock = GREATEST(total_stock, reserved_stock + sold_stock),
+    available_stock = GREATEST(total_stock, reserved_stock + sold_stock) - reserved_stock - sold_stock;
+
 INSERT INTO orders (order_id, user_id, item_id, amount, quantity, unit_price, discount_rate, payment_method, status, created_at) VALUES
 (1, 2, 1, 80.00, 1, 80.00, 0.00, '微信', 1, '2026-07-01 09:10:00'),
 (2, 3, 2, 120.00, 1, 120.00, 0.00, '支付宝', 1, '2026-07-01 10:20:00'),
@@ -88,6 +113,21 @@ ON DUPLICATE KEY UPDATE
     discount_rate = VALUES(discount_rate),
     payment_method = VALUES(payment_method),
     status = VALUES(status);
+
+UPDATE orders o
+JOIN ticket_types tt ON tt.item_id = o.item_id AND tt.name = '成人票'
+SET o.ticket_type_id = COALESCE(o.ticket_type_id, tt.ticket_type_id),
+    o.ticket_type_name_snapshot = COALESCE(o.ticket_type_name_snapshot, tt.name),
+    o.original_unit_price = COALESCE(o.original_unit_price, o.unit_price),
+    o.discounted_unit_price = COALESCE(
+        o.discounted_unit_price,
+        ROUND(o.unit_price * (1 - o.discount_rate / 100), 2)
+    ),
+    o.visit_date = COALESCE(o.visit_date, DATE_ADD(CURRENT_DATE, INTERVAL (MOD(o.order_id, 7) + 1) DAY)),
+    o.expires_at = COALESCE(o.expires_at, DATE_ADD(o.created_at, INTERVAL 15 MINUTE)),
+    o.paid_at = CASE WHEN o.status IN (1, 3) THEN COALESCE(o.paid_at, o.created_at) ELSE o.paid_at END,
+    o.cancelled_at = CASE WHEN o.status = 2 THEN COALESCE(o.cancelled_at, o.created_at) ELSE o.cancelled_at END,
+    o.completed_at = CASE WHEN o.status = 3 THEN COALESCE(o.completed_at, o.created_at) ELSE o.completed_at END;
 
 INSERT INTO profiles (profile_id, user_id, real_name, id_card, address, notes) VALUES
 (1, 1, '孔思成', '110101199001010001', '景区管理中心', '系统管理员账号'),

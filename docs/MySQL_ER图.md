@@ -10,9 +10,16 @@ MySQL 负责存储强一致的核心业务数据，包括用户、分类、景�
 erDiagram
     users ||--o| profiles : has
     users ||--o{ orders : creates
+    users ||--o{ refunds : operates
+    users ||--o{ admissions : verifies
     categories ||--o{ categories : parent
     categories ||--o{ items : contains
     items ||--o{ orders : sold_as
+    items ||--o{ ticket_types : offers
+    ticket_types ||--o{ ticket_inventory : stocks
+    ticket_types ||--o{ orders : selected_as
+    orders ||--o| refunds : may_refund
+    orders ||--o{ admissions : admits
 
     users {
         BIGINT user_id PK
@@ -57,6 +64,51 @@ erDiagram
         DECIMAL amount
         TINYINT status
         DATETIME created_at
+        BIGINT ticket_type_id FK
+        VARCHAR ticket_type_name_snapshot
+        DECIMAL original_unit_price
+        DECIMAL discounted_unit_price
+        DATE visit_date
+        DATETIME expires_at
+        DATETIME paid_at
+        DATETIME refunded_at
+    }
+
+    ticket_types {
+        BIGINT ticket_type_id PK
+        BIGINT item_id FK
+        VARCHAR name
+        DECIMAL original_price
+        DECIMAL discount_rate
+        TINYINT status
+    }
+
+    ticket_inventory {
+        BIGINT inventory_id PK
+        BIGINT ticket_type_id FK
+        DATE visit_date
+        INT total_stock
+        INT available_stock
+        INT reserved_stock
+        INT sold_stock
+        INT version
+    }
+
+    refunds {
+        BIGINT refund_id PK
+        BIGINT order_id FK
+        DECIMAL refund_amount
+        VARCHAR status
+        BIGINT operator_user_id FK
+        DATETIME refunded_at
+    }
+
+    admissions {
+        BIGINT admission_id PK
+        BIGINT order_id FK
+        INT quantity
+        BIGINT operator_user_id FK
+        DATETIME admitted_at
     }
 ```
 
@@ -69,6 +121,11 @@ erDiagram
 | categories - categories | 1:N | 分类支持父子层级 |
 | categories - items | 1:N | 一个分类包含多个景点 |
 | items - orders | 1:N | 一个景点可以产生多个订单 |
+| items - ticket_types | 1:N | 一个景点可配置成人、儿童、学生及其他票种 |
+| ticket_types - ticket_inventory | 1:N | 每个票种按游玩日期维护库存 |
+| ticket_types - orders | 1:N | 新订单引用一个票种并保存价格快照；旧订单允许兼容空引用 |
+| orders - refunds | 1:0..1 | 一个订单最多一条成功模拟退款记录 |
+| orders - admissions | 1:N | 支持分次数量核销，累计不得超过订单数量 |
 
 ## 4. 索引规划
 
@@ -81,6 +138,11 @@ erDiagram
 | items | category_id, status | 普通索引 | 景点分类与状态查询 |
 | orders | user_id, created_at | 普通索引 | 用户订单查询 |
 | orders | item_id, status | 普通索引 | 景点订单统计 |
+| ticket_types | item_id, status | 普通索引 | 查询景点可售票种 |
+| ticket_inventory | ticket_type_id, visit_date | 唯一索引 | 锁定单票种单日期库存行 |
+| ticket_inventory | visit_date, available_stock | 普通索引 | 查询日期可售库存 |
+| refunds | order_id | 唯一索引 | 防止重复退款 |
+| admissions | order_id, admitted_at | 普通索引 | 累计核销数量与记录追踪 |
 
 ## 5. 视图、存储过程与触发器规划
 
@@ -92,3 +154,10 @@ erDiagram
 | 存储过程 | sp_update_inactive_items | 批量更新景点状态 |
 | 触发器 | trg_orders_before_insert | 订单创建前校验金额 |
 | 触发器 | trg_items_before_update | 景点更新时维护 updated_at |
+
+## 6. Day09 兼容说明
+
+- `users`、`categories`、`items`、`orders`、`profiles` 及课程字段全部保留。
+- `orders.ticket_type_id` 对历史订单保持可空；迁移优先关联同景点“成人票”，并保存名称、原价、折后价、日期与时间快照。
+- 新业务只能通过服务层创建字段完整的订单；兼容空值不等于允许新订单缺字段。
+- `ticket_inventory` 使用 available/reserved/sold 三段库存，三者之和不得超过 total，所有值不得为负。

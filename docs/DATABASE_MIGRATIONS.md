@@ -39,11 +39,25 @@
 - 测试配置通过测试 resources 或系统属性覆盖，不复制/提交真实密码。
 - 启动测试时打印数据库名但绝不打印用户名密码或 URI 凭据。
 
+## Day09 已实现脚本
+
+- `mysql_day09_migration_baseline.sql`
+- `mysql_day09_ticket_types_inventory.sql`
+- `mysql_day09_order_lifecycle_refunds_admissions.sql`
+- `mongodb_day09_id_compatibility.js`
+- `mongodb_day09_indexes.js`
+
+回滚策略：新业务启用前可回退应用并保留新增表/列；退款、核销、订单快照等审计性数据不得自动删除。需要物理回滚时先导出新增表并确认没有新流程数据，再由管理员执行独立回滚脚本。MongoDB 迁移只做可逆类型规范化/补字段和索引，不自动删除重复评论。
+
+## 已验证项（2026-07-10）
+
+- 全新 MySQL `scenic_ticket_test`：10 表、12 外键、2 视图、2 存储过程、2 触发器、60 票种、420 库存行、4 迁移记录；库存不变量违规 0。
+- Day08 旧结构夹具升级：原 users/profiles/orders 记录保留，订单成功回填成人票和 100.00/90.00 价格快照；升级后 10 表、2 视图、2 过程、2 触发器。
+- MongoDB `scenic_ticket_test`：四集合、索引、中文文本、数值 ID 和至少四类真实聚合通过 Java Driver 集成测试。
+- 完整 Java 21 集成命令：51 tests，0 failures，0 errors，1 skipped（仅 Fake DAO 压力测试）。
+
 ## 待验证项
 
-- 空库执行全套脚本。
-- 已有 Day08 结构升级到新结构。
-- 外键、CHECK、唯一约束、索引。
-- 两个视图、两个存储过程、两个触发器实际使用。
+- 两个视图和第二个存储过程在应用业务中实际调用（当前已完成对象创建与真实库存在性验证）。
 - 库存并发、支付/退款/核销事务回滚。
-- MongoDB 四集合、索引、三条聚合、ID 兼容迁移。
+- 使用实际 `mongosh` 执行两个 Day09 Mongo 脚本；当前环境未安装 mongosh，已用 Java Driver 验证等效结构与行为。

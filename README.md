@@ -75,6 +75,9 @@ mysql -uroot -p < src/main/resources/sql/mysql_procedures.sql
 mysql -uroot -p < src/main/resources/sql/mysql_triggers.sql
 mysql -uroot -p < src/main/resources/sql/mysql_day07_optimization.sql
 mysql -uroot -p < src/main/resources/sql/mysql_day08_pricing_update.sql
+mysql -uroot -p < src/main/resources/sql/mysql_day09_migration_baseline.sql
+mysql -uroot -p < src/main/resources/sql/mysql_day09_ticket_types_inventory.sql
+mysql -uroot -p < src/main/resources/sql/mysql_day09_order_lifecycle_refunds_admissions.sql
 ```
 
 MongoDB 初始化：
@@ -82,6 +85,17 @@ MongoDB 初始化：
 ```text
 mongosh src/main/resources/sql/mongodb_init.js
 mongosh src/main/resources/sql/mongodb_day07_optimization.js
+mongosh src/main/resources/sql/mongodb_day09_id_compatibility.js
+mongosh src/main/resources/sql/mongodb_day09_indexes.js
+```
+
+`mongodb_init.js` 只用于空数据库；检测到受管集合已经存在时会拒绝执行。已有数据库必须使用 Day09 迁移脚本，不能通过重新运行初始化脚本清空数据。
+
+MySQL 全新安装和 Day08 升级可在隔离测试库验证（只允许操作 `scenic_ticket_test`）：
+
+```powershell
+.\scripts\verify-mysql-test-database.ps1 -Reset
+.\scripts\verify-mysql-upgrade.ps1 -Reset
 ```
 
 ## 版本控制规范
@@ -127,6 +141,14 @@ Swing 前端采用统一浅色业务风格，包含登录入口、独立注册�
 
 ```text
 mvn test -DintegrationTests=true
+```
+
+真实集成测试必须显式覆盖为测试数据库；代码中的保护器会拒绝其他数据库名：
+
+```powershell
+mvn clean test -DintegrationTests=true `
+  -Dscenic.ticket.mysql.url=jdbc:mysql://localhost:3306/scenic_ticket_test `
+  -Dscenic.ticket.mongodb.database=scenic_ticket_test
 ```
 
 Day 08 压力测试默认跳过；需要执行 10000 条日志 + 50 并发测试时，可显式开启：
