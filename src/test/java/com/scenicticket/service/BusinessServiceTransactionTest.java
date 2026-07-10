@@ -8,6 +8,7 @@ import com.scenicticket.dao.mysql.ItemDAO;
 import com.scenicticket.dao.mysql.OrderDAO;
 import com.scenicticket.exception.BusinessException;
 import com.scenicticket.exception.DBException;
+import com.scenicticket.dto.OrderViewDTO;
 import com.scenicticket.model.Item;
 import com.scenicticket.model.Order;
 import org.junit.jupiter.api.Test;
@@ -23,6 +24,7 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -91,6 +93,33 @@ class BusinessServiceTransactionTest {
         assertEquals(1, orderDAO.status);
         assertEquals(50, orderDAO.limit);
         assertEquals(0, orderDAO.offset);
+    }
+
+    @Test
+    void searchOrderViewsReturnsScenicNameAndPassesFilters() {
+        CapturingOrderViewDAO orderDAO = new CapturingOrderViewDAO();
+        BusinessService service = newService(orderDAO, new CapturingLogDAO(), TrackingConnection.create());
+
+        List<OrderViewDTO> views = service.searchOrderViews(3L, 9L, 1, 50, 0);
+
+        assertEquals(1, views.size());
+        assertEquals("测试景点", views.get(0).getItemTitle());
+        assertEquals(3L, orderDAO.userId);
+        assertEquals(9L, orderDAO.orderId);
+        assertEquals(1, orderDAO.status);
+    }
+
+    @Test
+    void administratorItemSearchIncludesOfflineItems() {
+        CapturingAdminItemDAO itemDAO = new CapturingAdminItemDAO();
+        BusinessService service = new BusinessService(new CategoryDAO(), itemDAO, new OrderDAO(), new DetailDAO(),
+                new CapturingLogDAO(), new CommentDAO(), () -> TrackingConnection.create().connection);
+
+        service.searchAllItemsForAdmin("公园", 2L, 100, 0);
+
+        assertEquals("公园", itemDAO.keyword);
+        assertEquals(2L, itemDAO.categoryId);
+        assertNull(itemDAO.status);
     }
 
     private static BusinessService newService(OrderDAO orderDAO, LogDAO logDAO,
@@ -168,6 +197,39 @@ class BusinessServiceTransactionTest {
             Order order = new Order();
             order.setOrderId(orderId);
             return List.of(order);
+        }
+    }
+
+    private static class CapturingOrderViewDAO extends OrderDAO {
+        private Long userId;
+        private Long orderId;
+        private Integer status;
+
+        @Override
+        public List<OrderViewDTO> searchViews(Long userId, Long orderId, Integer status, int limit, int offset) {
+            this.userId = userId;
+            this.orderId = orderId;
+            this.status = status;
+            Order order = new Order();
+            order.setOrderId(orderId);
+            OrderViewDTO view = new OrderViewDTO();
+            view.setOrder(order);
+            view.setItemTitle("测试景点");
+            return List.of(view);
+        }
+    }
+
+    private static class CapturingAdminItemDAO extends ItemDAO {
+        private String keyword;
+        private Long categoryId;
+        private Integer status;
+
+        @Override
+        public List<Item> search(String keyword, Long categoryId, Integer status, int limit, int offset) {
+            this.keyword = keyword;
+            this.categoryId = categoryId;
+            this.status = status;
+            return List.of();
         }
     }
 

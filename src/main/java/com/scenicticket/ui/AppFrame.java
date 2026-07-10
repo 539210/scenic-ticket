@@ -3,7 +3,9 @@ package com.scenicticket.ui;
 import com.scenicticket.dto.CrossDatabaseItemDTO;
 import com.scenicticket.dto.LoginResult;
 import com.scenicticket.dto.MonthlyOrderReportDTO;
+import com.scenicticket.dto.OrderViewDTO;
 import com.scenicticket.dto.RecommendationDTO;
+import com.scenicticket.dto.StatisticsReportDTO;
 import com.scenicticket.model.Category;
 import com.scenicticket.model.Item;
 import com.scenicticket.model.Order;
@@ -26,6 +28,7 @@ import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JPasswordField;
+import javax.swing.JSpinner;
 import javax.swing.JMenuItem;
 import javax.swing.JPopupMenu;
 import javax.swing.JScrollBar;
@@ -38,10 +41,12 @@ import javax.swing.JTextField;
 import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
 import javax.swing.SwingWorker;
+import javax.swing.SpinnerNumberModel;
 import javax.swing.table.DefaultTableModel;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
+import java.awt.Cursor;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Font;
@@ -51,36 +56,22 @@ import java.awt.GridLayout;
 import java.awt.Insets;
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Consumer;
 
 public class AppFrame extends JFrame {
-    private static final Color BACKGROUND = new Color(246, 248, 250);
-    private static final Color PANEL_BORDER = new Color(220, 225, 230);
-    private static final Font TITLE_FONT = new Font("Microsoft YaHei UI", Font.BOLD, 22);
-    private static final Font SECTION_FONT = new Font("Microsoft YaHei UI", Font.BOLD, 15);
-    private static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+    private static final Color BACKGROUND = UiTheme.BACKGROUND;
+    private static final Color PANEL_BORDER = UiTheme.BORDER;
+    private static final Font TITLE_FONT = UiTheme.TITLE_FONT;
+    private static final Font SECTION_FONT = UiTheme.SECTION_FONT;
     private static final String ALL_OPTION = "全部";
     private static final String[] KEYWORD_OPTIONS = {
             ALL_OPTION, "南山", "云岭", "青河", "古城", "海湾", "星湖", "观景", "博物馆", "亲子", "水上", "森林"
-    };
-    private static final CategoryChoice[] CATEGORY_OPTIONS = {
-            new CategoryChoice("全部类型", null),
-            new CategoryChoice("自然景观", 1L),
-            new CategoryChoice("历史文化", 2L),
-            new CategoryChoice("主题乐园", 3L),
-            new CategoryChoice("山水风光", 4L),
-            new CategoryChoice("森林公园", 5L),
-            new CategoryChoice("古镇古街", 6L),
-            new CategoryChoice("博物展馆", 7L),
-            new CategoryChoice("亲子乐园", 8L),
-            new CategoryChoice("水上乐园", 9L),
-            new CategoryChoice("城市观光", 10L)
     };
 
     private final UserService userService = new UserService();
@@ -97,13 +88,15 @@ public class AppFrame extends JFrame {
     private final JTextArea homeSummaryArea = createTextArea(10, 80);
     private final JLabel homeUserValue = new JLabel("未登录");
     private final JLabel homeRoleValue = new JLabel("-");
+    private final Map<Long, String> categoryNames = new LinkedHashMap<>();
 
     private User currentUser;
+    private int runningTasks;
 
     public AppFrame() {
         setTitle("景点售票系统");
-        setMinimumSize(new Dimension(1180, 760));
-        setSize(1280, 820);
+        setMinimumSize(new Dimension(1100, 680));
+        setSize(1360, 840);
         setLocationRelativeTo(null);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         getContentPane().setBackground(BACKGROUND);
@@ -135,6 +128,7 @@ public class AppFrame extends JFrame {
     }
 
     private void showSystemView() {
+        getRootPane().setDefaultButton(null);
         tabs.removeAll();
         getContentPane().removeAll();
         setLayout(new BorderLayout());
@@ -149,13 +143,13 @@ public class AppFrame extends JFrame {
 
     private Component createAuthHeader() {
         JPanel header = new JPanel(new BorderLayout());
-        header.setBorder(BorderFactory.createEmptyBorder(26, 32, 18, 32));
+        header.setBorder(BorderFactory.createEmptyBorder(22, 32, 16, 32));
         header.setBackground(Color.WHITE);
 
         JLabel title = new JLabel("景点售票系统");
-        title.setFont(new Font("Microsoft YaHei UI", Font.BOLD, 26));
+        title.setFont(TITLE_FONT);
         JLabel subtitle = new JLabel("请先登录后进入系统");
-        subtitle.setForeground(new Color(100, 110, 120));
+        subtitle.setForeground(UiTheme.MUTED);
 
         JPanel titleBlock = new JPanel(new GridLayout(2, 1));
         titleBlock.setOpaque(false);
@@ -173,8 +167,8 @@ public class AppFrame extends JFrame {
 
         JLabel title = new JLabel("景点售票系统");
         title.setFont(TITLE_FONT);
-        JLabel subtitle = new JLabel("MySQL + MongoDB + Java Swing");
-        subtitle.setForeground(new Color(100, 110, 120));
+        JLabel subtitle = new JLabel("景点门票与运营管理");
+        subtitle.setForeground(UiTheme.MUTED);
 
         JPanel titleBlock = new JPanel(new GridLayout(2, 1));
         titleBlock.setOpaque(false);
@@ -183,7 +177,7 @@ public class AppFrame extends JFrame {
 
         JPanel sessionBlock = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
         sessionBlock.setOpaque(false);
-        JButton logoutButton = new JButton("退出登录");
+        JButton logoutButton = secondaryButton("退出登录");
         logoutButton.addActionListener(event -> {
             showLoginView("已退出登录");
         });
@@ -196,17 +190,31 @@ public class AppFrame extends JFrame {
     }
 
     private Component createPages() {
-        tabs.addTab("首页", scrollPage(createHomePanel()));
-        tabs.addTab("个人档案", scrollPage(createProfilePanel()));
-        tabs.addTab("景点浏览", scrollPage(createItemPanel()));
-        tabs.addTab("我的订单", scrollPage(createOrderPanel()));
-        tabs.addTab("统计报表", scrollPage(createReportPanel()));
-        if (isCurrentAdmin()) {
+        List<String> visiblePages = UiNavigationPolicy.visiblePages(currentUser == null ? null : currentUser.getRole());
+        if (visiblePages.contains("首页")) {
+            tabs.addTab("首页", scrollPage(createHomePanel()));
+        }
+        if (visiblePages.contains("个人档案")) {
+            tabs.addTab("个人档案", scrollPage(createProfilePanel()));
+        }
+        if (visiblePages.contains("景点浏览")) {
+            tabs.addTab("景点浏览", scrollPage(createItemPanel()));
+        }
+        if (visiblePages.contains("我的订单")) {
+            tabs.addTab("我的订单", scrollPage(createOrderPanel()));
+        }
+        if (visiblePages.contains("统计报表")) {
+            tabs.addTab("统计报表", scrollPage(createReportPanel()));
+        }
+        if (visiblePages.contains("后台管理")) {
             tabs.addTab("后台管理", scrollPage(createManagePanel()));
+        }
+        if (visiblePages.contains("系统审计")) {
             tabs.addTab("系统审计", scrollPage(createAuditPanel()));
         }
         tabs.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
         tabs.setBackground(BACKGROUND);
+        styleNavigationTabs();
         return tabs;
     }
 
@@ -228,11 +236,11 @@ public class AppFrame extends JFrame {
 
         JPanel quickActions = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
         quickActions.setOpaque(false);
-        quickActions.add(navButton("个人档案", "个人档案"));
+        quickActions.add(navButton("完善档案", "个人档案"));
         quickActions.add(navButton("浏览景点", "景点浏览"));
-        quickActions.add(navButton("查看订单", "我的订单"));
-        quickActions.add(navButton("统计报表", "统计报表"));
-        JButton refreshButton = new JButton("刷新首页");
+        quickActions.add(navButton("我的订单", "我的订单"));
+        quickActions.add(navButton("查看报表", "统计报表"));
+        JButton refreshButton = secondaryButton("刷新");
         refreshButton.addActionListener(event -> {
             refreshHomeSummary();
             setStatus("首页已刷新");
@@ -250,15 +258,15 @@ public class AppFrame extends JFrame {
 
         homeSummaryArea.setText("");
         panel.add(top, BorderLayout.NORTH);
-        panel.add(wrapWithTitle("系统概览", homeSummaryArea), BorderLayout.CENTER);
+        panel.add(wrapWithTitle("欢迎使用", homeSummaryArea), BorderLayout.CENTER);
         return panel;
     }
 
     private JPanel createLoginPanel() {
         JTextField loginUsername = new JTextField(22);
         JPasswordField loginPassword = new JPasswordField(22);
-        JButton loginButton = new JButton("登录");
-        JButton registerPageButton = new JButton("注册新账号");
+        JButton loginButton = primaryButton("登录");
+        JButton registerPageButton = secondaryButton("注册新账号");
         JLabel loginResult = new JLabel(" ");
 
         JPanel loginPanel = formPanel("用户登录");
@@ -280,11 +288,16 @@ public class AppFrame extends JFrame {
                 setCurrentUser(result);
                 showSystemView();
             } else {
+                loginResult.setForeground(UiTheme.DANGER);
                 setStatus(result.getMessage());
             }
+        }, message -> {
+            loginResult.setForeground(UiTheme.DANGER);
+            loginResult.setText(message);
         }));
 
         registerPageButton.addActionListener(event -> showRegisterView());
+        getRootPane().setDefaultButton(loginButton);
 
         JPanel holder = pagePanel(new GridBagLayout());
         GridBagConstraints gbc = new GridBagConstraints();
@@ -304,8 +317,8 @@ public class AppFrame extends JFrame {
         JPasswordField registerPassword = new JPasswordField(22);
         JTextField registerEmail = new JTextField(22);
         JTextField registerPhone = new JTextField(22);
-        JButton registerButton = new JButton("注册");
-        JButton backButton = new JButton("返回登录");
+        JButton registerButton = primaryButton("注册");
+        JButton backButton = secondaryButton("返回登录");
         JLabel registerResult = new JLabel(" ");
 
         JPanel registerPanel = formPanel("用户注册");
@@ -325,9 +338,13 @@ public class AppFrame extends JFrame {
         ), userId -> {
             clearTextFields(registerPanel);
             showLoginView("注册成功，用户ID：" + userId + "，请登录");
+        }, message -> {
+            registerResult.setForeground(UiTheme.DANGER);
+            registerResult.setText(message);
         }));
 
         backButton.addActionListener(event -> showLoginView("请输入账号密码登录"));
+        getRootPane().setDefaultButton(registerButton);
 
         JPanel holder = pagePanel(new GridBagLayout());
         GridBagConstraints gbc = new GridBagConstraints();
@@ -349,21 +366,21 @@ public class AppFrame extends JFrame {
         JTextField idCardField = new JTextField(24);
         JTextField addressField = new JTextField(32);
         JTextArea notesArea = new JTextArea(5, 32);
-        JButton refreshButton = new JButton("刷新档案");
-        JButton saveButton = new JButton("保存档案");
+        JButton refreshButton = secondaryButton("刷新档案");
+        JButton saveButton = primaryButton("保存档案");
         JLabel message = new JLabel(" ");
 
         JPanel form = formPanel("个人档案");
-        addField(form, 0, "用户ID", userIdField);
-        addField(form, 1, "真实姓名", realNameField);
-        addField(form, 2, "证件号", idCardField);
-        addField(form, 3, "地址", addressField);
-        addTextAreaField(form, 4, "备注", notesArea);
-        addFormButtons(form, 5, refreshButton, saveButton);
-        addFormMessage(form, 6, message);
+        userIdField.setText(String.valueOf(requireCurrentUserId()));
+        addField(form, 0, "真实姓名", realNameField);
+        addField(form, 1, "证件号", idCardField);
+        addField(form, 2, "联系地址", addressField);
+        addTextAreaField(form, 3, "备注", notesArea);
+        addFormButtons(form, 4, refreshButton, saveButton);
+        addFormMessage(form, 5, message);
 
         refreshButton.addActionListener(event -> runTask("刷新档案", () -> userService.getProfile(
-                userIdField.getText().isBlank() ? requireCurrentUserId() : parseRequiredLong(userIdField.getText(), "用户ID")
+                requireCurrentUserId()
         ), profile -> {
             if (profile.isPresent()) {
                 fillProfileForm(profile.get(), userIdField, realNameField, idCardField, addressField, notesArea);
@@ -379,7 +396,7 @@ public class AppFrame extends JFrame {
 
         saveButton.addActionListener(event -> runTask("保存档案", () -> {
             Profile profile = new Profile();
-            profile.setUserId(userIdField.getText().isBlank() ? requireCurrentUserId() : parseRequiredLong(userIdField.getText(), "用户ID"));
+            profile.setUserId(requireCurrentUserId());
             profile.setRealName(realNameField.getText());
             profile.setIdCard(idCardField.getText());
             profile.setAddress(addressField.getText());
@@ -393,109 +410,117 @@ public class AppFrame extends JFrame {
 
     private JPanel createItemPanel() {
         JPanel panel = pagePanel(new BorderLayout(12, 12));
-
         JComboBox<String> keywordBox = new JComboBox<>(KEYWORD_OPTIONS);
         JTextField keywordField = new JTextField(14);
-        JComboBox<CategoryChoice> categoryBox = new JComboBox<>(CATEGORY_OPTIONS);
-        JTextField itemIdField = new JTextField(8);
-        JTextField ticketCountField = new JTextField("1", 4);
-        JComboBox<String> paymentBox = new JComboBox<>(new String[]{"微信", "支付宝", "银行卡", "现金"});
-        JTextField ratingField = new JTextField("5", 4);
-        JTextField commentField = new JTextField(24);
-        JTextArea detailArea = createTextArea(14, 70);
-        DefaultTableModel tableModel = tableModel("ID", "标题", "类型", "票价", "折扣", "状态", "推荐分", "推荐理由", "更新时间");
+        JComboBox<CategoryOption> categoryBox = new JComboBox<>();
+        categoryBox.addItem(new CategoryOption("全部类型", null));
+        JTextArea detailArea = createTextArea(18, 34);
+        DefaultTableModel tableModel = tableModel("景点名称", "类型", "票价", "折扣", "推荐分", "状态");
         JTable table = createTable(tableModel);
-        setColumnWidths(table, 80, 240, 120, 90, 90, 90, 90, 260, 180);
-        detailArea.setText("先选择预设关键词或景点类型查询。选中景点后可以查看详情、购买门票；购买成功后可在详情评论区发表评论。");
+        table.setAutoResizeMode(JTable.AUTO_RESIZE_ALL_COLUMNS);
+        setColumnWidths(table, 220, 120, 90, 90, 90, 90);
+        detailArea.setText("请选择查询条件，或点击“查询”浏览全部景点。");
+        List<Item> visibleItems = new ArrayList<>();
+        Map<Long, String> recommendationReasons = new LinkedHashMap<>();
+        Item[] selectedItem = new Item[1];
 
         JPanel searchToolbar = toolbar();
-        JButton searchButton = new JButton("查询景点");
-        JButton recommendButton = new JButton("推荐");
+        JButton searchButton = primaryButton("查询");
+        JButton recommendButton = secondaryButton("推荐");
         JPopupMenu recommendMenu = new JPopupMenu();
         JMenuItem personalRecommendItem = new JMenuItem("为你推荐");
-        JMenuItem ratedRecommendItem = new JMenuItem("高分");
         JMenuItem hotRecommendItem = new JMenuItem("热门");
+        JMenuItem ratedRecommendItem = new JMenuItem("高分");
         recommendMenu.add(personalRecommendItem);
-        recommendMenu.add(ratedRecommendItem);
         recommendMenu.add(hotRecommendItem);
-        JButton allButton = new JButton("查询全部");
-        JButton refreshButton = new JButton("刷新列表");
-        JButton clearButton = new JButton("清空条件");
-        searchToolbar.add(new JLabel("预设关键词"));
+        recommendMenu.add(ratedRecommendItem);
+        JButton clearButton = secondaryButton("重置");
+        searchToolbar.add(new JLabel("关键词"));
         searchToolbar.add(keywordBox);
-        searchToolbar.add(new JLabel("补充关键词"));
+        searchToolbar.add(new JLabel("自定义"));
         searchToolbar.add(keywordField);
         searchToolbar.add(new JLabel("景点类型"));
         searchToolbar.add(categoryBox);
         searchToolbar.add(searchButton);
         searchToolbar.add(recommendButton);
-        searchToolbar.add(allButton);
-        searchToolbar.add(refreshButton);
         searchToolbar.add(clearButton);
 
-        JPanel purchaseToolbar = toolbar();
-        JButton detailButton = new JButton("查看详情");
-        JButton commentsButton = new JButton("查看评论");
-        JButton orderButton = new JButton("创建订单");
-        purchaseToolbar.add(new JLabel("景点ID（可点表格自动填写）"));
-        purchaseToolbar.add(itemIdField);
-        purchaseToolbar.add(detailButton);
-        purchaseToolbar.add(commentsButton);
-        purchaseToolbar.add(new JLabel("购买票数"));
-        purchaseToolbar.add(ticketCountField);
-        purchaseToolbar.add(new JLabel("付款方式"));
-        purchaseToolbar.add(paymentBox);
-        purchaseToolbar.add(orderButton);
-
-        JPanel commentToolbar = toolbar();
-        JButton commentButton = new JButton("发表评论");
-        commentToolbar.add(new JLabel("评分1-5"));
-        commentToolbar.add(ratingField);
-        commentToolbar.add(new JLabel("评论内容"));
-        commentToolbar.add(commentField);
-        commentToolbar.add(commentButton);
-
-        JPanel controls = new JPanel(new GridLayout(3, 1, 0, 8));
-        controls.setOpaque(false);
-        controls.add(wrapWithTitle("景点查询", searchToolbar));
-        controls.add(wrapWithTitle("购票", purchaseToolbar));
-        controls.add(wrapWithTitle("详情页评论（购买后可评论）", commentToolbar));
+        JButton detailButton = secondaryButton("查看详情");
+        JButton commentsButton = secondaryButton("查看评论");
+        JButton orderButton = primaryButton("购买门票");
+        JButton commentButton = secondaryButton("发表评论");
+        detailButton.setEnabled(false);
+        commentsButton.setEnabled(false);
+        orderButton.setEnabled(false);
+        commentButton.setEnabled(false);
+        JPanel detailActions = toolbar();
+        detailActions.add(detailButton);
+        detailActions.add(commentsButton);
+        detailActions.add(orderButton);
+        detailActions.add(commentButton);
+        JPanel detailPanel = new JPanel(new BorderLayout(0, 10));
+        detailPanel.setOpaque(false);
+        detailPanel.add(new JScrollPane(detailArea), BorderLayout.CENTER);
+        detailPanel.add(detailActions, BorderLayout.SOUTH);
 
         table.getSelectionModel().addListSelectionListener(event -> {
-            int row = table.getSelectedRow();
-            if (!event.getValueIsAdjusting() && row >= 0) {
-                Object value = table.getValueAt(row, 0);
-                itemIdField.setText(String.valueOf(value));
+            int viewRow = table.getSelectedRow();
+            if (!event.getValueIsAdjusting() && viewRow >= 0) {
+                int modelRow = table.convertRowIndexToModel(viewRow);
+                selectedItem[0] = visibleItems.get(modelRow);
+                Item item = selectedItem[0];
+                String reason = recommendationReasons.get(item.getItemId());
+                detailArea.setText(item.getTitle() + System.lineSeparator()
+                        + "类型：" + categoryName(item.getCategoryId()) + System.lineSeparator()
+                        + "票价：" + UiFormatters.money(item.getPrice()) + "    折扣："
+                        + discountText(item.getDiscountRate()) + System.lineSeparator()
+                        + "状态：" + formatItemStatus(item.getStatus())
+                        + (reason == null ? "" : System.lineSeparator() + "推荐理由：" + reason)
+                        + System.lineSeparator() + System.lineSeparator()
+                        + "点击“查看详情”可查看开放时间、地址与评论。" );
+                detailButton.setEnabled(true);
+                commentsButton.setEnabled(true);
+                orderButton.setEnabled(item.getStatus() != null && item.getStatus() == 1);
+                commentButton.setEnabled(true);
             }
         });
 
         Consumer<List<Item>> fillItems = items -> {
             tableModel.setRowCount(0);
+            visibleItems.clear();
+            recommendationReasons.clear();
             for (Item item : items) {
+                visibleItems.add(item);
                 tableModel.addRow(new Object[]{
-                        item.getItemId(), item.getTitle(), categoryName(item.getCategoryId()), item.getPrice(),
-                        discountText(item.getDiscountRate()), formatItemStatus(item.getStatus()), "", "",
-                        formatDate(item.getUpdatedAt())
+                        item.getTitle(), categoryName(item.getCategoryId()), UiFormatters.money(item.getPrice()),
+                        discountText(item.getDiscountRate()), "-", formatItemStatus(item.getStatus())
                 });
             }
-            setStatus("查询到 " + items.size() + " 个景点。点击表格中的一行即可选择景点。");
+            resetItemSelection(table, selectedItem, detailButton, commentsButton, orderButton, commentButton);
+            detailArea.setText(items.isEmpty() ? "没有找到符合条件的景点，请调整查询条件。" : "共找到 " + items.size() + " 个景点，请从左侧列表选择。" );
+            setStatus("查询到 " + items.size() + " 个景点");
         };
 
         Consumer<List<RecommendationDTO>> fillRecommendations = recommendations -> {
             tableModel.setRowCount(0);
+            visibleItems.clear();
+            recommendationReasons.clear();
             for (RecommendationDTO recommendation : recommendations) {
                 Item item = recommendation.getItem();
                 if (item == null) {
                     continue;
                 }
+                visibleItems.add(item);
+                recommendationReasons.put(item.getItemId(), recommendation.getReason());
                 tableModel.addRow(new Object[]{
-                        item.getItemId(), item.getTitle(), categoryName(item.getCategoryId()), item.getPrice(),
-                        discountText(item.getDiscountRate()), formatItemStatus(item.getStatus()),
-                        formatRecommendationScore(recommendation.getScore()), recommendation.getReason(),
-                        formatDate(item.getUpdatedAt())
+                        item.getTitle(), categoryName(item.getCategoryId()), UiFormatters.money(item.getPrice()),
+                        discountText(item.getDiscountRate()), formatRecommendationScore(recommendation.getScore()),
+                        formatItemStatus(item.getStatus())
                 });
             }
-            setStatus("为你找到 " + recommendations.size() + " 个推荐景点。点击表格中的一行即可选择景点。");
+            resetItemSelection(table, selectedItem, detailButton, commentsButton, orderButton, commentButton);
+            detailArea.setText(recommendations.isEmpty() ? "暂时没有推荐结果。" : "已生成 " + recommendations.size() + " 个推荐结果，请选择景点查看推荐理由。" );
+            setStatus("已生成 " + recommendations.size() + " 个推荐景点");
         };
 
         searchButton.addActionListener(event -> runTask("景点查询", () -> businessService.searchItems(
@@ -515,71 +540,33 @@ public class AppFrame extends JFrame {
         hotRecommendItem.addActionListener(event -> runTask("热门推荐", () -> recommendService.recommendHotItems(null, null, 10),
                 fillRecommendations));
 
-        refreshButton.addActionListener(event -> runTask("刷新景点列表", () -> businessService.searchItems(
-                buildSearchKeyword((String) keywordBox.getSelectedItem(), keywordField.getText()),
-                selectedCategoryId(categoryBox), 50, 0
-        ), fillItems));
-
-        allButton.addActionListener(event -> {
-            keywordBox.setSelectedItem(ALL_OPTION);
-            keywordField.setText("");
-            categoryBox.setSelectedIndex(0);
-            runTask("查询全部景点", () -> businessService.searchItems(null, null, 50, 0), fillItems);
-        });
-
         clearButton.addActionListener(event -> {
             keywordBox.setSelectedItem(ALL_OPTION);
             keywordField.setText("");
             categoryBox.setSelectedIndex(0);
-            itemIdField.setText("");
-            commentField.setText("");
-            tableModel.setRowCount(0);
-            detailArea.setText("已清空条件。点击“查询全部”可以重新列出景点。");
-            setStatus("景点查询条件已清空");
+            runTask("重置景点列表", () -> businessService.searchItems(null, null, 50, 0), fillItems);
         });
 
         detailButton.addActionListener(event -> runTask("景点详情", () -> crossDatabaseQueryService.getItemDetail(
-                selectedOrTypedItemId(table, itemIdField), 8
+                requireSelectedItem(selectedItem).getItemId(), 8
         ), dto -> detailArea.setText(formatItemDetail(dto))));
 
         commentsButton.addActionListener(event -> runTask("查看评论", () -> crossDatabaseQueryService.getItemDetail(
-                selectedOrTypedItemId(table, itemIdField), 20
+                requireSelectedItem(selectedItem).getItemId(), 20
         ), dto -> detailArea.setText(formatItemCommentsView(dto))));
 
-        orderButton.addActionListener(event -> runTask("创建订单", () -> businessService.createOrder(
-                requireCurrentUserId(),
-                selectedOrTypedItemId(table, itemIdField),
-                parseRequiredInt(ticketCountField.getText(), "购买票数"),
-                (String) paymentBox.getSelectedItem()
-        ), orderId -> detailArea.setText("模拟付款成功，订单ID：" + orderId + "。现在可以在本页面下方发表评论。")));
+        orderButton.addActionListener(event -> showPurchaseDialog(requireSelectedItem(selectedItem), detailArea));
+        commentButton.addActionListener(event -> showCommentDialog(requireSelectedItem(selectedItem), detailArea));
 
-        commentButton.addActionListener(event -> runTask("发表评论", () -> {
-            long itemId = selectedOrTypedItemId(table, itemIdField);
-            if (!businessService.canComment(requireCurrentUserId(), itemId)) {
-                throw new IllegalArgumentException("购买成功后才能评论该景点，请先创建订单并完成模拟付款");
-            }
-            String comment = commentField.getText().trim();
-            int rating = parseRequiredInt(ratingField.getText(), "评分");
-            if (rating < 1 || rating > 5) {
-                throw new IllegalArgumentException("评分必须是 1 到 5 之间的整数");
-            }
-            if (comment.isBlank()) {
-                throw new IllegalArgumentException("评论内容不能为空");
-            }
-            behaviorLogService.addComment(
-                    requireCurrentUserId(),
-                    itemId,
-                    comment,
-                    rating,
-                    List.of("Swing界面"),
-                    "127.0.0.1"
-            );
-            return "评论提交成功";
-        }, detailArea::setText));
+        keywordField.addActionListener(event -> searchButton.doClick());
+        loadCategoryChoices(categoryBox, true);
 
-        JSplitPane splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, new JScrollPane(table), wrapWithTitle("景点详情与评论", detailArea));
-        splitPane.setResizeWeight(0.55);
-        panel.add(controls, BorderLayout.NORTH);
+        JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT,
+                wrapWithTitle("景点列表", new JScrollPane(table)),
+                wrapWithTitle("景点详情与评论", detailPanel));
+        splitPane.setResizeWeight(0.64);
+        splitPane.setDividerLocation(760);
+        panel.add(wrapWithTitle("查询景点", searchToolbar), BorderLayout.NORTH);
         panel.add(splitPane, BorderLayout.CENTER);
         return panel;
     }
@@ -588,78 +575,107 @@ public class AppFrame extends JFrame {
         JPanel panel = pagePanel(new BorderLayout(12, 12));
         JTextField userIdField = new JTextField(10);
         JTextField queryOrderIdField = new JTextField(10);
-        JTextField updateOrderIdField = new JTextField(10);
         JComboBox<String> queryStatusBox = new JComboBox<>(new String[]{"全部状态", "0-待支付", "1-已支付", "2-已取消", "3-已完成"});
         JComboBox<String> updateStatusBox = new JComboBox<>(new String[]{"0-待支付", "1-已支付", "2-已取消", "3-已完成"});
-        DefaultTableModel model = tableModel("订单ID", "用户ID", "景点ID", "票数", "单价", "折扣", "实付金额", "付款方式", "状态", "创建时间");
+        DefaultTableModel model = isCurrentAdmin()
+                ? tableModel("订单号", "用户ID", "景点名称", "票数", "单价", "折扣", "实付金额", "付款方式", "状态", "创建时间")
+                : tableModel("订单号", "景点名称", "票数", "单价", "折扣", "实付金额", "付款方式", "状态", "创建时间");
         JTable table = createTable(model);
-        setColumnWidths(table, 90, 90, 90, 70, 90, 90, 110, 110, 100, 180);
+        table.setAutoResizeMode(JTable.AUTO_RESIZE_ALL_COLUMNS);
+        if (isCurrentAdmin()) {
+            setColumnWidths(table, 80, 80, 190, 60, 90, 80, 100, 90, 90, 170);
+        } else {
+            setColumnWidths(table, 80, 210, 60, 90, 80, 100, 90, 90, 170);
+        }
+        Long[] selectedOrderId = new Long[1];
 
         JPanel queryToolbar = toolbar();
-        JButton listButton = new JButton("查我的订单");
-        JButton refreshButton = new JButton("刷新订单");
-        JButton updateButton = new JButton("更新状态");
+        JButton listButton = primaryButton("查询订单");
+        JButton refreshButton = secondaryButton("刷新");
+        JButton resetButton = secondaryButton("重置");
+        JButton updateButton = primaryButton("更新状态");
+        updateButton.setEnabled(false);
         if (isCurrentAdmin()) {
-            queryToolbar.add(new JLabel("用户ID（可不填）"));
+            queryToolbar.add(new JLabel("用户ID"));
             queryToolbar.add(userIdField);
-            listButton.setText("查询订单");
         }
-        queryToolbar.add(new JLabel("订单ID（可不填）"));
+        queryToolbar.add(new JLabel("订单号"));
         queryToolbar.add(queryOrderIdField);
-        queryToolbar.add(new JLabel("订单状态"));
+        queryToolbar.add(new JLabel("状态"));
         queryToolbar.add(queryStatusBox);
         queryToolbar.add(listButton);
         queryToolbar.add(refreshButton);
+        queryToolbar.add(resetButton);
 
         JPanel controls = new JPanel(new GridLayout(isCurrentAdmin() ? 2 : 1, 1, 0, 8));
         controls.setOpaque(false);
         controls.add(wrapWithTitle("订单查询", queryToolbar));
         if (isCurrentAdmin()) {
             JPanel updateToolbar = toolbar();
-            updateToolbar.add(new JLabel("订单ID（选择表格自动填）"));
-            updateToolbar.add(updateOrderIdField);
-            updateToolbar.add(new JLabel("改为"));
+            JLabel selectedOrderLabel = new JLabel("请先从表格选择订单");
+            updateToolbar.add(selectedOrderLabel);
+            updateToolbar.add(new JLabel("状态改为"));
             updateToolbar.add(updateStatusBox);
             updateToolbar.add(updateButton);
             controls.add(wrapWithTitle("订单状态更新", updateToolbar));
+            table.getSelectionModel().addListSelectionListener(event -> {
+                int row = table.getSelectedRow();
+                if (!event.getValueIsAdjusting() && row >= 0) {
+                    selectedOrderId[0] = Long.valueOf(String.valueOf(table.getValueAt(row, 0)));
+                    selectedOrderLabel.setText("已选择订单：" + selectedOrderId[0]);
+                    updateButton.setEnabled(true);
+                }
+            });
         }
-
-        table.getSelectionModel().addListSelectionListener(event -> {
-            int row = table.getSelectedRow();
-            if (!event.getValueIsAdjusting() && row >= 0) {
-                updateOrderIdField.setText(String.valueOf(table.getValueAt(row, 0)));
-            }
-        });
 
         Runnable refreshOrders = () -> runTask("订单查询", () -> {
             Long queryUserId = isCurrentAdmin()
                     ? parseOptionalLong(userIdField.getText())
                     : Long.valueOf(requireCurrentUserId());
-            return businessService.searchOrders(
+            return businessService.searchOrderViews(
                     queryUserId,
                     parseOptionalLong(queryOrderIdField.getText()),
                     selectedOrderStatus(queryStatusBox),
                     50,
                     0
             );
-        }, orders -> {
+        }, orderViews -> {
             model.setRowCount(0);
-            for (Order order : orders) {
-                model.addRow(new Object[]{
-                        order.getOrderId(), order.getUserId(), order.getItemId(), order.getQuantity(),
-                        order.getUnitPrice(), discountText(order.getDiscountRate()), order.getAmount(),
-                        order.getPaymentMethod(), formatOrderStatus(order.getStatus()), formatDate(order.getCreatedAt())
-                });
+            selectedOrderId[0] = null;
+            updateButton.setEnabled(false);
+            for (OrderViewDTO view : orderViews) {
+                Order order = view.getOrder();
+                if (isCurrentAdmin()) {
+                    model.addRow(new Object[]{order.getOrderId(), order.getUserId(), view.getItemTitle(), order.getQuantity(),
+                            UiFormatters.money(order.getUnitPrice()), discountText(order.getDiscountRate()),
+                            UiFormatters.money(order.getAmount()), order.getPaymentMethod(),
+                            formatOrderStatus(order.getStatus()), formatDate(order.getCreatedAt())});
+                } else {
+                    model.addRow(new Object[]{order.getOrderId(), view.getItemTitle(), order.getQuantity(),
+                            UiFormatters.money(order.getUnitPrice()), discountText(order.getDiscountRate()),
+                            UiFormatters.money(order.getAmount()), order.getPaymentMethod(),
+                            formatOrderStatus(order.getStatus()), formatDate(order.getCreatedAt())});
+                }
             }
-            setStatus("查询到 " + orders.size() + " 条订单");
+            setStatus("查询到 " + orderViews.size() + " 条订单");
         });
         listButton.addActionListener(event -> refreshOrders.run());
         refreshButton.addActionListener(event -> refreshOrders.run());
+        resetButton.addActionListener(event -> {
+            userIdField.setText("");
+            queryOrderIdField.setText("");
+            queryStatusBox.setSelectedIndex(0);
+            refreshOrders.run();
+        });
+        queryOrderIdField.addActionListener(event -> refreshOrders.run());
 
         updateButton.addActionListener(event -> runTask("更新订单状态", () -> businessService.updateOrderStatus(
-                parseRequiredLong(updateOrderIdField.getText(), "订单ID"),
+                requireSelectedOrderId(selectedOrderId),
                 updateStatusBox.getSelectedIndex()
-        ), updated -> setStatus(updated ? "订单状态已更新" : "订单状态未变化")));
+        ), updated -> {
+            setStatus(updated ? "订单状态已更新" : "订单状态未变化");
+            refreshOrders.run();
+        }));
 
         panel.add(controls, BorderLayout.NORTH);
         panel.add(new JScrollPane(table), BorderLayout.CENTER);
@@ -668,89 +684,161 @@ public class AppFrame extends JFrame {
 
     private JPanel createManagePanel() {
         JPanel panel = pagePanel(new BorderLayout(12, 12));
-        DefaultTableModel categoryModel = tableModel("分类ID", "名称", "父分类ID");
-        JTable categoryTable = createTable(categoryModel);
-        JTextArea resultArea = createTextArea(8, 60);
+        JTabbedPane manageTabs = new JTabbedPane(JTabbedPane.TOP);
 
-        JTextField categoryNameField = new JTextField(12);
-        JTextField parentIdField = new JTextField(8);
-        JTextField itemTitleField = new JTextField(16);
-        JComboBox<CategoryChoice> itemCategoryBox = new JComboBox<>(categoryChoicesWithoutAll());
-        JTextField itemDescField = new JTextField(20);
-        JTextField itemPriceField = new JTextField("80.00", 8);
-        JTextField itemDiscountField = new JTextField("0", 5);
-        JTextField itemStatusIdField = new JTextField(8);
-        JComboBox<String> itemStatusBox = new JComboBox<>(new String[]{"0-下架", "1-上架"});
+        JPanel itemPage = new JPanel(new BorderLayout(12, 12));
+        itemPage.setOpaque(false);
+        JTextField itemKeywordField = new JTextField(16);
+        JComboBox<CategoryOption> itemCategoryBox = new JComboBox<>();
+        itemCategoryBox.addItem(new CategoryOption("全部类型", null));
+        DefaultTableModel itemModel = tableModel("ID", "景点名称", "类型", "票价", "折扣", "状态", "更新时间");
+        JTable itemTable = createTable(itemModel);
+        itemTable.setAutoResizeMode(JTable.AUTO_RESIZE_ALL_COLUMNS);
+        setColumnWidths(itemTable, 60, 230, 130, 90, 80, 80, 170);
+        List<Item> adminItems = new ArrayList<>();
+        Item[] selectedItem = new Item[1];
 
-        JPanel categoryToolbar = toolbar();
-        JButton refreshCategoryButton = new JButton("刷新分类");
-        JButton createCategoryButton = new JButton("新增分类");
-        categoryToolbar.add(refreshCategoryButton);
-        categoryToolbar.add(new JLabel("分类名"));
-        categoryToolbar.add(categoryNameField);
-        categoryToolbar.add(new JLabel("父ID"));
-        categoryToolbar.add(parentIdField);
-        categoryToolbar.add(createCategoryButton);
+        JButton queryItemsButton = primaryButton("查询");
+        JButton refreshItemsButton = secondaryButton("刷新");
+        JButton resetItemsButton = secondaryButton("重置");
+        JButton createItemButton = primaryButton("新增景点");
+        JPanel itemQueryToolbar = toolbar();
+        itemQueryToolbar.add(new JLabel("关键词"));
+        itemQueryToolbar.add(itemKeywordField);
+        itemQueryToolbar.add(new JLabel("景点类型"));
+        itemQueryToolbar.add(itemCategoryBox);
+        itemQueryToolbar.add(queryItemsButton);
+        itemQueryToolbar.add(refreshItemsButton);
+        itemQueryToolbar.add(resetItemsButton);
+        itemQueryToolbar.add(createItemButton);
 
-        JPanel itemToolbar = toolbar();
-        JButton createItemButton = new JButton("新增景点");
-        JButton itemStatusButton = new JButton("更新状态");
-        JButton pricingButton = new JButton("修改价格折扣");
-        itemToolbar.add(new JLabel("景点标题"));
-        itemToolbar.add(itemTitleField);
-        itemToolbar.add(new JLabel("预设类型"));
-        itemToolbar.add(itemCategoryBox);
-        itemToolbar.add(new JLabel("描述"));
-        itemToolbar.add(itemDescField);
-        itemToolbar.add(new JLabel("票价"));
-        itemToolbar.add(itemPriceField);
-        itemToolbar.add(new JLabel("折扣%"));
-        itemToolbar.add(itemDiscountField);
-        itemToolbar.add(createItemButton);
-        itemToolbar.add(new JLabel("景点ID"));
-        itemToolbar.add(itemStatusIdField);
-        itemToolbar.add(itemStatusBox);
-        itemToolbar.add(itemStatusButton);
-        itemToolbar.add(pricingButton);
+        JLabel selectedItemLabel = new JLabel("请先从表格选择景点");
+        JTextField itemPriceField = new JTextField(8);
+        JTextField itemDiscountField = new JTextField(6);
+        JComboBox<String> itemStatusBox = new JComboBox<>(new String[]{"下架", "上架"});
+        JButton pricingButton = primaryButton("保存价格折扣");
+        JButton itemStatusButton = secondaryButton("更新上下架");
+        pricingButton.setEnabled(false);
+        itemStatusButton.setEnabled(false);
+        JPanel itemEditToolbar = toolbar();
+        itemEditToolbar.add(selectedItemLabel);
+        itemEditToolbar.add(new JLabel("票价"));
+        itemEditToolbar.add(itemPriceField);
+        itemEditToolbar.add(new JLabel("折扣%"));
+        itemEditToolbar.add(itemDiscountField);
+        itemEditToolbar.add(pricingButton);
+        itemEditToolbar.add(new JLabel("状态"));
+        itemEditToolbar.add(itemStatusBox);
+        itemEditToolbar.add(itemStatusButton);
 
-        JPanel controls = new JPanel(new GridLayout(2, 1, 0, 8));
-        controls.setOpaque(false);
-        controls.add(wrapWithTitle("分类管理", categoryToolbar));
-        controls.add(wrapWithTitle("景点管理", itemToolbar));
+        Runnable refreshItems = () -> runAdminTask("刷新景点", () -> businessService.searchAllItemsForAdmin(
+                itemKeywordField.getText(), selectedCategoryId(itemCategoryBox), 100, 0
+        ), items -> {
+            itemModel.setRowCount(0);
+            adminItems.clear();
+            adminItems.addAll(items);
+            for (Item item : items) {
+                itemModel.addRow(new Object[]{item.getItemId(), item.getTitle(), categoryName(item.getCategoryId()),
+                        UiFormatters.money(item.getPrice()), discountText(item.getDiscountRate()),
+                        formatItemStatus(item.getStatus()), formatDate(item.getUpdatedAt())});
+            }
+            selectedItem[0] = null;
+            selectedItemLabel.setText("请先从表格选择景点");
+            pricingButton.setEnabled(false);
+            itemStatusButton.setEnabled(false);
+            setStatus("已加载 " + items.size() + " 个景点");
+        });
 
-        refreshCategoryButton.addActionListener(event -> refreshCategories(categoryModel));
-        createCategoryButton.addActionListener(event -> runAdminTask("新增分类", () -> businessService.createCategory(
-                categoryNameField.getText(), parseOptionalLong(parentIdField.getText())
-        ), id -> {
-            resultArea.setText("分类创建成功，ID：" + id);
-            refreshCategories(categoryModel);
+        itemTable.getSelectionModel().addListSelectionListener(event -> {
+            int row = itemTable.getSelectedRow();
+            if (!event.getValueIsAdjusting() && row >= 0) {
+                selectedItem[0] = adminItems.get(itemTable.convertRowIndexToModel(row));
+                Item item = selectedItem[0];
+                selectedItemLabel.setText("已选择：" + item.getTitle());
+                itemPriceField.setText(item.getPrice() == null ? "0.00" : item.getPrice().toPlainString());
+                itemDiscountField.setText(item.getDiscountRate() == null ? "0" : item.getDiscountRate().stripTrailingZeros().toPlainString());
+                itemStatusBox.setSelectedIndex(item.getStatus() != null && item.getStatus() == 1 ? 1 : 0);
+                pricingButton.setEnabled(true);
+                itemStatusButton.setEnabled(true);
+            }
+        });
+
+        queryItemsButton.addActionListener(event -> refreshItems.run());
+        refreshItemsButton.addActionListener(event -> refreshItems.run());
+        itemKeywordField.addActionListener(event -> refreshItems.run());
+        resetItemsButton.addActionListener(event -> {
+            itemKeywordField.setText("");
+            itemCategoryBox.setSelectedIndex(0);
+            refreshItems.run();
+        });
+        createItemButton.addActionListener(event -> showCreateItemDialog(refreshItems));
+        pricingButton.addActionListener(event -> runAdminTask("保存价格折扣", () -> businessService.updateItemPricing(
+                requireSelectedItem(selectedItem).getItemId(), parseRequiredAmount(itemPriceField.getText(), "票价"),
+                parseRequiredAmount(itemDiscountField.getText(), "折扣")
+        ), updated -> {
+            setStatus(updated ? "景点价格和折扣已保存" : "价格和折扣没有变化");
+            refreshItems.run();
+        }));
+        itemStatusButton.addActionListener(event -> runAdminTask("更新上下架状态", () -> businessService.updateItemStatus(
+                requireSelectedItem(selectedItem).getItemId(), itemStatusBox.getSelectedIndex()
+        ), updated -> {
+            setStatus(updated ? "景点上下架状态已更新" : "景点状态没有变化");
+            refreshItems.run();
         }));
 
-        createItemButton.addActionListener(event -> runAdminTask("新增景点", () -> businessService.createItem(
-                itemTitleField.getText(),
-                requireCategoryId(itemCategoryBox),
-                itemDescField.getText(),
-                List.of(),
-                new Document("source", "Swing后台"),
-                parseRequiredAmount(itemPriceField.getText(), "票价"),
-                parseRequiredAmount(itemDiscountField.getText(), "折扣")
-        ), id -> resultArea.setText("景点创建成功，ID：" + id)));
+        JPanel itemTop = new JPanel(new GridLayout(2, 1, 0, 8));
+        itemTop.setOpaque(false);
+        itemTop.add(wrapWithTitle("筛选景点", itemQueryToolbar));
+        itemTop.add(wrapWithTitle("编辑所选景点", itemEditToolbar));
+        itemPage.add(itemTop, BorderLayout.NORTH);
+        itemPage.add(wrapWithTitle("景点列表", new JScrollPane(itemTable)), BorderLayout.CENTER);
 
-        itemStatusButton.addActionListener(event -> runAdminTask("更新景点状态", () -> businessService.updateItemStatus(
-                parseRequiredLong(itemStatusIdField.getText(), "景点ID"),
-                itemStatusBox.getSelectedIndex()
-        ), updated -> resultArea.setText(updated ? "景点状态已更新" : "景点状态未变化")));
+        JPanel categoryPage = new JPanel(new BorderLayout(12, 12));
+        categoryPage.setOpaque(false);
+        DefaultTableModel categoryModel = tableModel("分类ID", "分类名称", "上级分类");
+        JTable categoryTable = createTable(categoryModel);
+        categoryTable.setAutoResizeMode(JTable.AUTO_RESIZE_ALL_COLUMNS);
+        JTextField categoryNameField = new JTextField(16);
+        JComboBox<CategoryOption> parentCategoryBox = new JComboBox<>();
+        parentCategoryBox.addItem(new CategoryOption("无上级分类", null));
+        JButton createCategoryButton = primaryButton("新增分类");
+        JButton refreshCategoryButton = secondaryButton("刷新");
+        JPanel categoryToolbar = toolbar();
+        categoryToolbar.add(new JLabel("分类名称"));
+        categoryToolbar.add(categoryNameField);
+        categoryToolbar.add(new JLabel("上级分类"));
+        categoryToolbar.add(parentCategoryBox);
+        categoryToolbar.add(createCategoryButton);
+        categoryToolbar.add(refreshCategoryButton);
 
-        pricingButton.addActionListener(event -> runAdminTask("修改价格折扣", () -> businessService.updateItemPricing(
-                parseRequiredLong(itemStatusIdField.getText(), "景点ID"),
-                parseRequiredAmount(itemPriceField.getText(), "票价"),
-                parseRequiredAmount(itemDiscountField.getText(), "折扣")
-        ), updated -> resultArea.setText(updated ? "景点票价和折扣已更新" : "景点票价和折扣未变化")));
+        Runnable refreshCategories = () -> runAdminTask("刷新分类", businessService::listCategories, categories -> {
+            updateCategoryCache(categories);
+            fillCategoryCombo(itemCategoryBox, categories, true, "全部类型");
+            fillCategoryCombo(parentCategoryBox, categories, true, "无上级分类");
+            categoryModel.setRowCount(0);
+            for (Category category : categories) {
+                categoryModel.addRow(new Object[]{category.getCategoryId(), category.getName(),
+                        category.getParentId() == null ? "-" : categoryName(category.getParentId())});
+            }
+            setStatus("已加载 " + categories.size() + " 个分类");
+            refreshItems.run();
+        });
+        refreshCategoryButton.addActionListener(event -> refreshCategories.run());
+        createCategoryButton.addActionListener(event -> runAdminTask("新增分类", () -> businessService.createCategory(
+                categoryNameField.getText(), selectedCategoryId(parentCategoryBox)
+        ), id -> {
+            categoryNameField.setText("");
+            setStatus("分类创建成功，编号：" + id);
+            refreshCategories.run();
+        }));
+        categoryNameField.addActionListener(event -> createCategoryButton.doClick());
+        categoryPage.add(wrapWithTitle("新增分类", categoryToolbar), BorderLayout.NORTH);
+        categoryPage.add(wrapWithTitle("分类列表", new JScrollPane(categoryTable)), BorderLayout.CENTER);
 
-        JSplitPane splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, new JScrollPane(categoryTable), wrapWithTitle("操作结果", resultArea));
-        splitPane.setResizeWeight(0.68);
-        panel.add(controls, BorderLayout.NORTH);
-        panel.add(splitPane, BorderLayout.CENTER);
+        manageTabs.addTab("景点管理", itemPage);
+        manageTabs.addTab("分类管理", categoryPage);
+        panel.add(manageTabs, BorderLayout.CENTER);
+        refreshCategories.run();
         return panel;
     }
 
@@ -759,111 +847,245 @@ public class AppFrame extends JFrame {
         JTextField yearField = new JTextField(String.valueOf(LocalDate.now().getYear()), 6);
         JTextField monthField = new JTextField(String.valueOf(LocalDate.now().getMonthValue()), 4);
         JTextField userIdField = new JTextField(10);
-        JTextArea reportArea = createTextArea(24, 80);
-
-        JPanel toolbar = toolbar();
-        JButton monthlyButton = new JButton("月度订单");
-        JButton hotButton = new JButton("热门排行");
-        JButton userButton = new JButton(isCurrentAdmin() ? "用户报告" : "我的报告");
-        JButton dashboardButton = new JButton("仪表盘汇总");
-        JButton refreshButton = new JButton("刷新报表");
-        toolbar.add(new JLabel("年份"));
-        toolbar.add(yearField);
-        toolbar.add(new JLabel("月份"));
-        toolbar.add(monthField);
-        toolbar.add(monthlyButton);
-        toolbar.add(hotButton);
+        DefaultTableModel monthlyModel = tableModel("日期", "订单数", "销售金额");
+        DefaultTableModel hotModel = tableModel("排名", "景点ID", "总操作", "浏览", "下单", "平均停留(秒)");
+        DefaultTableModel userModel = tableModel("指标", "数据");
+        DefaultTableModel dashboardModel = tableModel("模块", "指标", "数据");
+        JTable monthlyTable = createTable(monthlyModel);
+        JTable hotTable = createTable(hotModel);
+        JTable userTable = createTable(userModel);
+        JTable dashboardTable = createTable(dashboardModel);
+        monthlyTable.setAutoResizeMode(JTable.AUTO_RESIZE_ALL_COLUMNS);
+        hotTable.setAutoResizeMode(JTable.AUTO_RESIZE_ALL_COLUMNS);
+        userTable.setAutoResizeMode(JTable.AUTO_RESIZE_ALL_COLUMNS);
+        dashboardTable.setAutoResizeMode(JTable.AUTO_RESIZE_ALL_COLUMNS);
+        JTabbedPane resultTabs = new JTabbedPane(JTabbedPane.TOP);
+        resultTabs.addTab("月度订单", new JScrollPane(monthlyTable));
+        resultTabs.addTab("热门排行", new JScrollPane(hotTable));
+        resultTabs.addTab(isCurrentAdmin() ? "用户报告" : "我的报告", new JScrollPane(userTable));
         if (isCurrentAdmin()) {
-            toolbar.add(new JLabel("用户ID（可不填）"));
-            toolbar.add(userIdField);
-        }
-        toolbar.add(userButton);
-        toolbar.add(refreshButton);
-        if (isCurrentAdmin()) {
-            toolbar.add(dashboardButton);
+            resultTabs.addTab("综合汇总", new JScrollPane(dashboardTable));
         }
 
-        monthlyButton.addActionListener(event -> runTask("月度订单报表", () -> statisticsService.getMonthlyOrderReport(
+        JPanel reportFilters = toolbar();
+        JPanel reportActions = toolbar();
+        JPanel reportToolbar = new JPanel(new GridLayout(2, 1, 0, 4));
+        reportToolbar.setOpaque(false);
+        JButton monthlyButton = primaryButton("月度订单");
+        JButton hotButton = secondaryButton("热门排行");
+        JButton userButton = secondaryButton(isCurrentAdmin() ? "用户报告" : "我的报告");
+        JButton dashboardButton = secondaryButton("综合汇总");
+        JButton refreshButton = secondaryButton("刷新当前报表");
+        reportFilters.add(new JLabel("年份"));
+        reportFilters.add(yearField);
+        reportFilters.add(new JLabel("月份"));
+        reportFilters.add(monthField);
+        if (isCurrentAdmin()) {
+            reportFilters.add(new JLabel("用户ID"));
+            reportFilters.add(userIdField);
+        }
+        reportActions.add(monthlyButton);
+        reportActions.add(hotButton);
+        reportActions.add(userButton);
+        if (isCurrentAdmin()) {
+            reportActions.add(dashboardButton);
+        }
+        reportActions.add(refreshButton);
+        reportToolbar.add(reportFilters);
+        reportToolbar.add(reportActions);
+
+        Runnable loadMonthly = () -> runTask("月度订单报表", () -> statisticsService.getMonthlyOrderReport(
                 parseRequiredInt(yearField.getText(), "年份"),
                 parseRequiredInt(monthField.getText(), "月份")
-        ), reports -> reportArea.setText(formatMonthlyReports(reports))));
+        ), reports -> {
+            monthlyModel.setRowCount(0);
+            for (MonthlyOrderReportDTO report : reports) {
+                monthlyModel.addRow(new Object[]{report.getOrderDate(), report.getOrderCount(),
+                        UiFormatters.money(report.getTotalAmount())});
+            }
+            resultTabs.setSelectedIndex(0);
+            setStatus("月度订单报表已更新");
+        });
+        monthlyButton.addActionListener(event -> loadMonthly.run());
 
-        hotButton.addActionListener(event -> runTask("热门排行", () -> statisticsService.getHotItemRanking(null, null, 10),
-                documents -> reportArea.setText(formatHotItems(documents))));
+        Runnable loadHot = () -> runTask("热门排行", () -> statisticsService.getHotItemRanking(null, null, 10), documents -> {
+            hotModel.setRowCount(0);
+            int rank = 1;
+            for (Document document : documents) {
+                hotModel.addRow(new Object[]{rank, valueText(document.get("_id")), numberText(document.get("total_actions")),
+                        numberText(document.get("view_count")), numberText(document.get("order_count")),
+                        decimalText(document.get("avg_duration"))});
+                rank += 1;
+            }
+            resultTabs.setSelectedIndex(1);
+            setStatus("热门排行已更新");
+        });
+        hotButton.addActionListener(event -> loadHot.run());
 
-        Runnable refreshUserReport = () -> runTask("用户报告", () -> statisticsService.getUserReport(
+        Runnable loadUserReport = () -> runTask("用户报告", () -> statisticsService.getUserReport(
                 isCurrentAdmin() && !userIdField.getText().isBlank()
                         ? parseRequiredLong(userIdField.getText(), "用户ID")
                         : requireCurrentUserId(),
                 null,
                 null
-        ), document -> reportArea.setText(formatUserReport(document)));
-        userButton.addActionListener(event -> refreshUserReport.run());
-        refreshButton.addActionListener(event -> refreshUserReport.run());
+        ), document -> {
+            fillUserReportTable(userModel, document);
+            resultTabs.setSelectedIndex(2);
+            setStatus("用户报告已更新");
+        });
+        userButton.addActionListener(event -> loadUserReport.run());
 
-        dashboardButton.addActionListener(event -> runTask("仪表盘汇总", () -> statisticsService.buildDashboardReport(
+        Runnable loadDashboard = () -> runTask("综合汇总", () -> statisticsService.buildDashboardReport(
                 null, null, parseRequiredInt(yearField.getText(), "年份"), parseRequiredInt(monthField.getText(), "月份")
-        ), dto -> reportArea.setText(new StringBuilder()
-                .append("热门景点：").append(System.lineSeparator()).append(formatHotItems(dto.getHotItems()))
-                .append(System.lineSeparator()).append("行为类型：").append(System.lineSeparator()).append(formatActionTypeSummary(dto.getActionTypeSummary()))
-                .append(System.lineSeparator()).append("热门标签：").append(System.lineSeparator()).append(formatHotTags(dto.getHotTags()))
-                .append(System.lineSeparator()).append("系统审计：").append(System.lineSeparator()).append(formatAuditSummary(dto.getSystemAuditSummary()))
-                .append(System.lineSeparator()).append("月度订单：").append(System.lineSeparator()).append(formatMonthlyReports(dto.getMonthlyOrderReport()))
-                .toString())));
+        ), dto -> {
+            fillDashboardTable(dashboardModel, dto);
+            resultTabs.setSelectedIndex(3);
+            setStatus("综合汇总已更新");
+        });
+        dashboardButton.addActionListener(event -> loadDashboard.run());
+        refreshButton.addActionListener(event -> {
+            int index = resultTabs.getSelectedIndex();
+            if (index == 0) {
+                loadMonthly.run();
+            } else if (index == 1) {
+                loadHot.run();
+            } else if (index == 2) {
+                loadUserReport.run();
+            } else if (isCurrentAdmin()) {
+                loadDashboard.run();
+            }
+        });
 
-        panel.add(toolbar, BorderLayout.NORTH);
-        panel.add(wrapWithTitle("报表结果", reportArea), BorderLayout.CENTER);
+        panel.add(wrapWithTitle("报表条件", reportToolbar), BorderLayout.NORTH);
+        panel.add(wrapWithTitle("报表数据", resultTabs), BorderLayout.CENTER);
         return panel;
     }
 
     private JPanel createAuditPanel() {
         JPanel panel = pagePanel(new BorderLayout(12, 12));
         JTextField userIdField = new JTextField(10);
-        JTextField logTypeField = new JTextField(10);
-        JComboBox<String> levelBox = new JComboBox<>(new String[]{"", "INFO", "WARN", "ERROR"});
-        JTextArea auditArea = createTextArea(24, 80);
+        JComboBox<String> logTypeBox = new JComboBox<>(new String[]{"全部类型", "登录", "退出", "注册", "创建订单", "景点更新", "查看报表"});
+        JComboBox<String> levelBox = new JComboBox<>(new String[]{"全部级别", "正常", "警告", "错误"});
+        DefaultTableModel logModel = tableModel("时间", "用户ID", "类型", "级别", "内容", "操作", "IP地址");
+        DefaultTableModel summaryModel = tableModel("类型", "级别", "操作次数", "涉及用户", "最近时间");
+        DefaultTableModel trendModel = tableModel("日期", "类型", "级别", "次数");
+        DefaultTableModel userSummaryModel = tableModel("用户ID", "操作次数", "警告", "错误", "最近时间", "操作类型");
+        JTable logTable = createTable(logModel);
+        JTable summaryTable = createTable(summaryModel);
+        JTable trendTable = createTable(trendModel);
+        JTable userSummaryTable = createTable(userSummaryModel);
+        logTable.setAutoResizeMode(JTable.AUTO_RESIZE_ALL_COLUMNS);
+        summaryTable.setAutoResizeMode(JTable.AUTO_RESIZE_ALL_COLUMNS);
+        trendTable.setAutoResizeMode(JTable.AUTO_RESIZE_ALL_COLUMNS);
+        userSummaryTable.setAutoResizeMode(JTable.AUTO_RESIZE_ALL_COLUMNS);
+        JScrollPane logScroll = new JScrollPane(logTable);
+        JScrollPane summaryScroll = new JScrollPane(summaryTable);
+        JScrollPane trendScroll = new JScrollPane(trendTable);
+        JScrollPane userSummaryScroll = new JScrollPane(userSummaryTable);
+        JTabbedPane auditTabs = new JTabbedPane(JTabbedPane.TOP);
+        auditTabs.addTab("日志明细", logScroll);
+        auditTabs.addTab("审计汇总", summaryScroll);
+        auditTabs.addTab("审计趋势", trendScroll);
+        auditTabs.addTab("用户操作", userSummaryScroll);
 
-        JPanel toolbar = toolbar();
-        JButton queryButton = new JButton("查询日志");
-        JButton summaryButton = new JButton("审计汇总");
-        JButton trendButton = new JButton("审计趋势");
-        JButton userSummaryButton = new JButton("用户操作汇总");
-        JButton refreshButton = new JButton("刷新日志");
-        toolbar.add(new JLabel("用户ID"));
-        toolbar.add(userIdField);
-        toolbar.add(new JLabel("类型"));
-        toolbar.add(logTypeField);
-        toolbar.add(new JLabel("级别"));
-        toolbar.add(levelBox);
-        toolbar.add(queryButton);
-        toolbar.add(summaryButton);
-        toolbar.add(trendButton);
-        toolbar.add(userSummaryButton);
-        toolbar.add(refreshButton);
+        JPanel auditFilters = toolbar();
+        JPanel auditActions = toolbar();
+        JPanel auditToolbar = new JPanel(new GridLayout(2, 1, 0, 4));
+        auditToolbar.setOpaque(false);
+        JButton queryButton = primaryButton("查询日志");
+        JButton summaryButton = secondaryButton("审计汇总");
+        JButton trendButton = secondaryButton("审计趋势");
+        JButton userSummaryButton = secondaryButton("用户操作");
+        JButton refreshButton = secondaryButton("刷新当前结果");
+        auditFilters.add(new JLabel("用户ID"));
+        auditFilters.add(userIdField);
+        auditFilters.add(new JLabel("类型"));
+        auditFilters.add(logTypeBox);
+        auditFilters.add(new JLabel("级别"));
+        auditFilters.add(levelBox);
+        auditActions.add(queryButton);
+        auditActions.add(summaryButton);
+        auditActions.add(trendButton);
+        auditActions.add(userSummaryButton);
+        auditActions.add(refreshButton);
+        auditToolbar.add(auditFilters);
+        auditToolbar.add(auditActions);
 
         Runnable refreshAuditLogs = () -> runAdminTask("审计日志查询", () -> systemLogService.queryAuditLogs(
                 parseOptionalLong(userIdField.getText()),
-                blankToNull(logTypeField.getText()),
-                blankToNull((String) levelBox.getSelectedItem()),
+                selectedLogType(logTypeBox),
+                selectedLogLevel(levelBox),
                 null,
                 null,
                 80
-        ), documents -> setTextKeepingScroll(auditArea, formatAuditLogs(documents)));
+        ), documents -> {
+            int scrollPosition = logScroll.getVerticalScrollBar().getValue();
+            logModel.setRowCount(0);
+            for (Document document : documents) {
+                Document detail = document.get("action_detail", Document.class);
+                logModel.addRow(new Object[]{formatDate(document.get("timestamp")), valueText(document.get("user_id")),
+                        logTypeName(document.getString("log_type")), logLevelName(document.getString("log_level")),
+                        valueText(document.get("message")), detail == null ? "-" : valueText(detail.get("operation")),
+                        detail == null ? "-" : valueText(detail.get("ip"))});
+            }
+            auditTabs.setSelectedIndex(0);
+            restoreScrollPosition(logScroll, scrollPosition);
+            setStatus("查询到 " + documents.size() + " 条审计日志");
+        });
         queryButton.addActionListener(event -> refreshAuditLogs.run());
-        refreshButton.addActionListener(event -> refreshAuditLogs.run());
 
-        summaryButton.addActionListener(event -> runAdminTask("审计汇总", () -> systemLogService.getAuditSummary(null, null),
-                documents -> setTextKeepingScroll(auditArea, formatAuditSummary(documents))));
+        Runnable loadSummary = () -> runAdminTask("审计汇总", () -> systemLogService.getAuditSummary(null, null), documents -> {
+            int scrollPosition = summaryScroll.getVerticalScrollBar().getValue();
+            summaryModel.setRowCount(0);
+            for (Document document : documents) {
+                summaryModel.addRow(new Object[]{logTypeName(document.getString("log_type")),
+                        logLevelName(document.getString("log_level")), numberText(document.get("operation_count")),
+                        numberText(document.get("user_count")), formatDate(document.get("latest_timestamp"))});
+            }
+            auditTabs.setSelectedIndex(1);
+            restoreScrollPosition(summaryScroll, scrollPosition);
+        });
+        summaryButton.addActionListener(event -> loadSummary.run());
 
-        trendButton.addActionListener(event -> runAdminTask("审计趋势", () -> systemLogService.getDailyAuditTrend(null, null),
-                documents -> setTextKeepingScroll(auditArea, formatAuditTrend(documents))));
+        Runnable loadTrend = () -> runAdminTask("审计趋势", () -> systemLogService.getDailyAuditTrend(null, null), documents -> {
+            int scrollPosition = trendScroll.getVerticalScrollBar().getValue();
+            trendModel.setRowCount(0);
+            for (Document document : documents) {
+                trendModel.addRow(new Object[]{valueText(document.get("date")), logTypeName(document.getString("log_type")),
+                        logLevelName(document.getString("log_level")), numberText(document.get("operation_count"))});
+            }
+            auditTabs.setSelectedIndex(2);
+            restoreScrollPosition(trendScroll, scrollPosition);
+        });
+        trendButton.addActionListener(event -> loadTrend.run());
 
-        userSummaryButton.addActionListener(event -> runAdminTask("用户操作汇总",
-                () -> systemLogService.getUserOperationSummary(null, null, 50),
-                documents -> setTextKeepingScroll(auditArea, formatUserOperationSummary(documents))));
+        Runnable loadUserSummary = () -> runAdminTask("用户操作汇总",
+                () -> systemLogService.getUserOperationSummary(null, null, 50), documents -> {
+                    int scrollPosition = userSummaryScroll.getVerticalScrollBar().getValue();
+                    userSummaryModel.setRowCount(0);
+                    for (Document document : documents) {
+                        userSummaryModel.addRow(new Object[]{valueText(document.get("user_id")),
+                                numberText(document.get("operation_count")), numberText(document.get("warn_count")),
+                                numberText(document.get("error_count")), formatDate(document.get("latest_timestamp")),
+                                logTypeListText(document.get("log_types"))});
+                    }
+                    auditTabs.setSelectedIndex(3);
+                    restoreScrollPosition(userSummaryScroll, scrollPosition);
+                });
+        userSummaryButton.addActionListener(event -> loadUserSummary.run());
+        refreshButton.addActionListener(event -> {
+            switch (auditTabs.getSelectedIndex()) {
+                case 0 -> refreshAuditLogs.run();
+                case 1 -> loadSummary.run();
+                case 2 -> loadTrend.run();
+                case 3 -> loadUserSummary.run();
+                default -> refreshAuditLogs.run();
+            }
+        });
+        userIdField.addActionListener(event -> refreshAuditLogs.run());
 
-        panel.add(toolbar, BorderLayout.NORTH);
-        panel.add(wrapWithTitle("审计结果", auditArea), BorderLayout.CENTER);
+        panel.add(wrapWithTitle("审计条件", auditToolbar), BorderLayout.NORTH);
+        panel.add(wrapWithTitle("审计结果", auditTabs), BorderLayout.CENTER);
         return panel;
     }
 
@@ -879,8 +1101,7 @@ public class AppFrame extends JFrame {
             userLabel.setText("未登录");
             return;
         }
-        userLabel.setText("当前用户：" + currentUser.getUsername() + " / " + roleDisplay(currentUser.getRole())
-                + " / ID " + currentUser.getUserId());
+        userLabel.setText(currentUser.getUsername() + "  ·  " + roleDisplay(currentUser.getRole()));
     }
 
     private void refreshHomeSummary() {
@@ -891,17 +1112,9 @@ public class AppFrame extends JFrame {
             homeUserValue.setText(currentUser.getUsername() + " / ID " + currentUser.getUserId());
             homeRoleValue.setText(roleDisplay(currentUser.getRole()));
         }
-        StringBuilder builder = new StringBuilder();
-        builder.append("欢迎使用景点售票系统。").append(System.lineSeparator());
-        builder.append("当前账号：")
-                .append(currentUser == null ? "未登录" : currentUser.getUsername() + " / " + roleDisplay(currentUser.getRole()))
-                .append(System.lineSeparator());
-        builder.append("可用功能：个人档案、景点浏览、我的订单、统计报表。推荐入口已合并到景点浏览页。")
-                .append(System.lineSeparator());
-        if (currentUser != null && "ADMIN".equals(currentUser.getRole())) {
-            builder.append("管理员功能：后台管理、系统审计。").append(System.lineSeparator());
-        }
-        homeSummaryArea.setText(builder.toString());
+        homeSummaryArea.setText(currentUser == null ? "请登录后使用系统。"
+                : "你好，" + currentUser.getUsername() + "。请选择上方快捷入口或左侧导航开始使用。"
+                + (isCurrentAdmin() ? System.lineSeparator() + "当前为管理员账户，可使用后台管理与系统审计。" : ""));
     }
 
     private void fillProfileForm(Profile profile, JTextField userIdField, JTextField realNameField,
@@ -913,13 +1126,149 @@ public class AppFrame extends JFrame {
         notesArea.setText(fieldText(profile.getNotes()));
     }
 
-    private void refreshCategories(DefaultTableModel model) {
-        runAdminTask("刷新分类", businessService::listCategories, categories -> {
-            model.setRowCount(0);
-            for (Category category : categories) {
-                model.addRow(new Object[]{category.getCategoryId(), category.getName(), category.getParentId()});
-            }
+    private void styleNavigationTabs() {
+        for (int i = 0; i < tabs.getTabCount(); i += 1) {
+            JLabel label = new JLabel(tabs.getTitleAt(i));
+            label.setForeground(UiTheme.TEXT);
+            label.setBorder(BorderFactory.createEmptyBorder(10, 14, 10, 14));
+            label.setPreferredSize(new Dimension(112, 38));
+            tabs.setTabComponentAt(i, label);
+        }
+    }
+
+    private void loadCategoryChoices(JComboBox<CategoryOption> comboBox, boolean includeAll) {
+        runTask("加载景点类型", businessService::listCategories, categories -> {
+            updateCategoryCache(categories);
+            fillCategoryCombo(comboBox, categories, includeAll, includeAll ? "全部类型" : "请选择类型");
         });
+    }
+
+    private void updateCategoryCache(List<Category> categories) {
+        categoryNames.clear();
+        for (Category category : categories) {
+            categoryNames.put(category.getCategoryId(), category.getName());
+        }
+    }
+
+    private void fillCategoryCombo(JComboBox<CategoryOption> comboBox, List<Category> categories,
+                                   boolean includeEmpty, String emptyLabel) {
+        UiCategoryOptions.fill(comboBox, categories, includeEmpty, emptyLabel);
+    }
+
+    private void showCreateItemDialog(Runnable refreshItems) {
+        if (categoryNames.isEmpty()) {
+            showError(new IllegalStateException("景点类型尚未加载，请先刷新分类"));
+            return;
+        }
+        JTextField titleField = new JTextField(24);
+        JComboBox<CategoryOption> categoryBox = new JComboBox<>();
+        categoryNames.forEach((id, name) -> categoryBox.addItem(new CategoryOption(name, id)));
+        JTextArea descriptionArea = new JTextArea(5, 24);
+        descriptionArea.setLineWrap(true);
+        descriptionArea.setWrapStyleWord(true);
+        JTextField priceField = new JTextField("80.00", 10);
+        JTextField discountField = new JTextField("0", 10);
+        JPanel form = formPanel("新增景点");
+        addField(form, 0, "景点名称", titleField);
+        addField(form, 1, "景点类型", categoryBox);
+        addTextAreaField(form, 2, "景点描述", descriptionArea);
+        addField(form, 3, "固定票价", priceField);
+        addField(form, 4, "折扣%", discountField);
+        int result = JOptionPane.showConfirmDialog(this, form, "新增景点",
+                JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+        if (result != JOptionPane.OK_OPTION) {
+            return;
+        }
+        runAdminTask("新增景点", () -> businessService.createItem(titleField.getText(), requireCategoryId(categoryBox),
+                descriptionArea.getText(), List.of(), new Document("source", "Swing后台"),
+                parseRequiredAmount(priceField.getText(), "票价"), parseRequiredAmount(discountField.getText(), "折扣")), id -> {
+            setStatus("景点创建成功，编号：" + id);
+            refreshItems.run();
+        });
+    }
+
+    private void showPurchaseDialog(Item item, JTextArea detailArea) {
+        if (item.getStatus() == null || item.getStatus() != 1) {
+            showError(new IllegalArgumentException("该景点当前未上架，暂不能购买"));
+            return;
+        }
+        JSpinner quantitySpinner = new JSpinner(new SpinnerNumberModel(1, 1, 99, 1));
+        JComboBox<String> paymentBox = new JComboBox<>(new String[]{"微信", "支付宝", "银行卡", "现金"});
+        JLabel amountLabel = new JLabel();
+        amountLabel.setFont(SECTION_FONT);
+        Runnable updateAmount = () -> amountLabel.setText(UiFormatters.money(UiFormatters.orderAmount(
+                item.getPrice(), item.getDiscountRate(), (Integer) quantitySpinner.getValue())));
+        quantitySpinner.addChangeListener(event -> updateAmount.run());
+        updateAmount.run();
+        JPanel form = formPanel("确认购买");
+        addField(form, 0, "景点", new JLabel(item.getTitle()));
+        addField(form, 1, "单价", new JLabel(UiFormatters.money(item.getPrice())));
+        addField(form, 2, "折扣", new JLabel(discountText(item.getDiscountRate())));
+        addField(form, 3, "购买票数", quantitySpinner);
+        addField(form, 4, "付款方式", paymentBox);
+        addField(form, 5, "实付金额", amountLabel);
+        int result = JOptionPane.showConfirmDialog(this, form, "购买门票",
+                JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+        if (result != JOptionPane.OK_OPTION) {
+            return;
+        }
+        runTask("购买门票", () -> businessService.createOrder(requireCurrentUserId(), item.getItemId(),
+                (Integer) quantitySpinner.getValue(), (String) paymentBox.getSelectedItem()), orderId ->
+                detailArea.setText("付款成功" + System.lineSeparator()
+                        + "景点：" + item.getTitle() + System.lineSeparator()
+                        + "订单号：" + orderId + System.lineSeparator()
+                        + "实付金额：" + amountLabel.getText() + System.lineSeparator()
+                        + "现在可以点击“发表评论”分享体验。"));
+    }
+
+    private void showCommentDialog(Item item, JTextArea detailArea) {
+        JSpinner ratingSpinner = new JSpinner(new SpinnerNumberModel(5, 1, 5, 1));
+        JTextArea commentArea = new JTextArea(5, 28);
+        commentArea.setLineWrap(true);
+        commentArea.setWrapStyleWord(true);
+        JPanel form = formPanel("发表评论");
+        addField(form, 0, "景点", new JLabel(item.getTitle()));
+        addField(form, 1, "评分", ratingSpinner);
+        addTextAreaField(form, 2, "评论内容", commentArea);
+        int result = JOptionPane.showConfirmDialog(this, form, "发表评论",
+                JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+        if (result != JOptionPane.OK_OPTION) {
+            return;
+        }
+        runTask("发表评论", () -> {
+            if (!businessService.canComment(requireCurrentUserId(), item.getItemId())) {
+                throw new IllegalArgumentException("购买成功后才能评论该景点，请先购买门票");
+            }
+            String comment = commentArea.getText().trim();
+            if (comment.isBlank()) {
+                throw new IllegalArgumentException("评论内容不能为空");
+            }
+            behaviorLogService.addComment(requireCurrentUserId(), item.getItemId(), comment,
+                    (Integer) ratingSpinner.getValue(), List.of("Swing界面"), "127.0.0.1");
+            return "评论提交成功";
+        }, message -> detailArea.setText(message + "。点击“查看评论”可查看最新内容。"));
+    }
+
+    private Item requireSelectedItem(Item[] selectedItem) {
+        if (selectedItem == null || selectedItem.length == 0 || selectedItem[0] == null) {
+            throw new IllegalArgumentException("请先从表格中选择一个景点");
+        }
+        return selectedItem[0];
+    }
+
+    private long requireSelectedOrderId(Long[] selectedOrderId) {
+        if (selectedOrderId == null || selectedOrderId.length == 0 || selectedOrderId[0] == null) {
+            throw new IllegalArgumentException("请先从表格中选择一个订单");
+        }
+        return selectedOrderId[0];
+    }
+
+    private void resetItemSelection(JTable table, Item[] selectedItem, JButton... actionButtons) {
+        table.clearSelection();
+        selectedItem[0] = null;
+        for (JButton button : actionButtons) {
+            button.setEnabled(false);
+        }
     }
 
     private JPanel pagePanel(java.awt.LayoutManager layout) {
@@ -955,18 +1304,7 @@ public class AppFrame extends JFrame {
     }
 
     private JPanel wrapWithTitle(String title, Component content) {
-        JPanel panel = new JPanel(new BorderLayout());
-        panel.setBackground(Color.WHITE);
-        panel.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(PANEL_BORDER),
-                BorderFactory.createEmptyBorder(12, 12, 12, 12)
-        ));
-        JLabel label = new JLabel(title);
-        label.setFont(SECTION_FONT);
-        label.setBorder(BorderFactory.createEmptyBorder(0, 0, 10, 0));
-        panel.add(label, BorderLayout.NORTH);
-        panel.add(content, BorderLayout.CENTER);
-        return panel;
+        return UiComponents.card(title, content);
     }
 
     private JPanel metricCard(String title, JLabel valueLabel) {
@@ -986,35 +1324,30 @@ public class AppFrame extends JFrame {
     }
 
     private JButton navButton(String text, String tabTitle) {
-        JButton button = new JButton(text);
+        JButton button = secondaryButton(text);
         button.addActionListener(event -> switchTo(tabTitle));
         return button;
     }
 
+    private JButton primaryButton(String text) {
+        return UiComponents.primaryButton(text);
+    }
+
+    private JButton secondaryButton(String text) {
+        return UiComponents.secondaryButton(text);
+    }
+
     private JPanel toolbar() {
-        JPanel toolbar = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 6));
-        toolbar.setBackground(Color.WHITE);
-        toolbar.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(PANEL_BORDER),
-                BorderFactory.createEmptyBorder(6, 8, 6, 8)
-        ));
-        return toolbar;
+        return UiComponents.toolbar();
     }
 
     private JTextArea createTextArea(int rows, int columns) {
-        JTextArea textArea = new JTextArea(rows, columns);
-        textArea.setLineWrap(true);
-        textArea.setWrapStyleWord(true);
-        textArea.setEditable(false);
-        return textArea;
+        return UiComponents.readOnlyTextArea(rows, columns);
     }
 
     private JTable createTable(DefaultTableModel model) {
-        JTable table = new JTable(model);
-        table.setRowHeight(28);
-        table.setAutoCreateRowSorter(true);
+        JTable table = UiComponents.table(model);
         table.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
-        table.getTableHeader().setReorderingAllowed(false);
         return table;
     }
 
@@ -1025,29 +1358,12 @@ public class AppFrame extends JFrame {
         }
     }
 
-    private long selectedOrTypedItemId(JTable table, JTextField itemIdField) {
-        if (itemIdField.getText() != null && !itemIdField.getText().isBlank()) {
-            return parseRequiredLong(itemIdField.getText(), "景点ID");
-        }
-        int row = table.getSelectedRow();
-        if (row >= 0) {
-            return parseRequiredLong(String.valueOf(table.getValueAt(row, 0)), "景点ID");
-        }
-        throw new IllegalArgumentException("请先在表格中选择一个景点，或手动填写景点ID");
-    }
-
-    private CategoryChoice[] categoryChoicesWithoutAll() {
-        CategoryChoice[] choices = new CategoryChoice[CATEGORY_OPTIONS.length - 1];
-        System.arraycopy(CATEGORY_OPTIONS, 1, choices, 0, choices.length);
-        return choices;
-    }
-
-    private Long selectedCategoryId(JComboBox<CategoryChoice> categoryBox) {
-        CategoryChoice choice = (CategoryChoice) categoryBox.getSelectedItem();
+    private Long selectedCategoryId(JComboBox<CategoryOption> categoryBox) {
+        CategoryOption choice = (CategoryOption) categoryBox.getSelectedItem();
         return choice == null ? null : choice.categoryId();
     }
 
-    private long requireCategoryId(JComboBox<CategoryChoice> categoryBox) {
+    private long requireCategoryId(JComboBox<CategoryOption> categoryBox) {
         Long categoryId = selectedCategoryId(categoryBox);
         if (categoryId == null || categoryId <= 0) {
             throw new IllegalArgumentException("请选择景点类型");
@@ -1065,28 +1381,92 @@ public class AppFrame extends JFrame {
         if (categoryId == null) {
             return "-";
         }
-        for (CategoryChoice choice : CATEGORY_OPTIONS) {
-            if (categoryId.equals(choice.categoryId())) {
-                return choice.label();
-            }
-        }
-        return "类型ID " + categoryId;
+        return categoryNames.getOrDefault(categoryId, "未分类");
     }
 
     private String discountText(BigDecimal discountRate) {
-        if (discountRate == null || discountRate.compareTo(BigDecimal.ZERO) == 0) {
-            return "无折扣";
-        }
-        return discountRate.stripTrailingZeros().toPlainString() + "%";
+        return UiFormatters.discount(discountRate);
     }
 
     private String formatRecommendationScore(double score) {
-        return String.format("%.1f", Math.max(0.0, Math.min(100.0, score)));
+        return UiFormatters.recommendationScore(score);
     }
 
     private Integer selectedOrderStatus(JComboBox<String> statusBox) {
         int selectedIndex = statusBox.getSelectedIndex();
         return selectedIndex <= 0 ? null : selectedIndex - 1;
+    }
+
+    private String selectedLogType(JComboBox<String> logTypeBox) {
+        return switch (logTypeBox.getSelectedIndex()) {
+            case 1 -> "LOGIN";
+            case 2 -> "LOGOUT";
+            case 3 -> "REGISTER";
+            case 4 -> "ORDER_CREATE";
+            case 5 -> "ITEM_UPDATE";
+            case 6 -> "REPORT_VIEW";
+            default -> null;
+        };
+    }
+
+    private String selectedLogLevel(JComboBox<String> levelBox) {
+        return switch (levelBox.getSelectedIndex()) {
+            case 1 -> "INFO";
+            case 2 -> "WARN";
+            case 3 -> "ERROR";
+            default -> null;
+        };
+    }
+
+    private void restoreScrollPosition(JScrollPane scrollPane, int position) {
+        SwingUtilities.invokeLater(() -> scrollPane.getVerticalScrollBar().setValue(position));
+    }
+
+    private void fillUserReportTable(DefaultTableModel model, Document document) {
+        model.setRowCount(0);
+        if (document == null || document.isEmpty()) {
+            return;
+        }
+        addMetricRow(model, "用户ID", valueText(document.get("user_id")));
+        addMetricRow(model, "总操作次数", numberText(document.get("action_count")));
+        addMetricRow(model, "访问景点数", numberText(document.get("visited_item_count")));
+        addMetricRow(model, "浏览次数", numberText(document.get("view_count")));
+        addMetricRow(model, "搜索次数", numberText(document.get("search_count")));
+        addMetricRow(model, "评论次数", numberText(document.get("comment_count")));
+        addMetricRow(model, "下单次数", numberText(document.get("order_count")));
+        addMetricRow(model, "总停留时长", numberText(document.get("total_duration")) + " 秒");
+        addMetricRow(model, "平均停留时长", decimalText(document.get("avg_duration")) + " 秒");
+        addMetricRow(model, "首次操作", formatDate(document.get("first_action_time")));
+        addMetricRow(model, "最近操作", formatDate(document.get("latest_action_time")));
+    }
+
+    private void addMetricRow(DefaultTableModel model, String name, Object value) {
+        model.addRow(new Object[]{name, value});
+    }
+
+    private void fillDashboardTable(DefaultTableModel model, StatisticsReportDTO dto) {
+        model.setRowCount(0);
+        for (Document document : dto.getHotItems()) {
+            model.addRow(new Object[]{"热门景点", "景点ID " + valueText(document.get("_id")),
+                    "总操作 " + numberText(document.get("total_actions")) + "，浏览 "
+                            + numberText(document.get("view_count")) + "，下单 " + numberText(document.get("order_count"))});
+        }
+        for (Document document : dto.getActionTypeSummary()) {
+            model.addRow(new Object[]{"用户行为", actionTypeName(document.getString("action_type")),
+                    numberText(document.get("action_count")) + " 次"});
+        }
+        for (Document document : dto.getHotTags()) {
+            model.addRow(new Object[]{"热门标签", valueText(document.get("_id")),
+                    numberText(document.get("tag_count")) + " 次"});
+        }
+        for (Document document : dto.getSystemAuditSummary()) {
+            model.addRow(new Object[]{"系统审计", logTypeName(document.getString("log_type")) + " / "
+                    + logLevelName(document.getString("log_level")), numberText(document.get("operation_count")) + " 次"});
+        }
+        for (MonthlyOrderReportDTO report : dto.getMonthlyOrderReport()) {
+            model.addRow(new Object[]{"月度订单", report.getOrderDate(),
+                    report.getOrderCount() + " 单，" + UiFormatters.money(report.getTotalAmount())});
+        }
     }
 
     private DefaultTableModel tableModel(String... columns) {
@@ -1156,8 +1536,13 @@ public class AppFrame extends JFrame {
     }
 
     private <T> void runTask(String name, Callable<T> task, Consumer<T> onSuccess) {
+        runTask(name, task, onSuccess, null);
+    }
+
+    private <T> void runTask(String name, Callable<T> task, Consumer<T> onSuccess, Consumer<String> onError) {
         String processingStatus = name + "处理中...";
         setStatus(processingStatus);
+        setBusy(true);
         new SwingWorker<T, Void>() {
             @Override
             protected T doInBackground() throws Exception {
@@ -1177,17 +1562,39 @@ public class AppFrame extends JFrame {
                     setStatus(name + "已中断");
                 } catch (ExecutionException e) {
                     Throwable cause = e.getCause() == null ? e : e.getCause();
-                    showError(cause);
-                    setStatus(name + "失败：" + cause.getMessage());
+                    String message = UiFormatters.chineseError(cause);
+                    if (onError == null) {
+                        showError(cause);
+                    } else {
+                        onError.accept(message);
+                    }
+                    setStatus(name + "失败：" + message);
+                } catch (RuntimeException e) {
+                    String message = UiFormatters.chineseError(e);
+                    if (onError == null) {
+                        showError(e);
+                    } else {
+                        onError.accept(message);
+                    }
+                    setStatus(name + "失败：" + message);
+                } finally {
+                    setBusy(false);
                 }
             }
         }.execute();
     }
 
+    private void setBusy(boolean busy) {
+        runningTasks = Math.max(0, runningTasks + (busy ? 1 : -1));
+        boolean active = runningTasks > 0;
+        getGlassPane().setVisible(active);
+        setCursor(active ? Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR) : Cursor.getDefaultCursor());
+    }
+
     private void showError(Throwable throwable) {
         SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(
                 this,
-                throwable.getMessage(),
+                UiFormatters.chineseError(throwable),
                 "操作失败",
                 JOptionPane.ERROR_MESSAGE
         ));
@@ -1227,11 +1634,7 @@ public class AppFrame extends JFrame {
     }
 
     private String roleDisplay(String role) {
-        return switch (role == null ? "" : role) {
-            case "ADMIN" -> "管理员";
-            case "USER" -> "普通用户";
-            default -> "未知";
-        };
+        return UiFormatters.role(role);
     }
 
     private boolean isCurrentAdmin() {
@@ -1547,13 +1950,7 @@ public class AppFrame extends JFrame {
     }
 
     private String formatDate(Object value) {
-        if (value instanceof java.util.Date date) {
-            return new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(date);
-        }
-        if (value instanceof LocalDateTime dateTime) {
-            return dateTime.format(DATE_TIME_FORMATTER);
-        }
-        return valueText(value);
+        return UiFormatters.date(value);
     }
 
     private String valueText(Object value) {
@@ -1714,20 +2111,11 @@ public class AppFrame extends JFrame {
     }
 
     private String formatItemStatus(Integer status) {
-        return status != null && status == 1 ? "上架" : "下架";
+        return UiFormatters.itemStatus(status);
     }
 
     private String formatOrderStatus(Integer status) {
-        if (status == null) {
-            return "-";
-        }
-        return switch (status) {
-            case 0 -> "待支付";
-            case 1 -> "已支付";
-            case 2 -> "已取消";
-            case 3 -> "已完成";
-            default -> "未知";
-        };
+        return UiFormatters.orderStatus(status);
     }
 
     private long requireCurrentUserId() {
@@ -1792,10 +2180,4 @@ public class AppFrame extends JFrame {
         return value.trim();
     }
 
-    private record CategoryChoice(String label, Long categoryId) {
-        @Override
-        public String toString() {
-            return label;
-        }
-    }
 }

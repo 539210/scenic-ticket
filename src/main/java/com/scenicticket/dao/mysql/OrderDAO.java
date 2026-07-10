@@ -2,6 +2,7 @@ package com.scenicticket.dao.mysql;
 
 import com.scenicticket.dao.BaseDAO;
 import com.scenicticket.exception.DBException;
+import com.scenicticket.dto.OrderViewDTO;
 import com.scenicticket.model.Order;
 
 import java.sql.Connection;
@@ -135,6 +136,58 @@ public class OrderDAO extends BaseDAO {
             }
         } catch (SQLException e) {
             throw new DBException("Failed to search orders.", e);
+        }
+    }
+
+    public List<OrderViewDTO> searchViews(Long userId, Long orderId, Integer status, int limit, int offset) {
+        StringBuilder sql = new StringBuilder("""
+                SELECT o.order_id, o.user_id, o.item_id, o.amount, o.quantity, o.unit_price,
+                       o.discount_rate, o.payment_method, o.status, o.created_at,
+                       COALESCE(i.title, '景点已删除') AS item_title
+                FROM orders o
+                LEFT JOIN items i ON i.item_id = o.item_id
+                WHERE 1 = 1
+                """);
+        List<Object> parameters = new ArrayList<>();
+        if (userId != null) {
+            sql.append(" AND o.user_id = ?");
+            parameters.add(userId);
+        }
+        if (orderId != null) {
+            sql.append(" AND o.order_id = ?");
+            parameters.add(orderId);
+        }
+        if (status != null) {
+            sql.append(" AND o.status = ?");
+            parameters.add(status);
+        }
+        sql.append(" ORDER BY o.created_at DESC LIMIT ? OFFSET ?");
+
+        try (Connection connection = getConnection();
+             PreparedStatement statement = connection.prepareStatement(sql.toString())) {
+            int parameterIndex = 1;
+            for (Object parameter : parameters) {
+                if (parameter instanceof Long longValue) {
+                    statement.setLong(parameterIndex, longValue);
+                } else if (parameter instanceof Integer intValue) {
+                    statement.setInt(parameterIndex, intValue);
+                }
+                parameterIndex += 1;
+            }
+            statement.setInt(parameterIndex, limit);
+            statement.setInt(parameterIndex + 1, offset);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                List<OrderViewDTO> orders = new ArrayList<>();
+                while (resultSet.next()) {
+                    OrderViewDTO view = new OrderViewDTO();
+                    view.setOrder(mapOrder(resultSet));
+                    view.setItemTitle(resultSet.getString("item_title"));
+                    orders.add(view);
+                }
+                return orders;
+            }
+        } catch (SQLException e) {
+            throw new DBException("Failed to search order views.", e);
         }
     }
 

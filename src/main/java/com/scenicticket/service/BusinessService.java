@@ -7,6 +7,7 @@ import com.scenicticket.dao.mysql.CategoryDAO;
 import com.scenicticket.dao.mysql.ItemDAO;
 import com.scenicticket.dao.mysql.OrderDAO;
 import com.scenicticket.dto.ItemDetailDTO;
+import com.scenicticket.dto.OrderViewDTO;
 import com.scenicticket.exception.BusinessException;
 import com.scenicticket.exception.DBException;
 import com.scenicticket.model.Category;
@@ -85,6 +86,11 @@ public class BusinessService {
 
     public List<Item> searchItems(String keyword, Long categoryId, int limit, int offset) {
         return itemDAO.search(SecurityUtil.normalizeText(keyword, 100), categoryId, 1,
+                SecurityUtil.normalizeLimit(limit, 20, 100), SecurityUtil.normalizeOffset(offset));
+    }
+
+    public List<Item> searchAllItemsForAdmin(String keyword, Long categoryId, int limit, int offset) {
+        return itemDAO.search(SecurityUtil.normalizeText(keyword, 100), categoryId, null,
                 SecurityUtil.normalizeLimit(limit, 20, 100), SecurityUtil.normalizeOffset(offset));
     }
 
@@ -181,6 +187,18 @@ public class BusinessService {
     }
 
     public List<Order> searchOrders(Long userId, Long orderId, Integer status, int limit, int offset) {
+        validateOrderFilters(userId, orderId, status);
+        return orderDAO.search(userId, orderId, status, SecurityUtil.normalizeLimit(limit, 20, 100),
+                SecurityUtil.normalizeOffset(offset));
+    }
+
+    public List<OrderViewDTO> searchOrderViews(Long userId, Long orderId, Integer status, int limit, int offset) {
+        validateOrderFilters(userId, orderId, status);
+        return orderDAO.searchViews(userId, orderId, status, SecurityUtil.normalizeLimit(limit, 20, 100),
+                SecurityUtil.normalizeOffset(offset));
+    }
+
+    private void validateOrderFilters(Long userId, Long orderId, Integer status) {
         if (userId != null && userId <= 0) {
             throw new BusinessException("用户ID必须大于 0");
         }
@@ -190,8 +208,6 @@ public class BusinessService {
         if (status != null && (status < 0 || status > 3)) {
             throw new BusinessException("订单状态不正确");
         }
-        return orderDAO.search(userId, orderId, status, SecurityUtil.normalizeLimit(limit, 20, 100),
-                SecurityUtil.normalizeOffset(offset));
     }
 
     public boolean updateOrderStatus(long orderId, int status) {
