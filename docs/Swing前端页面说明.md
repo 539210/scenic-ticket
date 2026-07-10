@@ -21,7 +21,7 @@ src/main/java/com/scenicticket/ui/AppFrame.java
 | 登录页 | 系统入口，登录成功后进入主系统 | `UserService#login` |
 | 注册页 | 从登录页跳转注册新用户，注册成功后返回登录页 | `UserService#register` |
 | 首页 | 展示当前账号、账号类型和快捷入口 | 本地 UI 状态 |
-| 个人档案 | 保存用户真实姓名、证件号、地址、备注 | `UserService#updateProfile` |
+| 个人档案 | 保存用户真实姓名、证件号、地址、个人简介 | `UserService#updateProfile` |
 | 景点浏览 | 按预设关键词/数据库分类查询景点，在右侧查看详情和评论，通过“推荐”按钮选择为你推荐/热门/高分，在独立窗口完成购票和评论 | `BusinessService`、`CrossDatabaseQueryService`、`RecommendService`、`BehaviorLogService` |
 | 我的订单 | 按订单号和状态查询订单，直接显示景点名称；管理员可按用户筛选并更新所选订单状态 | `BusinessService` |
 | 后台管理 | 景点管理和分类管理独立页签；通过景点列表维护票价、折扣和上下架状态 | `BusinessService` |
@@ -32,7 +32,7 @@ src/main/java/com/scenicticket/ui/AppFrame.java
 
 注册页会校验用户名、密码、邮箱和手机号。手机号必须是 11 位大陆手机号；输入非法时界面会用中文提示具体字段。
 
-景点票价和折扣由管理员维护。普通用户购买时只能填写票数并选择微信、支付宝、银行卡或现金作为模拟付款方式，系统按景点固定票价和折扣自动计算实付金额，不能由用户手动定价。
+景点票价和折扣由管理员维护。普通用户购买时只能填写票数并选择微信、支付宝或银行卡作为模拟付款方式，系统按景点固定票价和折扣自动计算实付金额，不能由用户手动定价。
 
 ## 新增/调整的后端接口
 
@@ -86,7 +86,7 @@ $env:Path="$env:JAVA_HOME\bin;$env:Path"
 
 ```text
 Compiling 49 source files with javac [debug release 21]
-Tests run: 41, Failures: 0, Errors: 0, Skipped: 2
+Tests run: 43, Failures: 0, Errors: 0, Skipped: 2
 BUILD SUCCESS
 ```
 

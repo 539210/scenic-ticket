@@ -15,37 +15,93 @@ import java.awt.Color;
 import java.awt.Cursor;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
+import java.awt.FontMetrics;
+import java.awt.Graphics;
+import java.awt.Graphics2D;
+import java.awt.RenderingHints;
 
 public final class UiComponents {
     private UiComponents() {
     }
 
     public static JButton primaryButton(String text) {
-        return button(text, UiTheme.PRIMARY, Color.WHITE);
+        return button(text, UiTheme.PRIMARY, Color.WHITE, UiTheme.PRIMARY.darker());
     }
 
     public static JButton secondaryButton(String text) {
-        JButton button = button(text, Color.WHITE, UiTheme.TEXT);
-        button.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(UiTheme.BORDER),
-                BorderFactory.createEmptyBorder(7, 14, 7, 14)
-        ));
-        return button;
+        return button(text, Color.WHITE, UiTheme.TEXT, UiTheme.BORDER);
     }
 
     public static JButton dangerButton(String text) {
-        return button(text, UiTheme.DANGER, Color.WHITE);
+        return button(text, UiTheme.DANGER, Color.WHITE, UiTheme.DANGER.darker());
     }
 
-    private static JButton button(String text, Color background, Color foreground) {
-        JButton button = new JButton(text);
-        button.setBackground(background);
-        button.setForeground(foreground);
+    private static JButton button(String text, Color background, Color foreground, Color border) {
+        JButton button = new StyledButton(text, background, foreground, border);
         button.setFocusPainted(false);
         button.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         button.setBorder(BorderFactory.createEmptyBorder(8, 15, 8, 15));
         button.setPreferredSize(new Dimension(Math.max(88, button.getPreferredSize().width), 36));
         return button;
+    }
+
+    private static final class StyledButton extends JButton {
+        private final Color normalBackground;
+        private final Color normalForeground;
+        private final Color borderColor;
+
+        private StyledButton(String text, Color background, Color foreground, Color borderColor) {
+            super(text);
+            this.normalBackground = background;
+            this.normalForeground = foreground;
+            this.borderColor = borderColor;
+            setOpaque(false);
+            setContentAreaFilled(false);
+            setBorderPainted(false);
+            setRolloverEnabled(true);
+        }
+
+        @Override
+        protected void paintComponent(Graphics graphics) {
+            Graphics2D g2 = (Graphics2D) graphics.create();
+            try {
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                Color background = normalBackground;
+                Color foreground = normalForeground;
+                if (!isEnabled()) {
+                    background = new Color(229, 231, 235);
+                    foreground = UiTheme.MUTED;
+                } else if (getModel().isPressed()) {
+                    background = normalBackground.darker();
+                } else if (getModel().isRollover()) {
+                    background = blend(normalBackground, Color.BLACK, 0.08f);
+                }
+                g2.setColor(background);
+                g2.fillRect(0, 0, getWidth(), getHeight());
+                g2.setColor(isEnabled() ? borderColor : UiTheme.BORDER);
+                g2.drawRect(0, 0, Math.max(0, getWidth() - 1), Math.max(0, getHeight() - 1));
+                if (hasFocus() && isEnabled()) {
+                    g2.setColor(blend(borderColor, Color.BLACK, 0.18f));
+                    g2.drawRect(2, 2, Math.max(0, getWidth() - 5), Math.max(0, getHeight() - 5));
+                }
+                g2.setFont(getFont());
+                g2.setColor(foreground);
+                FontMetrics metrics = g2.getFontMetrics();
+                int x = (getWidth() - metrics.stringWidth(getText())) / 2;
+                int y = (getHeight() - metrics.getHeight()) / 2 + metrics.getAscent();
+                g2.drawString(getText(), Math.max(0, x), y);
+            } finally {
+                g2.dispose();
+            }
+        }
+
+        private static Color blend(Color base, Color overlay, float amount) {
+            float safeAmount = Math.max(0f, Math.min(1f, amount));
+            int red = Math.round(base.getRed() * (1f - safeAmount) + overlay.getRed() * safeAmount);
+            int green = Math.round(base.getGreen() * (1f - safeAmount) + overlay.getGreen() * safeAmount);
+            int blue = Math.round(base.getBlue() * (1f - safeAmount) + overlay.getBlue() * safeAmount);
+            return new Color(red, green, blue);
+        }
     }
 
     public static JPanel page() {

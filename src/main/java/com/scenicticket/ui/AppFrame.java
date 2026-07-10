@@ -375,7 +375,7 @@ public class AppFrame extends JFrame {
         addField(form, 0, "真实姓名", realNameField);
         addField(form, 1, "证件号", idCardField);
         addField(form, 2, "联系地址", addressField);
-        addTextAreaField(form, 3, "备注", notesArea);
+        addTextAreaField(form, 3, "个人简介", notesArea);
         addFormButtons(form, 4, refreshButton, saveButton);
         addFormMessage(form, 5, message);
 
@@ -716,7 +716,7 @@ public class AppFrame extends JFrame {
         JTextField itemPriceField = new JTextField(8);
         JTextField itemDiscountField = new JTextField(6);
         JComboBox<String> itemStatusBox = new JComboBox<>(new String[]{"下架", "上架"});
-        JButton pricingButton = primaryButton("保存价格折扣");
+        JButton pricingButton = primaryButton("更新价格和折扣");
         JButton itemStatusButton = secondaryButton("更新上下架");
         pricingButton.setEnabled(false);
         itemStatusButton.setEnabled(false);
@@ -772,7 +772,7 @@ public class AppFrame extends JFrame {
             refreshItems.run();
         });
         createItemButton.addActionListener(event -> showCreateItemDialog(refreshItems));
-        pricingButton.addActionListener(event -> runAdminTask("保存价格折扣", () -> businessService.updateItemPricing(
+        pricingButton.addActionListener(event -> runAdminTask("更新价格和折扣", () -> businessService.updateItemPricing(
                 requireSelectedItem(selectedItem).getItemId(), parseRequiredAmount(itemPriceField.getText(), "票价"),
                 parseRequiredAmount(itemDiscountField.getText(), "折扣")
         ), updated -> {
@@ -1193,7 +1193,7 @@ public class AppFrame extends JFrame {
             return;
         }
         JSpinner quantitySpinner = new JSpinner(new SpinnerNumberModel(1, 1, 99, 1));
-        JComboBox<String> paymentBox = new JComboBox<>(new String[]{"微信", "支付宝", "银行卡", "现金"});
+        JComboBox<String> paymentBox = new JComboBox<>(new String[]{"微信", "支付宝", "银行卡"});
         JLabel amountLabel = new JLabel();
         amountLabel.setFont(SECTION_FONT);
         Runnable updateAmount = () -> amountLabel.setText(UiFormatters.money(UiFormatters.orderAmount(

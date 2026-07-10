@@ -251,8 +251,8 @@ public class BusinessService {
 
     private String normalizePaymentMethod(String paymentMethod) {
         String value = SecurityUtil.requireText(paymentMethod, "付款方式", 20);
-        if (!List.of("微信", "支付宝", "银行卡", "现金").contains(value)) {
-            throw new BusinessException("付款方式只能选择微信、支付宝、银行卡或现金");
+        if (!List.of("微信", "支付宝", "银行卡").contains(value)) {
+            throw new BusinessException("付款方式只能选择微信、支付宝或银行卡");
         }
         return value;
     }

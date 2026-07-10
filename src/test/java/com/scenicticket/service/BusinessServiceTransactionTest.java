@@ -76,6 +76,8 @@ class BusinessServiceTransactionTest {
                 () -> service.createOrder(0L, 2L, 1, "微信"));
         assertThrows(BusinessException.class,
                 () -> service.createOrder(1L, 2L, 0, "微信"));
+        assertThrows(BusinessException.class,
+                () -> service.createOrder(1L, 2L, 1, "现金"));
         assertFalse(trackingConnection.closed);
         assertEquals(List.of(), trackingConnection.autoCommitValues);
     }
@@ -120,6 +122,19 @@ class BusinessServiceTransactionTest {
         assertEquals("公园", itemDAO.keyword);
         assertEquals(2L, itemDAO.categoryId);
         assertNull(itemDAO.status);
+    }
+
+    @Test
+    void updateItemPricingNormalizesAndPassesValuesToDao() {
+        CapturingAdminItemDAO itemDAO = new CapturingAdminItemDAO();
+        BusinessService service = new BusinessService(new CategoryDAO(), itemDAO, new OrderDAO(), new DetailDAO(),
+                new CapturingLogDAO(), new CommentDAO(), () -> TrackingConnection.create().connection);
+
+        assertTrue(service.updateItemPricing(7L, new BigDecimal("99"), new BigDecimal("12.5")));
+
+        assertEquals(7L, itemDAO.updatedItemId);
+        assertEquals(new BigDecimal("99.00"), itemDAO.updatedPrice);
+        assertEquals(new BigDecimal("12.50"), itemDAO.updatedDiscount);
     }
 
     private static BusinessService newService(OrderDAO orderDAO, LogDAO logDAO,
@@ -223,6 +238,9 @@ class BusinessServiceTransactionTest {
         private String keyword;
         private Long categoryId;
         private Integer status;
+        private long updatedItemId;
+        private BigDecimal updatedPrice;
+        private BigDecimal updatedDiscount;
 
         @Override
         public List<Item> search(String keyword, Long categoryId, Integer status, int limit, int offset) {
@@ -230,6 +248,14 @@ class BusinessServiceTransactionTest {
             this.categoryId = categoryId;
             this.status = status;
             return List.of();
+        }
+
+        @Override
+        public boolean updatePricing(long itemId, BigDecimal price, BigDecimal discountRate) {
+            updatedItemId = itemId;
+            updatedPrice = price;
+            updatedDiscount = discountRate;
+            return true;
         }
     }
 
