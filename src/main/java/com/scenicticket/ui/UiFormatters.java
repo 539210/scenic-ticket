@@ -28,9 +28,9 @@ public final class UiFormatters {
 
     public static String discount(BigDecimal value) {
         if (value == null || value.compareTo(BigDecimal.ZERO) == 0) {
-            return "无折扣";
+            return "无优惠";
         }
-        return value.stripTrailingZeros().toPlainString() + "%";
+        return "减免" + value.stripTrailingZeros().toPlainString() + "%";
     }
 
     public static String itemStatus(Integer status) {
@@ -73,6 +73,10 @@ public final class UiFormatters {
                 .setScale(2, java.math.RoundingMode.HALF_UP);
     }
 
+    public static BigDecimal discountedUnitPrice(BigDecimal price, BigDecimal discount) {
+        return orderAmount(price, discount, 1);
+    }
+
     public static String chineseError(Throwable throwable) {
         Throwable current = throwable;
         while (current != null) {
@@ -84,5 +88,17 @@ public final class UiFormatters {
             current = current.getCause();
         }
         return "操作未完成，请检查数据库连接或稍后重试";
+    }
+
+    public static String readableText(Object value, String fallback) {
+        if (value == null || String.valueOf(value).isBlank()) {
+            return fallback;
+        }
+        String text = String.valueOf(value).trim();
+        long questionMarks = text.chars().filter(character -> character == '?').count();
+        if (questionMarks >= 3 || text.contains("??")) {
+            return "历史数据编码异常，暂无法显示";
+        }
+        return text;
     }
 }

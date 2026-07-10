@@ -111,6 +111,28 @@ public class BusinessService {
         return itemDAO.updatePricing(itemId, normalizePrice(price), normalizeDiscount(discountRate));
     }
 
+    public String getItemDescription(long itemId) {
+        if (itemId <= 0) {
+            throw new BusinessException("景点ID必须大于 0");
+        }
+        Document detail = detailDAO.findByItemId(itemId);
+        return detail == null ? "" : SecurityUtil.normalizeText(detail.getString("description"), 2000);
+    }
+
+    public boolean updateItemDescription(long itemId, String description) {
+        if (itemId <= 0) {
+            throw new BusinessException("景点ID必须大于 0");
+        }
+        itemDAO.findById(itemId).orElseThrow(() -> new BusinessException("景点不存在"));
+        String safeDescription = SecurityUtil.requireText(description, "景点简介", 2000);
+        Document existing = detailDAO.findByItemId(itemId);
+        List<String> images = existing == null ? null : existing.getList("images", String.class);
+        Document metadata = existing == null ? null : existing.get("metadata", Document.class);
+        detailDAO.upsertDetail(itemId, safeDescription, images == null ? List.of() : images,
+                metadata == null ? new Document() : metadata);
+        return true;
+    }
+
     public ItemDetailDTO getItemDetail(long userId, long itemId, String ip) {
         if (userId <= 0 || itemId <= 0) {
             throw new BusinessException("用户ID和景点ID必须大于 0");

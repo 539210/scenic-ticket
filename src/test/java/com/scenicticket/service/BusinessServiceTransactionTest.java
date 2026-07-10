@@ -12,6 +12,7 @@ import com.scenicticket.dto.OrderViewDTO;
 import com.scenicticket.model.Item;
 import com.scenicticket.model.Order;
 import org.junit.jupiter.api.Test;
+import org.bson.Document;
 
 import java.lang.reflect.Proxy;
 import java.math.BigDecimal;
@@ -65,6 +66,20 @@ class BusinessServiceTransactionTest {
         assertTrue(trackingConnection.rolledBack);
         assertTrue(trackingConnection.closed);
         assertEquals(0, logDAO.writeCount);
+    }
+
+    @Test
+    void createOrderUsesLatestPriceAndDiscountFromScenicItem() {
+        TrackingConnection trackingConnection = TrackingConnection.create();
+        CapturingDiscountOrderDAO orderDAO = new CapturingDiscountOrderDAO();
+        BusinessService service = new BusinessService(new CategoryDAO(), new DiscountedItemDAO(), orderDAO,
+                new DetailDAO(), new CapturingLogDAO(), new CommentDAO(), () -> trackingConnection.connection);
+
+        service.createOrder(1L, 2L, 1, "微信");
+
+        assertEquals(new BigDecimal("8110.00"), orderDAO.order.getUnitPrice());
+        assertEquals(new BigDecimal("1.00"), orderDAO.order.getDiscountRate());
+        assertEquals(new BigDecimal("8028.90"), orderDAO.order.getAmount());
     }
 
     @Test
@@ -137,6 +152,21 @@ class BusinessServiceTransactionTest {
         assertEquals(new BigDecimal("12.50"), itemDAO.updatedDiscount);
     }
 
+    @Test
+    void administratorCanReplaceCorruptedScenicDescriptionWithoutLosingMetadata() {
+        CapturingAdminItemDAO itemDAO = new CapturingAdminItemDAO();
+        CapturingDetailDAO detailDAO = new CapturingDetailDAO();
+        BusinessService service = new BusinessService(new CategoryDAO(), itemDAO, new OrderDAO(), detailDAO,
+                new CapturingLogDAO(), new CommentDAO(), () -> TrackingConnection.create().connection);
+
+        assertTrue(service.updateItemDescription(7L, "  森林公园景区简介  "));
+
+        assertEquals("森林公园景区简介", detailDAO.savedDescription);
+        assertEquals(List.of("cover.jpg"), detailDAO.savedImages);
+        assertEquals("08:30-19:00", detailDAO.savedMetadata.getString("open_time"));
+        assertEquals("旧简介", service.getItemDescription(7L));
+    }
+
     private static BusinessService newService(OrderDAO orderDAO, LogDAO logDAO,
                                               TrackingConnection trackingConnection) {
         return new BusinessService(new CategoryDAO(), new PricingItemDAO(), orderDAO, new DetailDAO(), logDAO,
@@ -154,6 +184,30 @@ class BusinessServiceTransactionTest {
             item.setDiscountRate(BigDecimal.ZERO);
             item.setStatus(1);
             return Optional.of(item);
+        }
+    }
+
+    private static class DiscountedItemDAO extends ItemDAO {
+        @Override
+        public Optional<Item> findById(long itemId) {
+            Item item = new Item();
+            item.setItemId(itemId);
+            item.setTitle("优惠测试景点");
+            item.setCategoryId(1L);
+            item.setPrice(new BigDecimal("8110.00"));
+            item.setDiscountRate(new BigDecimal("1.00"));
+            item.setStatus(1);
+            return Optional.of(item);
+        }
+    }
+
+    private static class CapturingDiscountOrderDAO extends OrderDAO {
+        private Order order;
+
+        @Override
+        public long create(Connection connection, Order order) {
+            this.order = order;
+            return 88L;
         }
     }
 
@@ -256,6 +310,35 @@ class BusinessServiceTransactionTest {
             updatedPrice = price;
             updatedDiscount = discountRate;
             return true;
+        }
+
+        @Override
+        public Optional<Item> findById(long itemId) {
+            Item item = new Item();
+            item.setItemId(itemId);
+            item.setTitle("测试景点");
+            return Optional.of(item);
+        }
+    }
+
+    private static class CapturingDetailDAO extends DetailDAO {
+        private String savedDescription;
+        private List<String> savedImages;
+        private Document savedMetadata;
+
+        @Override
+        public Document findByItemId(long itemId) {
+            return new Document("item_id", itemId)
+                    .append("description", "旧简介")
+                    .append("images", List.of("cover.jpg"))
+                    .append("metadata", new Document("open_time", "08:30-19:00"));
+        }
+
+        @Override
+        public void upsertDetail(long itemId, String description, List<String> images, Document metadata) {
+            savedDescription = description;
+            savedImages = images;
+            savedMetadata = metadata;
         }
     }
 
