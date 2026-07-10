@@ -6,16 +6,32 @@ import com.mongodb.client.MongoDatabase;
 import com.scenicticket.config.DBConfig;
 
 public final class MongoDBUtil {
-    private static final MongoClient CLIENT = MongoClients.create(DBConfig.get("mongodb.uri"));
+    private static volatile MongoClient client;
 
     private MongoDBUtil() {
     }
 
     public static MongoDatabase getDatabase() {
-        return CLIENT.getDatabase(DBConfig.get("mongodb.database"));
+        return getClient().getDatabase(DBConfig.get("mongodb.database"));
     }
 
-    public static void closeClient() {
-        CLIENT.close();
+    public static synchronized void closeClient() {
+        if (client != null) {
+            client.close();
+            client = null;
+        }
+    }
+
+    private static MongoClient getClient() {
+        MongoClient current = client;
+        if (current != null) {
+            return current;
+        }
+        synchronized (MongoDBUtil.class) {
+            if (client == null) {
+                client = MongoClients.create(DBConfig.get("mongodb.uri"));
+            }
+            return client;
+        }
     }
 }

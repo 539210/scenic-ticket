@@ -60,6 +60,21 @@ public class UserDAO extends BaseDAO {
         }
     }
 
+    public Optional<User> findByIdForUpdate(Connection connection, long userId) throws SQLException {
+        String sql = """
+                SELECT user_id, username, password_hash, email, phone, role, status, created_at, updated_at
+                FROM users
+                WHERE user_id = ?
+                FOR UPDATE
+                """;
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setLong(1, userId);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                return resultSet.next() ? Optional.of(mapUser(resultSet)) : Optional.empty();
+            }
+        }
+    }
+
     public Optional<User> findByUsername(String username) {
         String sql = """
                 SELECT user_id, username, password_hash, email, phone, role, status, created_at, updated_at
@@ -101,6 +116,86 @@ public class UserDAO extends BaseDAO {
             }
         } catch (SQLException e) {
             throw new DBException("Failed to list active users.", e);
+        }
+    }
+
+    public List<User> search(String username, String email, String role, Integer status, int limit, int offset) {
+        StringBuilder sql = new StringBuilder("""
+                SELECT user_id, username, password_hash, email, phone, role, status, created_at, updated_at
+                FROM users
+                WHERE 1 = 1
+                """);
+        List<Object> parameters = new ArrayList<>();
+        if (username != null && !username.isBlank()) {
+            sql.append(" AND username LIKE ?");
+            parameters.add("%" + username + "%");
+        }
+        if (email != null && !email.isBlank()) {
+            sql.append(" AND email LIKE ?");
+            parameters.add("%" + email + "%");
+        }
+        if (role != null && !role.isBlank()) {
+            sql.append(" AND role = ?");
+            parameters.add(role);
+        }
+        if (status != null) {
+            sql.append(" AND status = ?");
+            parameters.add(status);
+        }
+        sql.append(" ORDER BY user_id LIMIT ? OFFSET ?");
+
+        try (Connection connection = getConnection();
+             PreparedStatement statement = connection.prepareStatement(sql.toString())) {
+            int index = 1;
+            for (Object parameter : parameters) {
+                if (parameter instanceof Integer integer) {
+                    statement.setInt(index, integer);
+                } else {
+                    statement.setString(index, String.valueOf(parameter));
+                }
+                index += 1;
+            }
+            statement.setInt(index, limit);
+            statement.setInt(index + 1, offset);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                List<User> users = new ArrayList<>();
+                while (resultSet.next()) {
+                    users.add(mapUser(resultSet));
+                }
+                return users;
+            }
+        } catch (SQLException e) {
+            throw new DBException("Failed to search users.", e);
+        }
+    }
+
+    public List<Long> lockActiveAdminIds(Connection connection) throws SQLException {
+        String sql = "SELECT user_id FROM users WHERE role = 'ADMIN' AND status = 1 ORDER BY user_id FOR UPDATE";
+        try (PreparedStatement statement = connection.prepareStatement(sql);
+             ResultSet resultSet = statement.executeQuery()) {
+            List<Long> adminIds = new ArrayList<>();
+            while (resultSet.next()) {
+                adminIds.add(resultSet.getLong("user_id"));
+            }
+            return adminIds;
+        }
+    }
+
+    public boolean updateStatus(Connection connection, long userId, int status) throws SQLException {
+        String sql = "UPDATE users SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?";
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setInt(1, status);
+            statement.setLong(2, userId);
+            return statement.executeUpdate() == 1;
+        }
+    }
+
+    public boolean updateRole(Connection connection, long userId, String role) throws SQLException {
+        String sql = "UPDATE users SET role = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?";
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, role);
+            statement.setLong(2, userId);
+            return statement.executeUpdate() == 1;
         }
     }
 

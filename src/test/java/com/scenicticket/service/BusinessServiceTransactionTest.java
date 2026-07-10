@@ -6,6 +6,7 @@ import com.scenicticket.dao.mongo.LogDAO;
 import com.scenicticket.dao.mysql.CategoryDAO;
 import com.scenicticket.dao.mysql.ItemDAO;
 import com.scenicticket.dao.mysql.OrderDAO;
+import com.scenicticket.dao.mysql.UserDAO;
 import com.scenicticket.exception.BusinessException;
 import com.scenicticket.exception.DBException;
 import com.scenicticket.dto.OrderViewDTO;
@@ -73,7 +74,8 @@ class BusinessServiceTransactionTest {
         TrackingConnection trackingConnection = TrackingConnection.create();
         CapturingDiscountOrderDAO orderDAO = new CapturingDiscountOrderDAO();
         BusinessService service = new BusinessService(new CategoryDAO(), new DiscountedItemDAO(), orderDAO,
-                new DetailDAO(), new CapturingLogDAO(), new CommentDAO(), () -> trackingConnection.connection);
+                new DetailDAO(), new CapturingLogDAO(), new CommentDAO(), () -> trackingConnection.connection,
+                allowAllAuthorization());
 
         service.createOrder(1L, 2L, 1, "微信");
 
@@ -102,7 +104,7 @@ class BusinessServiceTransactionTest {
         CapturingSearchOrderDAO orderDAO = new CapturingSearchOrderDAO();
         BusinessService service = newService(orderDAO, new CapturingLogDAO(), TrackingConnection.create());
 
-        List<Order> orders = service.searchOrders(1L, 23L, 1, 50, 0);
+        List<Order> orders = service.searchOrders(1L, 1L, 23L, 1, 50, 0);
 
         assertEquals(1, orders.size());
         assertEquals(1L, orderDAO.userId);
@@ -117,7 +119,7 @@ class BusinessServiceTransactionTest {
         CapturingOrderViewDAO orderDAO = new CapturingOrderViewDAO();
         BusinessService service = newService(orderDAO, new CapturingLogDAO(), TrackingConnection.create());
 
-        List<OrderViewDTO> views = service.searchOrderViews(3L, 9L, 1, 50, 0);
+        List<OrderViewDTO> views = service.searchOrderViews(1L, 3L, 9L, 1, 50, 0);
 
         assertEquals(1, views.size());
         assertEquals("测试景点", views.get(0).getItemTitle());
@@ -130,9 +132,10 @@ class BusinessServiceTransactionTest {
     void administratorItemSearchIncludesOfflineItems() {
         CapturingAdminItemDAO itemDAO = new CapturingAdminItemDAO();
         BusinessService service = new BusinessService(new CategoryDAO(), itemDAO, new OrderDAO(), new DetailDAO(),
-                new CapturingLogDAO(), new CommentDAO(), () -> TrackingConnection.create().connection);
+                new CapturingLogDAO(), new CommentDAO(), () -> TrackingConnection.create().connection,
+                allowAllAuthorization());
 
-        service.searchAllItemsForAdmin("公园", 2L, 100, 0);
+        service.searchAllItemsForAdmin(1L, "公园", 2L, 100, 0);
 
         assertEquals("公园", itemDAO.keyword);
         assertEquals(2L, itemDAO.categoryId);
@@ -143,9 +146,10 @@ class BusinessServiceTransactionTest {
     void updateItemPricingNormalizesAndPassesValuesToDao() {
         CapturingAdminItemDAO itemDAO = new CapturingAdminItemDAO();
         BusinessService service = new BusinessService(new CategoryDAO(), itemDAO, new OrderDAO(), new DetailDAO(),
-                new CapturingLogDAO(), new CommentDAO(), () -> TrackingConnection.create().connection);
+                new CapturingLogDAO(), new CommentDAO(), () -> TrackingConnection.create().connection,
+                allowAllAuthorization());
 
-        assertTrue(service.updateItemPricing(7L, new BigDecimal("99"), new BigDecimal("12.5")));
+        assertTrue(service.updateItemPricing(1L, 7L, new BigDecimal("99"), new BigDecimal("12.5")));
 
         assertEquals(7L, itemDAO.updatedItemId);
         assertEquals(new BigDecimal("99.00"), itemDAO.updatedPrice);
@@ -157,9 +161,10 @@ class BusinessServiceTransactionTest {
         CapturingAdminItemDAO itemDAO = new CapturingAdminItemDAO();
         CapturingDetailDAO detailDAO = new CapturingDetailDAO();
         BusinessService service = new BusinessService(new CategoryDAO(), itemDAO, new OrderDAO(), detailDAO,
-                new CapturingLogDAO(), new CommentDAO(), () -> TrackingConnection.create().connection);
+                new CapturingLogDAO(), new CommentDAO(), () -> TrackingConnection.create().connection,
+                allowAllAuthorization());
 
-        assertTrue(service.updateItemDescription(7L, "  森林公园景区简介  "));
+        assertTrue(service.updateItemDescription(1L, 7L, "  森林公园景区简介  "));
 
         assertEquals("森林公园景区简介", detailDAO.savedDescription);
         assertEquals(List.of("cover.jpg"), detailDAO.savedImages);
@@ -170,7 +175,25 @@ class BusinessServiceTransactionTest {
     private static BusinessService newService(OrderDAO orderDAO, LogDAO logDAO,
                                               TrackingConnection trackingConnection) {
         return new BusinessService(new CategoryDAO(), new PricingItemDAO(), orderDAO, new DetailDAO(), logDAO,
-                new CommentDAO(), () -> trackingConnection.connection);
+                new CommentDAO(), () -> trackingConnection.connection, allowAllAuthorization());
+    }
+
+    private static AuthorizationService allowAllAuthorization() {
+        return new AuthorizationService(new UserDAO()) {
+            @Override
+            public com.scenicticket.model.User requireActiveUser(long actorUserId) {
+                com.scenicticket.model.User user = new com.scenicticket.model.User();
+                user.setUserId(actorUserId);
+                user.setRole("ADMIN");
+                user.setStatus(1);
+                return user;
+            }
+
+            @Override
+            public com.scenicticket.model.User requireAdmin(long actorUserId) {
+                return requireActiveUser(actorUserId);
+            }
+        };
     }
 
     private static class PricingItemDAO extends ItemDAO {

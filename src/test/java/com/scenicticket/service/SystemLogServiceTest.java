@@ -13,7 +13,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class SystemLogServiceTest {
     private final CapturingSystemLogDAO systemLogDAO = new CapturingSystemLogDAO();
-    private final SystemLogService service = new SystemLogService(systemLogDAO);
+    private final SystemLogService service = new SystemLogService(systemLogDAO, allowAdmin());
 
     @Test
     void recordOperationNormalizesIpAndDefaultsBlankOperationToLogType() {
@@ -37,11 +37,24 @@ class SystemLogServiceTest {
 
     @Test
     void queryMethodsClampLimit() {
-        service.queryRecentLogs(9999);
+        service.queryRecentLogs(1L, 9999);
         assertEquals(500, systemLogDAO.recentLimit);
 
-        service.queryAuditLogs(1L, "LOGIN", "INFO", null, null, -1);
+        service.queryAuditLogs(1L, 1L, "LOGIN", "INFO", null, null, -1);
         assertEquals(50, systemLogDAO.conditionLimit);
+    }
+
+    private static AuthorizationService allowAdmin() {
+        return new AuthorizationService(new com.scenicticket.dao.mysql.UserDAO()) {
+            @Override
+            public com.scenicticket.model.User requireAdmin(long actorUserId) {
+                com.scenicticket.model.User user = new com.scenicticket.model.User();
+                user.setUserId(actorUserId);
+                user.setRole("ADMIN");
+                user.setStatus(1);
+                return user;
+            }
+        };
     }
 
     private static class CapturingSystemLogDAO extends SystemLogDAO {

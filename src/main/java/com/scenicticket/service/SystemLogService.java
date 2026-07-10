@@ -10,13 +10,19 @@ import java.util.List;
 
 public class SystemLogService {
     private final SystemLogDAO systemLogDAO;
+    private final AuthorizationService authorizationService;
 
     public SystemLogService() {
-        this(new SystemLogDAO());
+        this(new SystemLogDAO(), new AuthorizationService());
     }
 
     public SystemLogService(SystemLogDAO systemLogDAO) {
+        this(systemLogDAO, new AuthorizationService());
+    }
+
+    public SystemLogService(SystemLogDAO systemLogDAO, AuthorizationService authorizationService) {
         this.systemLogDAO = systemLogDAO;
+        this.authorizationService = authorizationService;
     }
 
     public void recordOperation(long userId, String logType, String message, String ip, String operation) {
@@ -31,24 +37,29 @@ public class SystemLogService {
         record(userId, logType, "ERROR", message, ip, operation);
     }
 
-    public List<Document> queryAuditLogs(Long userId, String logType, String logLevel,
+    public List<Document> queryAuditLogs(long actorUserId, Long userId, String logType, String logLevel,
                                          Date startTime, Date endTime, int limit) {
+        authorizationService.requireAdmin(actorUserId);
         return systemLogDAO.findByCondition(userId, logType, logLevel, startTime, endTime, normalizeLimit(limit));
     }
 
-    public List<Document> queryRecentLogs(int limit) {
+    public List<Document> queryRecentLogs(long actorUserId, int limit) {
+        authorizationService.requireAdmin(actorUserId);
         return systemLogDAO.findRecent(normalizeLimit(limit));
     }
 
-    public List<Document> getAuditSummary(Date startTime, Date endTime) {
+    public List<Document> getAuditSummary(long actorUserId, Date startTime, Date endTime) {
+        authorizationService.requireAdmin(actorUserId);
         return systemLogDAO.aggregateAuditSummary(startTime, endTime);
     }
 
-    public List<Document> getDailyAuditTrend(Date startTime, Date endTime) {
+    public List<Document> getDailyAuditTrend(long actorUserId, Date startTime, Date endTime) {
+        authorizationService.requireAdmin(actorUserId);
         return systemLogDAO.aggregateDailyAuditTrend(startTime, endTime);
     }
 
-    public List<Document> getUserOperationSummary(Date startTime, Date endTime, int limit) {
+    public List<Document> getUserOperationSummary(long actorUserId, Date startTime, Date endTime, int limit) {
+        authorizationService.requireAdmin(actorUserId);
         return systemLogDAO.aggregateUserOperationSummary(startTime, endTime, normalizeLimit(limit));
     }
 

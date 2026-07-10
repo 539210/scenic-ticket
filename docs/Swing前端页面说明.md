@@ -24,7 +24,7 @@ src/main/java/com/scenicticket/ui/AppFrame.java
 | 个人档案 | 保存用户真实姓名、证件号、地址、个人简介 | `UserService#updateProfile` |
 | 景点浏览 | 按预设关键词/数据库分类查询景点，在右侧查看景点简介和游客评论，通过“推荐”按钮选择为你推荐/热门/高分，在独立窗口完成购票和发表评论 | `BusinessService`、`CrossDatabaseQueryService`、`RecommendService`、`BehaviorLogService` |
 | 我的订单 | 按订单号和状态查询订单，直接显示景点名称；管理员可按用户筛选并更新所选订单状态 | `BusinessService` |
-| 后台管理 | 景点管理和分类管理独立页签；通过景点列表维护原价、优惠减免、景点简介和上下架状态 | `BusinessService` |
+| 后台管理 | 景点、分类和用户管理独立页签；用户页支持条件查询、详情/概况、启禁和角色维护 | `BusinessService`、`AdminUserService` |
 | 统计报表 | 以表格展示月度订单、热门排行、用户报告和综合汇总 | `StatisticsService` |
 | 系统审计 | 以中文表格展示日志明细、审计汇总、趋势和用户操作汇总 | `SystemLogService` |
 
@@ -47,6 +47,9 @@ src/main/java/com/scenicticket/ui/AppFrame.java
 | `BusinessService` | `canComment` | 前端评论前校验用户是否购买过该景点 |
 | `BusinessService` | `searchOrderViews` | 联表查询订单及景点名称，避免用户依赖景点 ID |
 | `BusinessService` | `searchAllItemsForAdmin` | 管理员同时查看上架和下架景点 |
+| `AdminUserService` | `searchUsers` / `getUserDetail` | 管理员条件查询用户并查看档案、订单和行为概况 |
+| `AdminUserService` | `changeUserStatus` / `changeUserRole` | 事务化用户启禁和角色维护，保护自身及最后有效管理员 |
+| `AuthorizationService` | `requireActiveUser` / `requireAdmin` | 在服务层回查 actor 状态和角色，不依赖 UI 隐藏按钮 |
 
 ## 运行方式
 

@@ -17,6 +17,7 @@ public class StatisticsService {
     private final CommentDAO commentDAO;
     private final ReportDAO reportDAO;
     private final SystemLogDAO systemLogDAO;
+    private final AuthorizationService authorizationService;
 
     public StatisticsService() {
         this(new LogDAO(), new CommentDAO(), new ReportDAO(), new SystemLogDAO());
@@ -27,18 +28,26 @@ public class StatisticsService {
     }
 
     public StatisticsService(LogDAO logDAO, CommentDAO commentDAO, ReportDAO reportDAO, SystemLogDAO systemLogDAO) {
+        this(logDAO, commentDAO, reportDAO, systemLogDAO, new AuthorizationService());
+    }
+
+    public StatisticsService(LogDAO logDAO, CommentDAO commentDAO, ReportDAO reportDAO, SystemLogDAO systemLogDAO,
+                             AuthorizationService authorizationService) {
         this.logDAO = logDAO;
         this.commentDAO = commentDAO;
         this.reportDAO = reportDAO;
         this.systemLogDAO = systemLogDAO;
+        this.authorizationService = authorizationService;
     }
 
-    public List<Document> getUserBehaviorReport(long userId, Date startTime, Date endTime) {
+    public List<Document> getUserBehaviorReport(long actorUserId, long userId, Date startTime, Date endTime) {
+        authorizationService.requireSelfOrAdmin(actorUserId, userId);
         validateUserId(userId);
         return logDAO.aggregateUserBehavior(userId, startTime, endTime);
     }
 
-    public Document getUserReport(long userId, Date startTime, Date endTime) {
+    public Document getUserReport(long actorUserId, long userId, Date startTime, Date endTime) {
+        authorizationService.requireSelfOrAdmin(actorUserId, userId);
         validateUserId(userId);
         Document report = logDAO.aggregateUserReport(userId, startTime, endTime);
         report.append("behavior_summary", logDAO.aggregateUserBehavior(userId, startTime, endTime));
@@ -71,20 +80,24 @@ public class StatisticsService {
         return commentDAO.aggregateHotTags(normalizeLimit(limit));
     }
 
-    public List<Document> getSystemAuditSummary(Date startTime, Date endTime) {
+    public List<Document> getSystemAuditSummary(long actorUserId, Date startTime, Date endTime) {
+        authorizationService.requireAdmin(actorUserId);
         return systemLogDAO.aggregateAuditSummary(startTime, endTime);
     }
 
-    public List<Document> getSystemAuditTrend(Date startTime, Date endTime) {
+    public List<Document> getSystemAuditTrend(long actorUserId, Date startTime, Date endTime) {
+        authorizationService.requireAdmin(actorUserId);
         return systemLogDAO.aggregateDailyAuditTrend(startTime, endTime);
     }
 
-    public List<Document> getUserOperationSummary(Date startTime, Date endTime, int limit) {
+    public List<Document> getUserOperationSummary(long actorUserId, Date startTime, Date endTime, int limit) {
+        authorizationService.requireAdmin(actorUserId);
         return systemLogDAO.aggregateUserOperationSummary(startTime, endTime, normalizeLimit(limit));
     }
 
-    public List<Document> querySystemAuditLogs(Long userId, String logType, String logLevel,
+    public List<Document> querySystemAuditLogs(long actorUserId, Long userId, String logType, String logLevel,
                                                Date startTime, Date endTime, int limit) {
+        authorizationService.requireAdmin(actorUserId);
         return systemLogDAO.findByCondition(userId, logType, logLevel, startTime, endTime, normalizeLimit(limit));
     }
 
@@ -93,19 +106,21 @@ public class StatisticsService {
         return reportDAO.callMonthlyOrderReport(year, month);
     }
 
-    public StatisticsReportDTO buildDashboardReport(Date startTime, Date endTime) {
+    public StatisticsReportDTO buildDashboardReport(long actorUserId, Date startTime, Date endTime) {
+        authorizationService.requireAdmin(actorUserId);
         StatisticsReportDTO report = new StatisticsReportDTO();
         report.setHotItems(getHotItemRanking(startTime, endTime, 10));
         report.setActionTypeSummary(getActionTypeSummary(startTime, endTime));
         report.setDailyTrend(getDailyActionTrend(startTime, endTime));
         report.setHotTags(getHotTags(10));
-        report.setSystemAuditSummary(getSystemAuditSummary(startTime, endTime));
-        report.setSystemAuditTrend(getSystemAuditTrend(startTime, endTime));
+        report.setSystemAuditSummary(getSystemAuditSummary(actorUserId, startTime, endTime));
+        report.setSystemAuditTrend(getSystemAuditTrend(actorUserId, startTime, endTime));
         return report;
     }
 
-    public StatisticsReportDTO buildDashboardReport(Date startTime, Date endTime, int reportYear, int reportMonth) {
-        StatisticsReportDTO report = buildDashboardReport(startTime, endTime);
+    public StatisticsReportDTO buildDashboardReport(long actorUserId, Date startTime, Date endTime,
+                                                     int reportYear, int reportMonth) {
+        StatisticsReportDTO report = buildDashboardReport(actorUserId, startTime, endTime);
         report.setMonthlyOrderReport(getMonthlyOrderReport(reportYear, reportMonth));
         return report;
     }

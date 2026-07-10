@@ -3,6 +3,7 @@ package com.scenicticket.dao.mysql;
 import com.scenicticket.dao.BaseDAO;
 import com.scenicticket.exception.DBException;
 import com.scenicticket.dto.OrderViewDTO;
+import com.scenicticket.dto.UserOrderSummaryDTO;
 import com.scenicticket.model.Order;
 
 import java.sql.Connection;
@@ -221,6 +222,37 @@ public class OrderDAO extends BaseDAO {
             }
         } catch (SQLException e) {
             throw new DBException("Failed to check paid order.", e);
+        }
+    }
+
+    public UserOrderSummaryDTO summarizeByUserId(long userId) {
+        String sql = """
+                SELECT COUNT(*) AS total_orders,
+                       SUM(CASE WHEN status = 0 THEN 1 ELSE 0 END) AS pending_orders,
+                       SUM(CASE WHEN status = 1 THEN 1 ELSE 0 END) AS paid_orders,
+                       SUM(CASE WHEN status = 2 THEN 1 ELSE 0 END) AS cancelled_orders,
+                       SUM(CASE WHEN status = 3 THEN 1 ELSE 0 END) AS completed_orders,
+                       COALESCE(SUM(CASE WHEN status IN (1, 3) THEN amount ELSE 0 END), 0) AS paid_amount
+                FROM orders
+                WHERE user_id = ?
+                """;
+        try (Connection connection = getConnection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setLong(1, userId);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                UserOrderSummaryDTO summary = new UserOrderSummaryDTO();
+                if (resultSet.next()) {
+                    summary.setTotalOrders(resultSet.getLong("total_orders"));
+                    summary.setPendingOrders(resultSet.getLong("pending_orders"));
+                    summary.setPaidOrders(resultSet.getLong("paid_orders"));
+                    summary.setCancelledOrders(resultSet.getLong("cancelled_orders"));
+                    summary.setCompletedOrders(resultSet.getLong("completed_orders"));
+                    summary.setPaidAmount(resultSet.getBigDecimal("paid_amount"));
+                }
+                return summary;
+            }
+        } catch (SQLException e) {
+            throw new DBException("Failed to summarize user orders.", e);
         }
     }
 

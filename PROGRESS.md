@@ -1,10 +1,10 @@
 # 景点售票系统进度记录
 
-更新时间：2026-07-10 22:20（Asia/Shanghai）
+更新时间：2026-07-11（Asia/Shanghai）
 
 ## 当前状态
 
-- 当前里程碑：M1 数据库安装与迁移（实现与验收完成，等待 Git 检查点）
+- 当前里程碑：M2 用户、会话和权限（实现与验收完成，等待 Git 检查点）
 - 当前分支：`codex/scenic-ticket-stabilization`
 - 基线提交：`90f254ca42fa47a95cfe3f5b936ae7270bba10f2`
 - 工作树基线：干净；未覆盖或撤销用户修改
@@ -75,5 +75,14 @@ BUILD SUCCESS
 - MongoDB 真实测试：四集合、索引、中文往返、数值 ID、热门/行为/评分/审计聚合通过。
 - 完整 Java 21 集成套件：51 tests，0 failures，0 errors，1 skipped（Fake DAO 压力测试）。
 - 默认 Java 21 套件：48 tests，0 failures，0 errors，2 skipped；真实数据库默认不参与普通单元测试。
-- M1 实现与验收已完成；计划检查点为 `[Day 09] 完善数据库迁移与测试隔离`。
-- 当前阻塞：工作区 `.git` 受保护，Git 暂存需要提升权限；Codex 提升操作额度已用尽并提示 2026-07-11 03:12 后重试。为遵守里程碑顺序，未在检查点前进入 M2，也未尝试绕过权限。
+- M1 检查点已完成：`8d72476 [Day 09] 完善数据库迁移与测试隔离`。
+
+## M2 用户、会话和权限进展（2026-07-11）
+
+- 新增数据库回查型 `AuthorizationService`；管理员写操作、系统审计、系统级统计以及用户私有数据查询均在服务层校验 actor、启用状态和角色，不再依赖 Swing 隐藏入口。
+- 新增管理员用户管理服务和 Swing 页签，支持按用户名、邮箱、角色、状态查询，查看档案、订单概况和行为概况，以及启禁账号和修改角色。
+- 用户状态/角色修改使用 MySQL 事务与行锁；禁止管理员禁用自己、修改自己的角色或禁用/降级最后一个有效管理员。
+- 登录、注册和退出审计采用明确的跨库降级策略：MySQL 核心结果不因 MongoDB 日志失败而伪装失败；界面显示审计警告。
+- 退出和账号切换递增会话代次，旧 `SwingWorker` 回调不能回写新会话；退出写入 `LOGOUT` 审计。
+- M2 真实集成套件显式使用 MySQL/MongoDB `scenic_ticket_test`：66 tests，0 failures，0 errors，1 skipped（仅 opt-in 压力测试）。
+- M2 默认 Java 21 `mvn clean test`：61 tests，0 failures，0 errors，2 skipped（真实数据库测试和 opt-in 压力测试）；`BUILD SUCCESS`。

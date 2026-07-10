@@ -6,6 +6,8 @@ import com.scenicticket.dto.MonthlyOrderReportDTO;
 import com.scenicticket.dto.OrderViewDTO;
 import com.scenicticket.dto.RecommendationDTO;
 import com.scenicticket.dto.StatisticsReportDTO;
+import com.scenicticket.dto.AdminUserDetailDTO;
+import com.scenicticket.dto.UserSearchCriteria;
 import com.scenicticket.model.Category;
 import com.scenicticket.model.Item;
 import com.scenicticket.model.Order;
@@ -18,6 +20,7 @@ import com.scenicticket.service.RecommendService;
 import com.scenicticket.service.StatisticsService;
 import com.scenicticket.service.SystemLogService;
 import com.scenicticket.service.UserService;
+import com.scenicticket.service.AdminUserService;
 import org.bson.Document;
 
 import javax.swing.BorderFactory;
@@ -81,6 +84,7 @@ public class AppFrame extends JFrame {
     private final StatisticsService statisticsService = new StatisticsService();
     private final SystemLogService systemLogService = new SystemLogService();
     private final BehaviorLogService behaviorLogService = new BehaviorLogService();
+    private final AdminUserService adminUserService = new AdminUserService();
 
     private final JLabel userLabel = new JLabel("未登录");
     private final JLabel statusLabel = new JLabel("就绪");
@@ -92,6 +96,7 @@ public class AppFrame extends JFrame {
 
     private User currentUser;
     private int runningTasks;
+    private final SessionTaskGuard sessionTaskGuard = new SessionTaskGuard();
 
     public AppFrame() {
         setTitle("景点售票系统");
@@ -104,6 +109,7 @@ public class AppFrame extends JFrame {
     }
 
     private void showLoginView(String message) {
+        sessionTaskGuard.advanceSession();
         currentUser = null;
         updateSessionLabel();
         statusLabel.setText(message);
@@ -117,6 +123,7 @@ public class AppFrame extends JFrame {
     }
 
     private void showRegisterView() {
+        sessionTaskGuard.advanceSession();
         statusLabel.setText("创建新用户账号");
         getContentPane().removeAll();
         setLayout(new BorderLayout());
@@ -179,7 +186,9 @@ public class AppFrame extends JFrame {
         sessionBlock.setOpaque(false);
         JButton logoutButton = secondaryButton("退出登录");
         logoutButton.addActionListener(event -> {
-            showLoginView("已退出登录");
+            User loggingOutUser = currentUser;
+            runTask("退出登录", () -> userService.logout(loggingOutUser, "127.0.0.1"), auditRecorded ->
+                    showLoginView(auditRecorded ? "已退出登录" : "已退出登录，审计日志写入失败"));
         });
         sessionBlock.add(userLabel);
         sessionBlock.add(logoutButton);
@@ -381,6 +390,7 @@ public class AppFrame extends JFrame {
         addFormMessage(form, 5, message);
 
         refreshButton.addActionListener(event -> runTask("刷新档案", () -> userService.getProfile(
+                requireCurrentUserId(),
                 requireCurrentUserId()
         ), profile -> {
             if (profile.isPresent()) {
@@ -402,7 +412,7 @@ public class AppFrame extends JFrame {
             profile.setIdCard(idCardField.getText());
             profile.setAddress(addressField.getText());
             profile.setNotes(notesArea.getText());
-            return userService.updateProfile(profile);
+            return userService.updateProfile(requireCurrentUserId(), profile);
         }, saved -> message.setText(saved ? "档案已保存" : "档案未更新")));
 
         panel.add(form, BorderLayout.NORTH);
@@ -648,6 +658,7 @@ public class AppFrame extends JFrame {
                     ? parseOptionalLong(userIdField.getText())
                     : Long.valueOf(requireCurrentUserId());
             return businessService.searchOrderViews(
+                    requireCurrentUserId(),
                     queryUserId,
                     parseOptionalLong(queryOrderIdField.getText()),
                     selectedOrderStatus(queryStatusBox),
@@ -685,6 +696,7 @@ public class AppFrame extends JFrame {
         queryOrderIdField.addActionListener(event -> refreshOrders.run());
 
         updateButton.addActionListener(event -> runTask("更新订单状态", () -> businessService.updateOrderStatus(
+                requireCurrentUserId(),
                 requireSelectedOrderId(selectedOrderId),
                 updateStatusBox.getSelectedIndex()
         ), updated -> {
@@ -759,6 +771,7 @@ public class AppFrame extends JFrame {
         introEditPanel.add(updateIntroButton, BorderLayout.EAST);
 
         Runnable refreshItems = () -> runAdminTask("刷新景点", () -> businessService.searchAllItemsForAdmin(
+                requireCurrentUserId(),
                 itemKeywordField.getText(), selectedCategoryId(itemCategoryBox), 100, 0
         ), items -> {
             itemModel.setRowCount(0);
@@ -806,6 +819,7 @@ public class AppFrame extends JFrame {
         });
         createItemButton.addActionListener(event -> showCreateItemDialog(refreshItems));
         pricingButton.addActionListener(event -> runAdminTask("更新票价和优惠", () -> businessService.updateItemPricing(
+                requireCurrentUserId(),
                 requireSelectedItem(selectedItem).getItemId(), parseRequiredAmount(itemPriceField.getText(), "票价"),
                 parseRequiredAmount(itemDiscountField.getText(), "优惠减免比例")
         ), updated -> {
@@ -813,12 +827,14 @@ public class AppFrame extends JFrame {
             refreshItems.run();
         }));
         itemStatusButton.addActionListener(event -> runAdminTask("更新上下架状态", () -> businessService.updateItemStatus(
+                requireCurrentUserId(),
                 requireSelectedItem(selectedItem).getItemId(), itemStatusBox.getSelectedIndex()
         ), updated -> {
             setStatus(updated ? "景点上下架状态已更新" : "景点状态没有变化");
             refreshItems.run();
         }));
         updateIntroButton.addActionListener(event -> runAdminTask("更新景点简介", () -> businessService.updateItemDescription(
+                requireCurrentUserId(),
                 requireSelectedItem(selectedItem).getItemId(), itemIntroArea.getText()
         ), updated -> setStatus(updated ? "景点简介已更新，用户重新查看即可看到" : "景点简介没有变化")));
 
@@ -862,6 +878,7 @@ public class AppFrame extends JFrame {
         });
         refreshCategoryButton.addActionListener(event -> refreshCategories.run());
         createCategoryButton.addActionListener(event -> runAdminTask("新增分类", () -> businessService.createCategory(
+                requireCurrentUserId(),
                 categoryNameField.getText(), selectedCategoryId(parentCategoryBox)
         ), id -> {
             categoryNameField.setText("");
@@ -874,8 +891,126 @@ public class AppFrame extends JFrame {
 
         manageTabs.addTab("景点管理", itemPage);
         manageTabs.addTab("分类管理", categoryPage);
+        manageTabs.addTab("用户管理", createUserManagementPanel());
         panel.add(manageTabs, BorderLayout.CENTER);
         refreshCategories.run();
+        return panel;
+    }
+
+    private JPanel createUserManagementPanel() {
+        JPanel panel = new JPanel(new BorderLayout(12, 12));
+        panel.setOpaque(false);
+        JTextField usernameField = new JTextField(12);
+        JTextField emailField = new JTextField(16);
+        JComboBox<String> roleFilter = new JComboBox<>(new String[]{"全部角色", "管理员", "普通用户"});
+        JComboBox<String> statusFilter = new JComboBox<>(new String[]{"全部状态", "启用", "禁用"});
+        JButton queryButton = primaryButton("查询用户");
+        JButton resetButton = secondaryButton("重置");
+
+        JPanel filters = toolbar();
+        filters.add(new JLabel("用户名"));
+        filters.add(usernameField);
+        filters.add(new JLabel("邮箱"));
+        filters.add(emailField);
+        filters.add(new JLabel("角色"));
+        filters.add(roleFilter);
+        filters.add(new JLabel("状态"));
+        filters.add(statusFilter);
+        filters.add(queryButton);
+        filters.add(resetButton);
+
+        DefaultTableModel model = tableModel("用户ID", "用户名", "邮箱", "手机号", "角色", "状态", "创建时间");
+        JTable table = createTable(model);
+        table.setAutoResizeMode(JTable.AUTO_RESIZE_ALL_COLUMNS);
+        setColumnWidths(table, 70, 120, 190, 120, 90, 70, 170);
+        List<User> visibleUsers = new ArrayList<>();
+        User[] selectedUser = new User[1];
+
+        JTextArea detailArea = createTextArea(14, 38);
+        detailArea.setText("请先查询并选择用户。\n服务层会再次校验管理员权限。");
+        JComboBox<String> targetStatusBox = new JComboBox<>(new String[]{"禁用", "启用"});
+        JComboBox<String> targetRoleBox = new JComboBox<>(new String[]{"普通用户", "管理员"});
+        JButton statusButton = primaryButton("更新状态");
+        JButton roleButton = secondaryButton("更新角色");
+        statusButton.setEnabled(false);
+        roleButton.setEnabled(false);
+        JPanel actions = toolbar();
+        actions.add(new JLabel("状态"));
+        actions.add(targetStatusBox);
+        actions.add(statusButton);
+        actions.add(new JLabel("角色"));
+        actions.add(targetRoleBox);
+        actions.add(roleButton);
+
+        JPanel detailPanel = new JPanel(new BorderLayout(0, 10));
+        detailPanel.setOpaque(false);
+        detailPanel.add(new JScrollPane(detailArea), BorderLayout.CENTER);
+        detailPanel.add(actions, BorderLayout.SOUTH);
+
+        Runnable refreshUsers = () -> runAdminTask("查询用户", () -> adminUserService.searchUsers(
+                requireCurrentUserId(), new UserSearchCriteria(
+                        blankToNull(usernameField.getText()), blankToNull(emailField.getText()),
+                        selectedUserRoleFilter(roleFilter), selectedUserStatusFilter(statusFilter), 100, 0)
+        ), users -> {
+            visibleUsers.clear();
+            visibleUsers.addAll(users);
+            model.setRowCount(0);
+            for (User user : users) {
+                model.addRow(new Object[]{user.getUserId(), user.getUsername(), user.getEmail(), user.getPhone(),
+                        roleDisplay(user.getRole()), user.getStatus() != null && user.getStatus() == 1 ? "启用" : "禁用",
+                        formatDate(user.getCreatedAt())});
+            }
+            selectedUser[0] = null;
+            statusButton.setEnabled(false);
+            roleButton.setEnabled(false);
+            detailArea.setText(users.isEmpty() ? "没有找到符合条件的用户。" : "查询到 " + users.size() + " 个用户，请选择查看详情。");
+            setStatus("查询到 " + users.size() + " 个用户");
+        });
+
+        table.getSelectionModel().addListSelectionListener(event -> {
+            int viewRow = table.getSelectedRow();
+            if (!event.getValueIsAdjusting() && viewRow >= 0) {
+                selectedUser[0] = visibleUsers.get(table.convertRowIndexToModel(viewRow));
+                User target = selectedUser[0];
+                targetStatusBox.setSelectedIndex(target.getStatus() != null && target.getStatus() == 1 ? 1 : 0);
+                targetRoleBox.setSelectedIndex("ADMIN".equals(target.getRole()) ? 1 : 0);
+                statusButton.setEnabled(true);
+                roleButton.setEnabled(true);
+                runAdminTask("加载用户详情", () -> adminUserService.getUserDetail(
+                        requireCurrentUserId(), target.getUserId()), detail -> detailArea.setText(formatAdminUserDetail(detail)));
+            }
+        });
+
+        queryButton.addActionListener(event -> refreshUsers.run());
+        resetButton.addActionListener(event -> {
+            usernameField.setText("");
+            emailField.setText("");
+            roleFilter.setSelectedIndex(0);
+            statusFilter.setSelectedIndex(0);
+            refreshUsers.run();
+        });
+        usernameField.addActionListener(event -> refreshUsers.run());
+        emailField.addActionListener(event -> refreshUsers.run());
+        statusButton.addActionListener(event -> runAdminTask("更新用户状态", () -> adminUserService.changeUserStatus(
+                requireCurrentUserId(), requireSelectedUser(selectedUser).getUserId(), targetStatusBox.getSelectedIndex()
+        ), result -> {
+            setStatus(result.message());
+            refreshUsers.run();
+        }));
+        roleButton.addActionListener(event -> runAdminTask("更新用户角色", () -> adminUserService.changeUserRole(
+                requireCurrentUserId(), requireSelectedUser(selectedUser).getUserId(),
+                targetRoleBox.getSelectedIndex() == 1 ? "ADMIN" : "USER"
+        ), result -> {
+            setStatus(result.message());
+            refreshUsers.run();
+        }));
+
+        JSplitPane split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT,
+                wrapWithTitle("用户列表", new JScrollPane(table)), wrapWithTitle("用户详情与操作", detailPanel));
+        split.setResizeWeight(0.62);
+        split.setDividerLocation(760);
+        panel.add(wrapWithTitle("用户筛选", filters), BorderLayout.NORTH);
+        panel.add(split, BorderLayout.CENTER);
         return panel;
     }
 
@@ -960,6 +1095,7 @@ public class AppFrame extends JFrame {
         hotButton.addActionListener(event -> loadHot.run());
 
         Runnable loadUserReport = () -> runTask("用户报告", () -> statisticsService.getUserReport(
+                requireCurrentUserId(),
                 isCurrentAdmin() && !userIdField.getText().isBlank()
                         ? parseRequiredLong(userIdField.getText(), "用户ID")
                         : requireCurrentUserId(),
@@ -973,7 +1109,8 @@ public class AppFrame extends JFrame {
         userButton.addActionListener(event -> loadUserReport.run());
 
         Runnable loadDashboard = () -> runTask("综合汇总", () -> statisticsService.buildDashboardReport(
-                null, null, parseRequiredInt(yearField.getText(), "年份"), parseRequiredInt(monthField.getText(), "月份")
+                requireCurrentUserId(), null, null, parseRequiredInt(yearField.getText(), "年份"),
+                parseRequiredInt(monthField.getText(), "月份")
         ), dto -> {
             fillDashboardTable(dashboardModel, dto);
             resultTabs.setSelectedIndex(3);
@@ -1049,6 +1186,7 @@ public class AppFrame extends JFrame {
         auditToolbar.add(auditActions);
 
         Runnable refreshAuditLogs = () -> runAdminTask("审计日志查询", () -> systemLogService.queryAuditLogs(
+                requireCurrentUserId(),
                 parseOptionalLong(userIdField.getText()),
                 selectedLogType(logTypeBox),
                 selectedLogLevel(levelBox),
@@ -1071,7 +1209,8 @@ public class AppFrame extends JFrame {
         });
         queryButton.addActionListener(event -> refreshAuditLogs.run());
 
-        Runnable loadSummary = () -> runAdminTask("审计汇总", () -> systemLogService.getAuditSummary(null, null), documents -> {
+        Runnable loadSummary = () -> runAdminTask("审计汇总", () -> systemLogService.getAuditSummary(
+                requireCurrentUserId(), null, null), documents -> {
             int scrollPosition = summaryScroll.getVerticalScrollBar().getValue();
             summaryModel.setRowCount(0);
             for (Document document : documents) {
@@ -1084,7 +1223,8 @@ public class AppFrame extends JFrame {
         });
         summaryButton.addActionListener(event -> loadSummary.run());
 
-        Runnable loadTrend = () -> runAdminTask("审计趋势", () -> systemLogService.getDailyAuditTrend(null, null), documents -> {
+        Runnable loadTrend = () -> runAdminTask("审计趋势", () -> systemLogService.getDailyAuditTrend(
+                requireCurrentUserId(), null, null), documents -> {
             int scrollPosition = trendScroll.getVerticalScrollBar().getValue();
             trendModel.setRowCount(0);
             for (Document document : documents) {
@@ -1097,7 +1237,7 @@ public class AppFrame extends JFrame {
         trendButton.addActionListener(event -> loadTrend.run());
 
         Runnable loadUserSummary = () -> runAdminTask("用户操作汇总",
-                () -> systemLogService.getUserOperationSummary(null, null, 50), documents -> {
+                () -> systemLogService.getUserOperationSummary(requireCurrentUserId(), null, null, 50), documents -> {
                     int scrollPosition = userSummaryScroll.getVerticalScrollBar().getValue();
                     userSummaryModel.setRowCount(0);
                     for (Document document : documents) {
@@ -1127,6 +1267,7 @@ public class AppFrame extends JFrame {
     }
 
     private void setCurrentUser(LoginResult result) {
+        sessionTaskGuard.advanceSession();
         currentUser = result.getUser();
         updateSessionLabel();
         refreshHomeSummary();
@@ -1216,7 +1357,7 @@ public class AppFrame extends JFrame {
         if (result != JOptionPane.OK_OPTION) {
             return;
         }
-        runAdminTask("新增景点", () -> businessService.createItem(titleField.getText(), requireCategoryId(categoryBox),
+        runAdminTask("新增景点", () -> businessService.createItem(requireCurrentUserId(), titleField.getText(), requireCategoryId(categoryBox),
                 descriptionArea.getText(), List.of(), new Document("source", "Swing后台"),
                 parseRequiredAmount(priceField.getText(), "票价"), parseRequiredAmount(discountField.getText(), "优惠减免比例")), id -> {
             setStatus("景点创建成功，编号：" + id);
@@ -1294,6 +1435,13 @@ public class AppFrame extends JFrame {
             throw new IllegalArgumentException("请先从表格中选择一个景点");
         }
         return selectedItem[0];
+    }
+
+    private User requireSelectedUser(User[] selectedUser) {
+        if (selectedUser == null || selectedUser.length == 0 || selectedUser[0] == null) {
+            throw new IllegalArgumentException("请先从表格中选择一个用户");
+        }
+        return selectedUser[0];
     }
 
     private long requireSelectedOrderId(Long[] selectedOrderId) {
@@ -1458,6 +1606,22 @@ public class AppFrame extends JFrame {
         };
     }
 
+    private String selectedUserRoleFilter(JComboBox<String> roleBox) {
+        return switch (roleBox.getSelectedIndex()) {
+            case 1 -> "ADMIN";
+            case 2 -> "USER";
+            default -> null;
+        };
+    }
+
+    private Integer selectedUserStatusFilter(JComboBox<String> statusBox) {
+        return switch (statusBox.getSelectedIndex()) {
+            case 1 -> 1;
+            case 2 -> 0;
+            default -> null;
+        };
+    }
+
     private void restoreScrollPosition(JScrollPane scrollPane, int position) {
         SwingUtilities.invokeLater(() -> scrollPane.getVerticalScrollBar().setValue(position));
     }
@@ -1580,6 +1744,7 @@ public class AppFrame extends JFrame {
     }
 
     private <T> void runTask(String name, Callable<T> task, Consumer<T> onSuccess, Consumer<String> onError) {
+        long taskGeneration = sessionTaskGuard.currentToken();
         String processingStatus = name + "处理中...";
         setStatus(processingStatus);
         setBusy(true);
@@ -1593,14 +1758,22 @@ public class AppFrame extends JFrame {
             protected void done() {
                 try {
                     T result = get();
+                    if (!sessionTaskGuard.isCurrent(taskGeneration)) {
+                        return;
+                    }
                     onSuccess.accept(result);
                     if (processingStatus.equals(statusLabel.getText())) {
                         setStatus(name + "完成");
                     }
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
-                    setStatus(name + "已中断");
+                    if (sessionTaskGuard.isCurrent(taskGeneration)) {
+                        setStatus(name + "已中断");
+                    }
                 } catch (ExecutionException e) {
+                    if (!sessionTaskGuard.isCurrent(taskGeneration)) {
+                        return;
+                    }
                     Throwable cause = e.getCause() == null ? e : e.getCause();
                     String message = UiFormatters.chineseError(cause);
                     if (onError == null) {
@@ -1610,6 +1783,9 @@ public class AppFrame extends JFrame {
                     }
                     setStatus(name + "失败：" + message);
                 } catch (RuntimeException e) {
+                    if (!sessionTaskGuard.isCurrent(taskGeneration)) {
+                        return;
+                    }
                     String message = UiFormatters.chineseError(e);
                     if (onError == null) {
                         showError(e);
@@ -1703,6 +1879,43 @@ public class AppFrame extends JFrame {
         builder.append("状态：").append(formatItemStatus(item.getStatus())).append(System.lineSeparator())
                 .append(System.lineSeparator());
         builder.append("简介：").append(formatItemDetailDocument(dto.getDetail()));
+        return builder.toString();
+    }
+
+    private String formatAdminUserDetail(AdminUserDetailDTO detail) {
+        User user = detail.getUser();
+        Profile profile = detail.getProfile();
+        var orders = detail.getOrderSummary();
+        StringBuilder builder = new StringBuilder("用户基本信息")
+                .append(System.lineSeparator()).append(System.lineSeparator())
+                .append("用户ID：").append(valueText(user.getUserId())).append(System.lineSeparator())
+                .append("用户名：").append(valueText(user.getUsername())).append(System.lineSeparator())
+                .append("邮箱：").append(valueText(user.getEmail())).append(System.lineSeparator())
+                .append("手机号：").append(valueText(user.getPhone())).append(System.lineSeparator())
+                .append("角色：").append(roleDisplay(user.getRole())).append(System.lineSeparator())
+                .append("状态：").append(user.getStatus() != null && user.getStatus() == 1 ? "启用" : "禁用")
+                .append(System.lineSeparator()).append(System.lineSeparator())
+                .append("用户档案").append(System.lineSeparator());
+        if (profile == null) {
+            builder.append("暂无档案").append(System.lineSeparator());
+        } else {
+            builder.append("真实姓名：").append(valueText(profile.getRealName())).append(System.lineSeparator())
+                    .append("证件号：").append(valueText(profile.getIdCard())).append(System.lineSeparator())
+                    .append("地址：").append(valueText(profile.getAddress())).append(System.lineSeparator())
+                    .append("备注：").append(valueText(profile.getNotes())).append(System.lineSeparator());
+        }
+        builder.append(System.lineSeparator()).append("订单概况").append(System.lineSeparator())
+                .append("总订单：").append(orders.getTotalOrders())
+                .append("，待支付：").append(orders.getPendingOrders())
+                .append("，已支付：").append(orders.getPaidOrders())
+                .append("，已取消：").append(orders.getCancelledOrders())
+                .append("，已完成：").append(orders.getCompletedOrders()).append(System.lineSeparator())
+                .append("有效订单金额：").append(UiFormatters.money(orders.getPaidAmount()))
+                .append(System.lineSeparator()).append(System.lineSeparator())
+                .append("行为概况").append(System.lineSeparator())
+                .append(detail.isBehaviorDataAvailable()
+                        ? "行为日志数量：" + detail.getBehaviorCount()
+                        : "MongoDB 行为数据暂不可用，MySQL 用户信息仍可管理");
         return builder.toString();
     }
 

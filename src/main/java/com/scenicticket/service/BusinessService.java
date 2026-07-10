@@ -32,6 +32,7 @@ public class BusinessService {
     private final LogDAO logDAO;
     private final CommentDAO commentDAO;
     private final ConnectionProvider connectionProvider;
+    private final AuthorizationService authorizationService;
 
     public BusinessService() {
         this(new CategoryDAO(), new ItemDAO(), new OrderDAO(), new DetailDAO(), new LogDAO(), new CommentDAO());
@@ -44,6 +45,13 @@ public class BusinessService {
 
     public BusinessService(CategoryDAO categoryDAO, ItemDAO itemDAO, OrderDAO orderDAO, DetailDAO detailDAO,
                            LogDAO logDAO, CommentDAO commentDAO, ConnectionProvider connectionProvider) {
+        this(categoryDAO, itemDAO, orderDAO, detailDAO, logDAO, commentDAO, connectionProvider,
+                new AuthorizationService());
+    }
+
+    public BusinessService(CategoryDAO categoryDAO, ItemDAO itemDAO, OrderDAO orderDAO, DetailDAO detailDAO,
+                           LogDAO logDAO, CommentDAO commentDAO, ConnectionProvider connectionProvider,
+                           AuthorizationService authorizationService) {
         this.categoryDAO = categoryDAO;
         this.itemDAO = itemDAO;
         this.orderDAO = orderDAO;
@@ -51,9 +59,11 @@ public class BusinessService {
         this.logDAO = logDAO;
         this.commentDAO = commentDAO;
         this.connectionProvider = connectionProvider;
+        this.authorizationService = authorizationService;
     }
 
-    public long createCategory(String name, Long parentId) {
+    public long createCategory(long actorUserId, String name, Long parentId) {
+        authorizationService.requireAdmin(actorUserId);
         String safeName = SecurityUtil.requireText(name, "分类名称", 50);
         Category category = new Category();
         category.setName(safeName);
@@ -65,12 +75,16 @@ public class BusinessService {
         return categoryDAO.findAll();
     }
 
-    public long createItem(String title, long categoryId, String description, List<String> images, Document metadata) {
-        return createItem(title, categoryId, description, images, metadata, new BigDecimal("80.00"), BigDecimal.ZERO);
+    public long createItem(long actorUserId, String title, long categoryId, String description,
+                           List<String> images, Document metadata) {
+        return createItem(actorUserId, title, categoryId, description, images, metadata,
+                new BigDecimal("80.00"), BigDecimal.ZERO);
     }
 
-    public long createItem(String title, long categoryId, String description, List<String> images, Document metadata,
+    public long createItem(long actorUserId, String title, long categoryId, String description,
+                           List<String> images, Document metadata,
                            BigDecimal price, BigDecimal discountRate) {
+        authorizationService.requireAdmin(actorUserId);
         String safeTitle = SecurityUtil.requireText(title, "景点标题", 200);
         Item item = new Item();
         item.setTitle(safeTitle);
@@ -89,12 +103,14 @@ public class BusinessService {
                 SecurityUtil.normalizeLimit(limit, 20, 100), SecurityUtil.normalizeOffset(offset));
     }
 
-    public List<Item> searchAllItemsForAdmin(String keyword, Long categoryId, int limit, int offset) {
+    public List<Item> searchAllItemsForAdmin(long actorUserId, String keyword, Long categoryId, int limit, int offset) {
+        authorizationService.requireAdmin(actorUserId);
         return itemDAO.search(SecurityUtil.normalizeText(keyword, 100), categoryId, null,
                 SecurityUtil.normalizeLimit(limit, 20, 100), SecurityUtil.normalizeOffset(offset));
     }
 
-    public boolean updateItemStatus(long itemId, int status) {
+    public boolean updateItemStatus(long actorUserId, long itemId, int status) {
+        authorizationService.requireAdmin(actorUserId);
         if (itemId <= 0) {
             throw new BusinessException("景点ID必须大于 0");
         }
@@ -104,7 +120,8 @@ public class BusinessService {
         return itemDAO.updateStatus(itemId, status);
     }
 
-    public boolean updateItemPricing(long itemId, BigDecimal price, BigDecimal discountRate) {
+    public boolean updateItemPricing(long actorUserId, long itemId, BigDecimal price, BigDecimal discountRate) {
+        authorizationService.requireAdmin(actorUserId);
         if (itemId <= 0) {
             throw new BusinessException("景点ID必须大于 0");
         }
@@ -119,7 +136,8 @@ public class BusinessService {
         return detail == null ? "" : SecurityUtil.normalizeText(detail.getString("description"), 2000);
     }
 
-    public boolean updateItemDescription(long itemId, String description) {
+    public boolean updateItemDescription(long actorUserId, long itemId, String description) {
+        authorizationService.requireAdmin(actorUserId);
         if (itemId <= 0) {
             throw new BusinessException("景点ID必须大于 0");
         }
@@ -137,6 +155,7 @@ public class BusinessService {
         if (userId <= 0 || itemId <= 0) {
             throw new BusinessException("用户ID和景点ID必须大于 0");
         }
+        authorizationService.requireActiveUser(userId);
         Item item = itemDAO.findById(itemId)
                 .orElseThrow(() -> new BusinessException("景点不存在"));
         logDAO.recordAction(userId, itemId, "VIEW", 0, "SWING", SecurityUtil.normalizeIp(ip));
@@ -151,6 +170,7 @@ public class BusinessService {
         if (userId <= 0 || itemId <= 0) {
             throw new BusinessException("用户ID和景点ID必须大于 0");
         }
+        authorizationService.requireActiveUser(userId);
         if (quantity <= 0 || quantity > 99) {
             throw new BusinessException("购买票数必须是 1 到 99 之间的整数");
         }
@@ -197,6 +217,7 @@ public class BusinessService {
         if (userId <= 0 || itemId <= 0) {
             throw new BusinessException("用户ID和景点ID必须大于 0");
         }
+        authorizationService.requireActiveUser(userId);
         return orderDAO.existsPaidOrder(userId, itemId);
     }
 
@@ -204,17 +225,21 @@ public class BusinessService {
         if (userId <= 0) {
             throw new BusinessException("用户ID必须大于 0");
         }
+        authorizationService.requireActiveUser(userId);
         return orderDAO.findByUserId(userId, SecurityUtil.normalizeLimit(limit, 20, 100),
                 SecurityUtil.normalizeOffset(offset));
     }
 
-    public List<Order> searchOrders(Long userId, Long orderId, Integer status, int limit, int offset) {
+    public List<Order> searchOrders(long actorUserId, Long userId, Long orderId, Integer status, int limit, int offset) {
+        validateOrderReadAccess(actorUserId, userId);
         validateOrderFilters(userId, orderId, status);
         return orderDAO.search(userId, orderId, status, SecurityUtil.normalizeLimit(limit, 20, 100),
                 SecurityUtil.normalizeOffset(offset));
     }
 
-    public List<OrderViewDTO> searchOrderViews(Long userId, Long orderId, Integer status, int limit, int offset) {
+    public List<OrderViewDTO> searchOrderViews(long actorUserId, Long userId, Long orderId, Integer status,
+                                               int limit, int offset) {
+        validateOrderReadAccess(actorUserId, userId);
         validateOrderFilters(userId, orderId, status);
         return orderDAO.searchViews(userId, orderId, status, SecurityUtil.normalizeLimit(limit, 20, 100),
                 SecurityUtil.normalizeOffset(offset));
@@ -232,7 +257,8 @@ public class BusinessService {
         }
     }
 
-    public boolean updateOrderStatus(long orderId, int status) {
+    public boolean updateOrderStatus(long actorUserId, long orderId, int status) {
+        authorizationService.requireAdmin(actorUserId);
         if (orderId <= 0) {
             throw new BusinessException("订单ID必须大于 0");
         }
@@ -240,6 +266,15 @@ public class BusinessService {
             throw new BusinessException("订单状态不正确");
         }
         return orderDAO.updateStatus(orderId, status);
+    }
+
+    private void validateOrderReadAccess(long actorUserId, Long requestedUserId) {
+        var actor = authorizationService.requireActiveUser(actorUserId);
+        if (!"ADMIN".equals(actor.getRole())) {
+            if (requestedUserId == null || requestedUserId != actorUserId) {
+                throw new BusinessException("普通用户只能查询自己的订单");
+            }
+        }
     }
 
     private void rollbackQuietly(Connection connection) {

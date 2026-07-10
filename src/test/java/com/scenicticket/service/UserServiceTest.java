@@ -83,32 +83,34 @@ class UserServiceTest {
 
     @Test
     void updateProfileRequiresUserIdAndNormalizesFields() {
+        userDAO.addActiveUser(8L);
         Profile profile = new Profile();
         profile.setUserId(8L);
         profile.setRealName("  Alice  ");
         profile.setAddress("  Hangzhou  ");
 
-        assertTrue(service.updateProfile(profile));
+        assertTrue(service.updateProfile(8L, profile));
         assertEquals("Alice", profileDAO.profile.getRealName());
         assertEquals("Hangzhou", profileDAO.profile.getAddress());
 
         Profile invalid = new Profile();
-        assertThrows(BusinessException.class, () -> service.updateProfile(invalid));
+        assertThrows(BusinessException.class, () -> service.updateProfile(8L, invalid));
     }
 
     @Test
     void getProfileRequiresValidUserIdAndReadsProfile() {
+        userDAO.addActiveUser(8L);
         Profile profile = new Profile();
         profile.setUserId(8L);
         profile.setRealName("Alice");
         profileDAO.profile = profile;
 
-        Optional<Profile> result = service.getProfile(8L);
+        Optional<Profile> result = service.getProfile(8L, 8L);
 
         assertTrue(result.isPresent());
         assertEquals("Alice", result.get().getRealName());
         assertEquals(8L, profileDAO.lastFindUserId);
-        assertThrows(BusinessException.class, () -> service.getProfile(0L));
+        assertThrows(BusinessException.class, () -> service.getProfile(8L, 0L));
     }
 
     @Test
@@ -126,6 +128,18 @@ class UserServiceTest {
         assertFalse(service.isAdmin(null));
     }
 
+    @Test
+    void loginAndLogoutRemainSuccessfulWhenMongoAuditIsUnavailable() {
+        service.register("alice", "password123", "alice@example.com", "13900000000");
+        systemLogDAO.fail = true;
+
+        LoginResult result = service.login("alice", "password123", "127.0.0.1");
+
+        assertTrue(result.isSuccess());
+        assertTrue(result.getMessage().contains("审计日志写入失败"));
+        assertFalse(service.logout(result.getUser(), "127.0.0.1"));
+    }
+
     private static class InMemoryUserDAO extends UserDAO {
         private long nextId = 1L;
         private final Map<String, User> usersByName = new LinkedHashMap<>();
@@ -141,6 +155,20 @@ class UserServiceTest {
         @Override
         public Optional<User> findByUsername(String username) {
             return Optional.ofNullable(usersByName.get(username));
+        }
+
+        private void addActiveUser(long userId) {
+            User user = new User();
+            user.setUserId(userId);
+            user.setUsername("user" + userId);
+            user.setRole("USER");
+            user.setStatus(1);
+            usersByName.put(user.getUsername(), user);
+        }
+
+        @Override
+        public Optional<User> findById(long userId) {
+            return usersByName.values().stream().filter(user -> user.getUserId() == userId).findFirst();
         }
     }
 
@@ -168,9 +196,13 @@ class UserServiceTest {
         private String lastMessage;
         private Document lastActionDetail;
         private int writeCount;
+        private boolean fail;
 
         @Override
         public void record(long userId, String logType, String logLevel, String message, Document actionDetail) {
+            if (fail) {
+                throw new IllegalStateException("Mongo unavailable");
+            }
             lastUserId = userId;
             lastLogType = logType;
             lastLogLevel = logLevel;

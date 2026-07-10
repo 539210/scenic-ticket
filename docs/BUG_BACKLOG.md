@@ -1,6 +1,6 @@
 # Bug Backlog
 
-更新时间：2026-07-10
+更新时间：2026-07-11
 
 状态：`OPEN` / `IN PROGRESS` / `BLOCKED` / `FIXED` / `VERIFIED` / `CLOSED`
 
@@ -8,7 +8,7 @@
 
 | ID | 状态 | 问题 | 复现证据/根因 | 验收 |
 | --- | --- | --- | --- | --- |
-| BUG-P0-001 | OPEN | 普通调用者可绕过管理员权限执行管理操作 | `BusinessService` 的分类/景点/价格/状态/订单状态方法不接收当前 actor，也不校验角色；权限只在 `AppFrame.runAdminTask` | 服务层拒绝普通用户，覆盖直接调用测试 |
+| BUG-P0-001 | VERIFIED | 普通调用者可绕过管理员权限执行管理操作 | 管理写接口已强制接收 actor 并经 `AuthorizationService` 回查启用状态和 ADMIN 角色；统计、审计、私有数据查询同步收紧 | 直接服务调用越权测试及真实测试库管理员操作通过；M2 集成套件 66 tests、0 failures/errors |
 | BUG-P0-002 | OPEN | 订单状态可被任意改写，允许非法转换 | `BusinessService.updateOrderStatus` 只校验 0..3 后直接 UPDATE；可已取消→已支付、已完成→已取消 | 集中状态机，非法转换测试全部拒绝 |
 
 ## P1
@@ -33,8 +33,8 @@
 | BUG-P2-004 | IN PROGRESS | 已知：系统审计条件查询不能正常使用 | 现有空/类型/级别/双条件查询返回 31/28/25/22 条；但 UI/Service 缺日期、关键词、limit、清空，组合测试不足 | 单/双/多条件、空条件、清空、时区、关键词和 limit 测试通过 |
 | BUG-P2-005 | OPEN | 评论规则允许同一用户对同一景点重复插入 | `CommentDAO.addComment` 永远 insert，无唯一索引/upsert/updated_at | 唯一索引或等效约束；再次评论更新原记录 |
 | BUG-P2-006 | OPEN | 评论展示缺用户信息、标签和更新时间 | `formatComments` 只显示评分、时间、内容 | 展示脱敏用户名、评分、正文、标签、时间 |
-| BUG-P2-007 | OPEN | 管理员用户管理完全缺失 | UI 无对应页面；服务/DAO 不完整 | 查询、档案、启禁、角色、订单/行为概况及安全限制完成 |
-| BUG-P2-008 | OPEN | 退出没有写 LOGOUT 审计，异步任务可能跨会话回写 | 退出按钮直接 `showLoginView`；没有任务取消/session token | 退出审计、旧任务不能污染新会话、回归测试通过 |
+| BUG-P2-007 | VERIFIED | 管理员用户管理完全缺失 | 已新增查询、详情、档案、订单/行为概况、启禁和角色管理；事务行锁保护自身与最后管理员规则 | 6 项服务单元测试、2 项真实 MySQL/MongoDB 集成测试和 Swing 静态检查通过 |
+| BUG-P2-008 | VERIFIED | 退出没有写 LOGOUT 审计，异步任务可能跨会话回写 | 退出调用 `UserService.logout` 写 LOGOUT；`SessionTaskGuard` 在退出/登录切换时使旧异步回调失效 | Mongo 日志失败降级测试、会话代次回归测试和 M2 完整套件通过 |
 | BUG-P2-009 | OPEN | 热门排行只显示景点 ID | 报表直接展示 Mongo `_id`，没有跨库映射名称 | 显示景点名称且缺失主数据有明确降级 |
 | BUG-P2-010 | OPEN | 第二个存储过程和两个视图未在系统/测试中证明实际用途 | 静态脚本存在但无调用/验证 | 每个对象都有实际调用或真实集成测试并可解释 |
 
