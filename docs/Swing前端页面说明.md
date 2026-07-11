@@ -24,7 +24,7 @@ src/main/java/com/scenicticket/ui/AppFrame.java
 | 个人档案 | 保存用户真实姓名、证件号、地址、个人简介 | `UserService#updateProfile` |
 | 景点浏览 | 按预设关键词/数据库分类查询景点；概览、简介、评论使用独立页签，过时异步详情不会覆盖新选择 | `BusinessService`、`CrossDatabaseQueryService`、`RecommendService`、`BehaviorLogService` |
 | 我的订单 | 按订单号和状态查询订单，显示票种/日期/价格快照；专用按钮执行支付、待支付取消和退款 | `BusinessService`、`OrderLifecycleService` |
-| 后台管理 | 景点、分类、用户及票种/库存独立页签；支持未来日期每日库存维护 | `BusinessService`、`AdminUserService`、`TicketInventoryService` |
+| 后台管理 | 景点、分类、用户、票种/库存和门票核销独立页签 | `BusinessService`、`AdminUserService`、`TicketInventoryService`、`AdmissionService` |
 | 统计报表 | 以表格展示月度订单、热门排行、用户报告和综合汇总 | `StatisticsService` |
 | 系统审计 | 以中文表格展示日志明细、审计汇总、趋势和用户操作汇总 | `SystemLogService` |
 
@@ -55,6 +55,7 @@ src/main/java/com/scenicticket/ui/AppFrame.java
 | `TicketInventoryService` | `setTotalStock` / `listAvailable` | 行锁维护每日库存并向用户展示未来可售票种和日期 |
 | `OrderLifecycleService` | `createPendingOrder` / `pay` | 创建待支付订单并预留库存，主动支付后把预留转为已售 |
 | `OrderLifecycleService` | `cancelPending` / `refund` / `expireDueOrders` | 合法取消、退款、过期释放以及库存恢复 |
+| `AdmissionService` | `admit` / `listByOrder` | 管理员部分/全部核销、完成状态和核销记录查询 |
 
 ## 运行方式
 

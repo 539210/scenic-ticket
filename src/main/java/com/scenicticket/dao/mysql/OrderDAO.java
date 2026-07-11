@@ -246,6 +246,10 @@ public class OrderDAO extends BaseDAO {
         return transition(connection, orderId, 0, 1, "paid_at");
     }
 
+    public boolean markCompleted(Connection connection, long orderId) throws SQLException {
+        return transition(connection, orderId, 1, 3, "completed_at");
+    }
+
     public boolean markCancelled(Connection connection, long orderId, int expectedStatus, boolean refunded)
             throws SQLException {
         String timestamps = refunded

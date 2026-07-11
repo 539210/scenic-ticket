@@ -4,7 +4,7 @@
 
 ## 当前状态
 
-- 当前里程碑：M5 订单、支付和退款（状态机与事务实现阶段）
+- 当前里程碑：M6 入园核销（资格、数量与完成状态实现阶段）
 - 当前分支：`codex/scenic-ticket-stabilization`
 - 基线提交：`90f254ca42fa47a95cfe3f5b936ae7270bba10f2`
 - 工作树基线：干净；未覆盖或撤销用户修改
@@ -140,3 +140,18 @@ BUILD SUCCESS
 - 默认 Java 21 `mvn clean test`：76 tests，0 failures，0 errors，2 skipped。
 - 完整真实 MySQL/MongoDB `scenic_ticket_test` 套件最终重跑：85 tests，0 failures，0 errors，1 skipped；包含退款边界、真实生命周期、库存并发及跨库审计降级。
 - M5 实现与验收已完成，计划检查点为 `[Day 09] 完成订单支付退款状态机`。
+- M5 检查点已完成：`ff81022 [Day 09] 完成订单支付退款状态机`。
+
+## M6 入园核销起始审计（2026-07-11）
+
+- `admissions` 表和外键/数量约束已由 M1 创建，但 Java 主代码尚无 Admission Model、DAO、Service 或 Swing 管理页。
+- M5 退款已通过查询 `admissions` 阻止已核销订单退款；M6 需补齐仅管理员、仅已支付、仅有效游玩日期、部分/全部数量核销以及全部核销后订单完成的原子事务。
+
+## M6 入园核销验收（2026-07-11）
+
+- 新增 `Admission`、`AdmissionDAO`、`AdmissionService` 和管理员“门票核销”页；核销记录保存订单、数量、操作员、时间和备注。
+- 服务先锁定订单，要求管理员、已支付未完成、未退款且游玩日期等于当天；累计核销数量不得超过订单数量。
+- 支持多次部分核销；最后一张核销后同一事务把订单从已支付变为已完成并写 `completed_at`。
+- MySQL 核销提交后写 MongoDB `system_logs` 审计；审计失败不回滚核销，返回明确警告。
+- 真实流程：3 张票支付后先核销 1 张，退款被拒；再核销 2 张后订单完成，退款继续被拒；两条核销记录均可查询。
+- 默认 Java 21 `mvn clean test`：80 tests，0 failures，0 errors，2 skipped；完整真实测试库套件：90 tests，0 failures，0 errors，1 skipped。

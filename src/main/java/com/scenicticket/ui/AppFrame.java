@@ -16,6 +16,7 @@ import com.scenicticket.model.Profile;
 import com.scenicticket.model.User;
 import com.scenicticket.model.TicketInventory;
 import com.scenicticket.model.TicketType;
+import com.scenicticket.model.Admission;
 import com.scenicticket.service.BehaviorLogService;
 import com.scenicticket.service.BusinessService;
 import com.scenicticket.service.CrossDatabaseQueryService;
@@ -26,6 +27,7 @@ import com.scenicticket.service.UserService;
 import com.scenicticket.service.AdminUserService;
 import com.scenicticket.service.TicketInventoryService;
 import com.scenicticket.service.OrderLifecycleService;
+import com.scenicticket.service.AdmissionService;
 import org.bson.Document;
 
 import javax.swing.BorderFactory;
@@ -92,6 +94,7 @@ public class AppFrame extends JFrame {
     private final AdminUserService adminUserService = new AdminUserService();
     private final TicketInventoryService ticketInventoryService = new TicketInventoryService();
     private final OrderLifecycleService orderLifecycleService = new OrderLifecycleService();
+    private final AdmissionService admissionService = new AdmissionService();
 
     private final JLabel userLabel = new JLabel("未登录");
     private final JLabel statusLabel = new JLabel("就绪");
@@ -1032,6 +1035,7 @@ public class AppFrame extends JFrame {
         manageTabs.addTab("分类管理", categoryPage);
         manageTabs.addTab("用户管理", createUserManagementPanel());
         manageTabs.addTab("票种与库存", createTicketInventoryManagementPanel());
+        manageTabs.addTab("门票核销", createAdmissionManagementPanel());
         panel.add(manageTabs, BorderLayout.CENTER);
         refreshCategories.run();
         return panel;
@@ -1151,6 +1155,49 @@ public class AppFrame extends JFrame {
         split.setDividerLocation(760);
         panel.add(wrapWithTitle("用户筛选", filters), BorderLayout.NORTH);
         panel.add(split, BorderLayout.CENTER);
+        return panel;
+    }
+
+    private JPanel createAdmissionManagementPanel() {
+        JPanel panel = new JPanel(new BorderLayout(10, 10));
+        panel.setOpaque(false);
+        JTextField orderIdField = new JTextField(10);
+        JSpinner quantitySpinner = new JSpinner(new SpinnerNumberModel(1, 1, 99, 1));
+        JTextField noteField = new JTextField(24);
+        JButton queryButton = secondaryButton("查询核销记录");
+        JButton admitButton = primaryButton("确认核销");
+        JPanel toolbar = toolbar();
+        toolbar.add(new JLabel("订单ID"));
+        toolbar.add(orderIdField);
+        toolbar.add(new JLabel("本次数量"));
+        toolbar.add(quantitySpinner);
+        toolbar.add(new JLabel("备注"));
+        toolbar.add(noteField);
+        toolbar.add(queryButton);
+        toolbar.add(admitButton);
+
+        DefaultTableModel model = tableModel("核销ID", "订单ID", "数量", "操作员ID", "核销时间", "备注");
+        JTable table = createTable(model);
+        setColumnWidths(table, 75, 80, 65, 90, 165, 230);
+        Runnable refresh = () -> runAdminTask("查询核销记录", () -> admissionService.listByOrder(
+                requireCurrentUserId(), parseRequiredLong(orderIdField.getText(), "订单ID")), admissions -> {
+            model.setRowCount(0);
+            for (Admission admission : admissions) {
+                model.addRow(new Object[]{admission.getAdmissionId(), admission.getOrderId(), admission.getQuantity(),
+                        admission.getOperatorUserId(), formatDate(admission.getAdmittedAt()), valueText(admission.getNote())});
+            }
+            setStatus("已加载 " + admissions.size() + " 条核销记录");
+        });
+        queryButton.addActionListener(event -> refresh.run());
+        orderIdField.addActionListener(event -> refresh.run());
+        admitButton.addActionListener(event -> runAdminTask("门票核销", () -> admissionService.admit(
+                requireCurrentUserId(), parseRequiredLong(orderIdField.getText(), "订单ID"),
+                (Integer) quantitySpinner.getValue(), noteField.getText()), result -> {
+            setStatus(result.message());
+            refresh.run();
+        }));
+        panel.add(wrapWithTitle("管理员门票核销（仅游玩日期当天的已支付订单）", toolbar), BorderLayout.NORTH);
+        panel.add(wrapWithTitle("核销记录", new JScrollPane(table)), BorderLayout.CENTER);
         return panel;
     }
 
