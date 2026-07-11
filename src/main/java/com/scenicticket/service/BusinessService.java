@@ -304,50 +304,7 @@ public class BusinessService {
     }
 
     public long createOrder(long userId, long itemId, int quantity, String paymentMethod) {
-        if (userId <= 0 || itemId <= 0) {
-            throw new BusinessException("用户ID和景点ID必须大于 0");
-        }
-        authorizationService.requireActiveUser(userId);
-        if (quantity <= 0 || quantity > 99) {
-            throw new BusinessException("购买票数必须是 1 到 99 之间的整数");
-        }
-        String safePaymentMethod = normalizePaymentMethod(paymentMethod);
-        Item item = itemDAO.findById(itemId)
-                .orElseThrow(() -> new BusinessException("景点不存在"));
-        if (item.getStatus() == null || item.getStatus() != 1) {
-            throw new BusinessException("该景点未上架，暂不能购买");
-        }
-        BigDecimal unitPrice = normalizePrice(item.getPrice());
-        BigDecimal discountRate = normalizeDiscount(item.getDiscountRate());
-        BigDecimal amount = calculateOrderAmount(unitPrice, discountRate, quantity);
-        try (Connection connection = connectionProvider.getConnection()) {
-            try {
-                connection.setAutoCommit(false);
-                Order order = new Order();
-                order.setUserId(userId);
-                order.setItemId(itemId);
-                order.setAmount(amount);
-                order.setQuantity(quantity);
-                order.setUnitPrice(unitPrice);
-                order.setDiscountRate(discountRate);
-                order.setPaymentMethod(safePaymentMethod);
-                order.setStatus(1);
-                long orderId = orderDAO.create(connection, order);
-                connection.commit();
-                logDAO.recordAction(userId, itemId, "ORDER", 0, "SWING", "127.0.0.1");
-                return orderId;
-            } catch (SQLException e) {
-                rollbackQuietly(connection);
-                throw new DBException("Failed to create order.", e);
-            } catch (RuntimeException e) {
-                rollbackQuietly(connection);
-                throw e;
-            } finally {
-                connection.setAutoCommit(true);
-            }
-        } catch (SQLException e) {
-            throw new DBException("Failed to create order transaction.", e);
-        }
+        throw new BusinessException("旧订单创建接口已停用，请选择票种和游玩日期创建待支付订单");
     }
 
     public boolean canComment(long userId, long itemId) {
@@ -395,14 +352,7 @@ public class BusinessService {
     }
 
     public boolean updateOrderStatus(long actorUserId, long orderId, int status) {
-        authorizationService.requireAdmin(actorUserId);
-        if (orderId <= 0) {
-            throw new BusinessException("订单ID必须大于 0");
-        }
-        if (status < 0 || status > 3) {
-            throw new BusinessException("订单状态不正确");
-        }
-        return orderDAO.updateStatus(orderId, status);
+        throw new BusinessException("任意订单状态修改已停用，请使用支付、取消、退款或核销业务操作");
     }
 
     private void validateOrderReadAccess(long actorUserId, Long requestedUserId) {

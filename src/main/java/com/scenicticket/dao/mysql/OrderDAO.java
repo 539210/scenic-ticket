@@ -27,8 +27,11 @@ public class OrderDAO extends BaseDAO {
 
     public long create(Connection connection, Order order) throws SQLException {
         String sql = """
-                INSERT INTO orders (user_id, item_id, amount, quantity, unit_price, discount_rate, payment_method, status)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO orders (
+                    user_id, item_id, amount, quantity, unit_price, discount_rate, payment_method,
+                    ticket_type_id, ticket_type_name_snapshot, original_unit_price, discounted_unit_price,
+                    visit_date, expires_at, status_version, status
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """;
         try (PreparedStatement statement = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             statement.setLong(1, order.getUserId());
@@ -38,7 +41,14 @@ public class OrderDAO extends BaseDAO {
             statement.setBigDecimal(5, order.getUnitPrice());
             statement.setBigDecimal(6, order.getDiscountRate());
             statement.setString(7, order.getPaymentMethod());
-            statement.setInt(8, order.getStatus() == null ? 1 : order.getStatus());
+            statement.setLong(8, order.getTicketTypeId());
+            statement.setString(9, order.getTicketTypeNameSnapshot());
+            statement.setBigDecimal(10, order.getOriginalUnitPrice());
+            statement.setBigDecimal(11, order.getDiscountedUnitPrice());
+            statement.setDate(12, java.sql.Date.valueOf(order.getVisitDate()));
+            statement.setTimestamp(13, Timestamp.valueOf(order.getExpiresAt()));
+            statement.setInt(14, order.getStatusVersion() == null ? 0 : order.getStatusVersion());
+            statement.setInt(15, order.getStatus() == null ? 0 : order.getStatus());
             statement.executeUpdate();
             try (ResultSet generatedKeys = statement.getGeneratedKeys()) {
                 if (generatedKeys.next()) {
@@ -51,7 +61,10 @@ public class OrderDAO extends BaseDAO {
 
     public Optional<Order> findById(long orderId) {
         String sql = """
-                SELECT order_id, user_id, item_id, amount, quantity, unit_price, discount_rate, payment_method, status, created_at
+                SELECT order_id, user_id, item_id, amount, quantity, unit_price, discount_rate, payment_method,
+                       ticket_type_id, ticket_type_name_snapshot, original_unit_price, discounted_unit_price,
+                       visit_date, expires_at, paid_at, cancelled_at, completed_at, refunded_at,
+                       status_version, status, created_at
                 FROM orders
                 WHERE order_id = ?
                 """;
@@ -69,9 +82,28 @@ public class OrderDAO extends BaseDAO {
         }
     }
 
+    public Optional<Order> findByIdForUpdate(Connection connection, long orderId) throws SQLException {
+        String sql = """
+                SELECT order_id, user_id, item_id, amount, quantity, unit_price, discount_rate, payment_method,
+                       ticket_type_id, ticket_type_name_snapshot, original_unit_price, discounted_unit_price,
+                       visit_date, expires_at, paid_at, cancelled_at, completed_at, refunded_at,
+                       status_version, status, created_at
+                FROM orders WHERE order_id = ? FOR UPDATE
+                """;
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setLong(1, orderId);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                return resultSet.next() ? Optional.of(mapOrder(resultSet)) : Optional.empty();
+            }
+        }
+    }
+
     public List<Order> findByUserId(long userId, int limit, int offset) {
         String sql = """
-                SELECT order_id, user_id, item_id, amount, quantity, unit_price, discount_rate, payment_method, status, created_at
+                SELECT order_id, user_id, item_id, amount, quantity, unit_price, discount_rate, payment_method,
+                       ticket_type_id, ticket_type_name_snapshot, original_unit_price, discounted_unit_price,
+                       visit_date, expires_at, paid_at, cancelled_at, completed_at, refunded_at,
+                       status_version, status, created_at
                 FROM orders
                 WHERE user_id = ?
                 ORDER BY created_at DESC
@@ -96,7 +128,10 @@ public class OrderDAO extends BaseDAO {
 
     public List<Order> search(Long userId, Long orderId, Integer status, int limit, int offset) {
         StringBuilder sql = new StringBuilder("""
-                SELECT order_id, user_id, item_id, amount, quantity, unit_price, discount_rate, payment_method, status, created_at
+                SELECT order_id, user_id, item_id, amount, quantity, unit_price, discount_rate, payment_method,
+                       ticket_type_id, ticket_type_name_snapshot, original_unit_price, discounted_unit_price,
+                       visit_date, expires_at, paid_at, cancelled_at, completed_at, refunded_at,
+                       status_version, status, created_at
                 FROM orders
                 WHERE 1 = 1
                 """);
@@ -143,7 +178,10 @@ public class OrderDAO extends BaseDAO {
     public List<OrderViewDTO> searchViews(Long userId, Long orderId, Integer status, int limit, int offset) {
         StringBuilder sql = new StringBuilder("""
                 SELECT o.order_id, o.user_id, o.item_id, o.amount, o.quantity, o.unit_price,
-                       o.discount_rate, o.payment_method, o.status, o.created_at,
+                       o.discount_rate, o.payment_method, o.ticket_type_id, o.ticket_type_name_snapshot,
+                       o.original_unit_price, o.discounted_unit_price, o.visit_date, o.expires_at,
+                       o.paid_at, o.cancelled_at, o.completed_at, o.refunded_at,
+                       o.status_version, o.status, o.created_at,
                        COALESCE(i.title, '景点已删除') AS item_title
                 FROM orders o
                 LEFT JOIN items i ON i.item_id = o.item_id
@@ -201,6 +239,66 @@ public class OrderDAO extends BaseDAO {
             return statement.executeUpdate() == 1;
         } catch (SQLException e) {
             throw new DBException("Failed to update order status.", e);
+        }
+    }
+
+    public boolean markPaid(Connection connection, long orderId) throws SQLException {
+        return transition(connection, orderId, 0, 1, "paid_at");
+    }
+
+    public boolean markCancelled(Connection connection, long orderId, int expectedStatus, boolean refunded)
+            throws SQLException {
+        String timestamps = refunded
+                ? "refunded_at = CURRENT_TIMESTAMP, cancelled_at = CURRENT_TIMESTAMP"
+                : "cancelled_at = CURRENT_TIMESTAMP";
+        String sql = "UPDATE orders SET status = 2, " + timestamps
+                + ", status_version = status_version + 1 WHERE order_id = ? AND status = ?";
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setLong(1, orderId);
+            statement.setInt(2, expectedStatus);
+            return statement.executeUpdate() == 1;
+        }
+    }
+
+    public List<Long> findExpiredPendingIds(int limit) {
+        String sql = """
+                SELECT order_id FROM orders
+                WHERE status = 0 AND expires_at IS NOT NULL AND expires_at <= CURRENT_TIMESTAMP
+                ORDER BY expires_at LIMIT ?
+                """;
+        try (Connection connection = getConnection(); PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setInt(1, limit);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                List<Long> ids = new ArrayList<>();
+                while (resultSet.next()) {
+                    ids.add(resultSet.getLong(1));
+                }
+                return ids;
+            }
+        } catch (SQLException exception) {
+            throw new DBException("查询过期待支付订单失败", exception);
+        }
+    }
+
+    public boolean hasAdmissions(Connection connection, long orderId) throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement(
+                "SELECT 1 FROM admissions WHERE order_id = ? LIMIT 1")) {
+            statement.setLong(1, orderId);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                return resultSet.next();
+            }
+        }
+    }
+
+    private boolean transition(Connection connection, long orderId, int expectedStatus, int targetStatus,
+                               String timeColumn) throws SQLException {
+        String sql = "UPDATE orders SET status = ?, " + timeColumn
+                + " = CURRENT_TIMESTAMP, status_version = status_version + 1 WHERE order_id = ? AND status = ?";
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setInt(1, targetStatus);
+            statement.setLong(2, orderId);
+            statement.setInt(3, expectedStatus);
+            return statement.executeUpdate() == 1;
         }
     }
 
@@ -266,6 +364,19 @@ public class OrderDAO extends BaseDAO {
         order.setUnitPrice(resultSet.getBigDecimal("unit_price"));
         order.setDiscountRate(resultSet.getBigDecimal("discount_rate"));
         order.setPaymentMethod(resultSet.getString("payment_method"));
+        long ticketTypeId = resultSet.getLong("ticket_type_id");
+        order.setTicketTypeId(resultSet.wasNull() ? null : ticketTypeId);
+        order.setTicketTypeNameSnapshot(resultSet.getString("ticket_type_name_snapshot"));
+        order.setOriginalUnitPrice(resultSet.getBigDecimal("original_unit_price"));
+        order.setDiscountedUnitPrice(resultSet.getBigDecimal("discounted_unit_price"));
+        java.sql.Date visitDate = resultSet.getDate("visit_date");
+        order.setVisitDate(visitDate == null ? null : visitDate.toLocalDate());
+        order.setExpiresAt(toLocalDateTime(resultSet.getTimestamp("expires_at")));
+        order.setPaidAt(toLocalDateTime(resultSet.getTimestamp("paid_at")));
+        order.setCancelledAt(toLocalDateTime(resultSet.getTimestamp("cancelled_at")));
+        order.setCompletedAt(toLocalDateTime(resultSet.getTimestamp("completed_at")));
+        order.setRefundedAt(toLocalDateTime(resultSet.getTimestamp("refunded_at")));
+        order.setStatusVersion(resultSet.getInt("status_version"));
         order.setStatus(resultSet.getInt("status"));
         order.setCreatedAt(toLocalDateTime(resultSet.getTimestamp("created_at")));
         return order;

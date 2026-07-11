@@ -9,17 +9,17 @@
 | ID | 状态 | 问题 | 复现证据/根因 | 验收 |
 | --- | --- | --- | --- | --- |
 | BUG-P0-001 | VERIFIED | 普通调用者可绕过管理员权限执行管理操作 | 管理写接口已强制接收 actor 并经 `AuthorizationService` 回查启用状态和 ADMIN 角色；统计、审计、私有数据查询同步收紧 | 直接服务调用越权测试及真实测试库管理员操作通过；M2 集成套件 66 tests、0 failures/errors |
-| BUG-P0-002 | OPEN | 订单状态可被任意改写，允许非法转换 | `BusinessService.updateOrderStatus` 只校验 0..3 后直接 UPDATE；可已取消→已支付、已完成→已取消 | 集中状态机，非法转换测试全部拒绝 |
+| BUG-P0-002 | VERIFIED | 订单状态可被任意改写，允许非法转换 | 任意状态接口已 fail-closed；状态只可由支付、待支付取消、过期、退款和后续核销专用事务转换 | 已取消再支付、已支付直接取消、过期支付、完成/核销/过期退款均被拒绝或进入规定兼容路径 |
 
 ## P1
 
 | ID | 状态 | 问题 | 复现证据/根因 | 验收 |
 | --- | --- | --- | --- | --- |
-| BUG-P1-001 | OPEN | 创建订单直接变为已支付 | `BusinessService.createOrder` 明确 `order.setStatus(1)`，DAO 默认也为 1；与确定流程冲突 | 创建后待支付，主动确认支付后才已支付 |
-| BUG-P1-002 | IN PROGRESS | 无票种、游玩日期和每日库存，无法防超卖 | 票种/每日库存 DAO、服务和 Swing 管理已完成；真实 20 线程争抢 10 张仅成功 10 次且库存不为负 | M4 独立库存并发已通过；需 M5 将待支付订单创建接入同一预留事务后再关闭 |
-| BUG-P1-003 | OPEN | 无退款与库存恢复 | 无 refunds 表/服务/UI | 合法退款同事务恢复库存，非法退款被拒绝 |
+| BUG-P1-001 | VERIFIED | 创建订单直接变为已支付 | 旧创建接口已停用；新流程创建状态 0、预留库存并设置 15 分钟过期，用户主动支付后才状态 1 | 真实待支付→支付流程和 Swing 专用按钮通过 |
+| BUG-P1-002 | VERIFIED | 无票种、游玩日期和每日库存，无法防超卖 | M4 行锁库存已接入 M5 待支付订单同一事务；票种/日期/数量与价格均由服务回查 | 20 线程防超卖及真实订单逐桶库存断言通过 |
+| BUG-P1-003 | VERIFIED | 无退款与库存恢复 | `refunds` DAO、退款资格、订单锁和已售→可售库存恢复在同一事务 | 真实退款记录/金额/状态/库存通过；过期、完成、核销和重复退款单测拒绝 |
 | BUG-P1-004 | OPEN | 无门票核销 | 无 admissions 表/服务/UI | 合法核销、数量与完成状态测试通过 |
-| BUG-P1-005 | OPEN | MySQL 提交成功后 Mongo 日志失败会向用户显示整体失败 | `createOrder` 在 commit 后同步 `logDAO.recordAction`，异常直接传播 | 已提交业务明确成功并带警告/待补偿记录，不重复下单 |
+| BUG-P1-005 | VERIFIED | MySQL 提交成功后 Mongo 日志失败会向用户显示整体失败 | 生命周期先提交 MySQL，再安全写 Mongo；失败返回带审计警告的成功结果并记录 WARN | 支付提交后 Mongo 异常测试确认 MySQL 不回滚且 UI 可显示警告 |
 | BUG-P1-006 | VERIFIED | 真实集成测试没有隔离测试数据库 | 已增加配置覆盖和 `DatabaseTargetGuard`；完整集成套件显式使用两个 `scenic_ticket_test` | 51 tests，0 failures/errors，MySQL/MongoDB 真实测试通过 |
 | BUG-P1-007 | VERIFIED | Mongo 初始化脚本无保护地 drop 四个集合 | 全新安装脚本检测已有集合并拒绝；升级使用非破坏 Day09 脚本 | 静态审计与 Java Driver 测试库初始化通过；mongosh 执行仍待有客户端环境复核 |
 

@@ -109,6 +109,78 @@ public class TicketInventoryDAO extends BaseDAO {
         return current;
     }
 
+    public TicketInventory confirmSale(Connection connection, long ticketTypeId, LocalDate visitDate, int quantity)
+            throws SQLException {
+        TicketInventory current = requireLocked(connection, ticketTypeId, visitDate);
+        if (current.getReservedStock() < quantity) {
+            throw new BusinessException("预留库存不足，无法确认支付");
+        }
+        updateBuckets(connection, current.getInventoryId(), 0, -quantity, quantity);
+        current.setReservedStock(current.getReservedStock() - quantity);
+        current.setSoldStock(current.getSoldStock() + quantity);
+        current.setVersion(current.getVersion() + 1);
+        return current;
+    }
+
+    public TicketInventory releaseReservation(Connection connection, long ticketTypeId,
+                                              LocalDate visitDate, int quantity) throws SQLException {
+        TicketInventory current = requireLocked(connection, ticketTypeId, visitDate);
+        if (current.getReservedStock() < quantity) {
+            throw new BusinessException("预留库存不足，无法取消订单");
+        }
+        updateBuckets(connection, current.getInventoryId(), quantity, -quantity, 0);
+        current.setAvailableStock(current.getAvailableStock() + quantity);
+        current.setReservedStock(current.getReservedStock() - quantity);
+        current.setVersion(current.getVersion() + 1);
+        return current;
+    }
+
+    public boolean releaseReservationIfPresent(Connection connection, long ticketTypeId,
+                                               LocalDate visitDate, int quantity) throws SQLException {
+        TicketInventory current = requireLocked(connection, ticketTypeId, visitDate);
+        if (current.getReservedStock() < quantity) {
+            return false;
+        }
+        updateBuckets(connection, current.getInventoryId(), quantity, -quantity, 0);
+        return true;
+    }
+
+    public TicketInventory restoreSold(Connection connection, long ticketTypeId,
+                                       LocalDate visitDate, int quantity) throws SQLException {
+        TicketInventory current = requireLocked(connection, ticketTypeId, visitDate);
+        if (current.getSoldStock() < quantity) {
+            throw new BusinessException("已售库存不足，无法退款恢复");
+        }
+        updateBuckets(connection, current.getInventoryId(), quantity, 0, -quantity);
+        current.setAvailableStock(current.getAvailableStock() + quantity);
+        current.setSoldStock(current.getSoldStock() - quantity);
+        current.setVersion(current.getVersion() + 1);
+        return current;
+    }
+
+    private TicketInventory requireLocked(Connection connection, long ticketTypeId, LocalDate visitDate)
+            throws SQLException {
+        return findForUpdate(connection, ticketTypeId, visitDate)
+                .orElseThrow(() -> new BusinessException("订单对应的库存记录不存在"));
+    }
+
+    private void updateBuckets(Connection connection, long inventoryId, int availableDelta,
+                               int reservedDelta, int soldDelta) throws SQLException {
+        String sql = """
+                UPDATE ticket_inventory
+                SET available_stock = available_stock + ?, reserved_stock = reserved_stock + ?,
+                    sold_stock = sold_stock + ?, version = version + 1
+                WHERE inventory_id = ?
+                """;
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setInt(1, availableDelta);
+            statement.setInt(2, reservedDelta);
+            statement.setInt(3, soldDelta);
+            statement.setLong(4, inventoryId);
+            statement.executeUpdate();
+        }
+    }
+
     private TicketInventory map(ResultSet resultSet) throws SQLException {
         TicketInventory inventory = new TicketInventory();
         inventory.setInventoryId(resultSet.getLong("inventory_id"));

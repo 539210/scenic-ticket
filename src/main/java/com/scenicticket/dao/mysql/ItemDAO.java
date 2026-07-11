@@ -41,13 +41,20 @@ public class ItemDAO extends BaseDAO {
     }
 
     public Optional<Item> findById(long itemId) {
+        try (Connection connection = getConnection()) {
+            return findById(connection, itemId);
+        } catch (SQLException e) {
+            throw new DBException("Failed to find item by id.", e);
+        }
+    }
+
+    public Optional<Item> findById(Connection connection, long itemId) throws SQLException {
         String sql = """
                 SELECT item_id, title, category_id, price, discount_rate, status, created_at, updated_at
                 FROM items
                 WHERE item_id = ?
                 """;
-        try (Connection connection = getConnection();
-             PreparedStatement statement = connection.prepareStatement(sql)) {
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setLong(1, itemId);
             try (ResultSet resultSet = statement.executeQuery()) {
                 if (resultSet.next()) {
@@ -55,8 +62,6 @@ public class ItemDAO extends BaseDAO {
                 }
                 return Optional.empty();
             }
-        } catch (SQLException e) {
-            throw new DBException("Failed to find item by id.", e);
         }
     }
 

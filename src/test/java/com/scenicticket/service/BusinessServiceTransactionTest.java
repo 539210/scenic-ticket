@@ -32,71 +32,25 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class BusinessServiceTransactionTest {
     @Test
-    void createOrderCommitsAndWritesActionLogOnSuccess() {
-        TrackingConnection trackingConnection = TrackingConnection.create();
-        SucceedingOrderDAO orderDAO = new SucceedingOrderDAO(77L);
-        CapturingLogDAO logDAO = new CapturingLogDAO();
-        BusinessService service = newService(orderDAO, logDAO, trackingConnection);
+    void legacyCreateOrderApiIsDisabled() {
+        BusinessService service = newService(new SucceedingOrderDAO(77L), new CapturingLogDAO(),
+                TrackingConnection.create());
 
-        long orderId = service.createOrder(1L, 2L, 2, "微信");
-
-        assertEquals(77L, orderId);
-        assertSame(trackingConnection.connection, orderDAO.connection);
-        assertEquals(List.of(false, true), trackingConnection.autoCommitValues);
-        assertTrue(trackingConnection.committed);
-        assertFalse(trackingConnection.rolledBack);
-        assertTrue(trackingConnection.closed);
-        assertEquals("ORDER", logDAO.actionType);
-    }
-
-    @Test
-    void createOrderRollsBackWhenOrderInsertFails() {
-        TrackingConnection trackingConnection = TrackingConnection.create();
-        SQLException cause = new SQLException("insert failed");
-        FailingOrderDAO orderDAO = new FailingOrderDAO(cause);
-        CapturingLogDAO logDAO = new CapturingLogDAO();
-        BusinessService service = newService(orderDAO, logDAO, trackingConnection);
-
-        DBException exception = assertThrows(DBException.class,
+        BusinessException exception = assertThrows(BusinessException.class,
                 () -> service.createOrder(1L, 2L, 2, "微信"));
 
-        assertSame(cause, exception.getCause());
-        assertSame(trackingConnection.connection, orderDAO.connection);
-        assertEquals(List.of(false, true), trackingConnection.autoCommitValues);
-        assertFalse(trackingConnection.committed);
-        assertTrue(trackingConnection.rolledBack);
-        assertTrue(trackingConnection.closed);
-        assertEquals(0, logDAO.writeCount);
+        assertTrue(exception.getMessage().contains("旧订单创建接口已停用"));
     }
 
     @Test
-    void createOrderUsesLatestPriceAndDiscountFromScenicItem() {
-        TrackingConnection trackingConnection = TrackingConnection.create();
-        CapturingDiscountOrderDAO orderDAO = new CapturingDiscountOrderDAO();
-        BusinessService service = new BusinessService(new CategoryDAO(), new DiscountedItemDAO(), orderDAO,
-                new DetailDAO(), new CapturingLogDAO(), new CommentDAO(), () -> trackingConnection.connection,
-                allowAllAuthorization());
+    void arbitraryOrderStatusApiIsDisabled() {
+        BusinessService service = newService(new SucceedingOrderDAO(77L), new CapturingLogDAO(),
+                TrackingConnection.create());
 
-        service.createOrder(1L, 2L, 1, "微信");
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> service.updateOrderStatus(1L, 2L, 1));
 
-        assertEquals(new BigDecimal("8110.00"), orderDAO.order.getUnitPrice());
-        assertEquals(new BigDecimal("1.00"), orderDAO.order.getDiscountRate());
-        assertEquals(new BigDecimal("8028.90"), orderDAO.order.getAmount());
-    }
-
-    @Test
-    void createOrderRejectsInvalidInputBeforeOpeningConnection() {
-        TrackingConnection trackingConnection = TrackingConnection.create();
-        BusinessService service = newService(new SucceedingOrderDAO(1L), new CapturingLogDAO(), trackingConnection);
-
-        assertThrows(BusinessException.class,
-                () -> service.createOrder(0L, 2L, 1, "微信"));
-        assertThrows(BusinessException.class,
-                () -> service.createOrder(1L, 2L, 0, "微信"));
-        assertThrows(BusinessException.class,
-                () -> service.createOrder(1L, 2L, 1, "现金"));
-        assertFalse(trackingConnection.closed);
-        assertEquals(List.of(), trackingConnection.autoCommitValues);
+        assertTrue(exception.getMessage().contains("任意订单状态修改已停用"));
     }
 
     @Test

@@ -8,6 +8,7 @@ import com.scenicticket.dto.RecommendationDTO;
 import com.scenicticket.dto.StatisticsReportDTO;
 import com.scenicticket.dto.AdminUserDetailDTO;
 import com.scenicticket.dto.UserSearchCriteria;
+import com.scenicticket.dto.TicketAvailabilityDTO;
 import com.scenicticket.model.Category;
 import com.scenicticket.model.Item;
 import com.scenicticket.model.Order;
@@ -24,6 +25,7 @@ import com.scenicticket.service.SystemLogService;
 import com.scenicticket.service.UserService;
 import com.scenicticket.service.AdminUserService;
 import com.scenicticket.service.TicketInventoryService;
+import com.scenicticket.service.OrderLifecycleService;
 import org.bson.Document;
 
 import javax.swing.BorderFactory;
@@ -89,6 +91,7 @@ public class AppFrame extends JFrame {
     private final BehaviorLogService behaviorLogService = new BehaviorLogService();
     private final AdminUserService adminUserService = new AdminUserService();
     private final TicketInventoryService ticketInventoryService = new TicketInventoryService();
+    private final OrderLifecycleService orderLifecycleService = new OrderLifecycleService();
 
     private final JLabel userLabel = new JLabel("未登录");
     private final JLabel statusLabel = new JLabel("就绪");
@@ -639,16 +642,15 @@ public class AppFrame extends JFrame {
         JTextField userIdField = new JTextField(10);
         JTextField queryOrderIdField = new JTextField(10);
         JComboBox<String> queryStatusBox = new JComboBox<>(new String[]{"全部状态", "0-待支付", "1-已支付", "2-已取消", "3-已完成"});
-        JComboBox<String> updateStatusBox = new JComboBox<>(new String[]{"0-待支付", "1-已支付", "2-已取消", "3-已完成"});
         DefaultTableModel model = isCurrentAdmin()
-                ? tableModel("订单号", "用户ID", "景点名称", "票数", "门票原价", "优惠", "实付金额", "付款方式", "状态", "创建时间")
-                : tableModel("订单号", "景点名称", "票数", "门票原价", "优惠", "实付金额", "付款方式", "状态", "创建时间");
+                ? tableModel("订单号", "用户ID", "景点名称", "票种", "游玩日期", "票数", "原价", "优惠", "折后单价", "总额", "付款方式", "状态", "过期时间", "创建时间")
+                : tableModel("订单号", "景点名称", "票种", "游玩日期", "票数", "原价", "优惠", "折后单价", "总额", "付款方式", "状态", "过期时间", "创建时间");
         JTable table = createTable(model);
         table.setAutoResizeMode(JTable.AUTO_RESIZE_ALL_COLUMNS);
         if (isCurrentAdmin()) {
-            setColumnWidths(table, 80, 80, 190, 60, 90, 80, 100, 90, 90, 170);
+            setColumnWidths(table, 80, 80, 170, 100, 105, 55, 85, 75, 90, 95, 85, 85, 155, 155);
         } else {
-            setColumnWidths(table, 80, 210, 60, 90, 80, 100, 90, 90, 170);
+            setColumnWidths(table, 80, 180, 100, 105, 55, 85, 75, 90, 95, 85, 85, 155, 155);
         }
         Long[] selectedOrderId = new Long[1];
 
@@ -656,8 +658,12 @@ public class AppFrame extends JFrame {
         JButton listButton = primaryButton("查询订单");
         JButton refreshButton = secondaryButton("刷新");
         JButton resetButton = secondaryButton("重置");
-        JButton updateButton = primaryButton("更新状态");
-        updateButton.setEnabled(false);
+        JButton payButton = primaryButton("确认支付");
+        JButton cancelButton = secondaryButton("取消待支付订单");
+        JButton refundButton = secondaryButton("申请模拟退款");
+        payButton.setEnabled(false);
+        cancelButton.setEnabled(false);
+        refundButton.setEnabled(false);
         if (isCurrentAdmin()) {
             queryToolbar.add(new JLabel("用户ID"));
             queryToolbar.add(userIdField);
@@ -670,28 +676,30 @@ public class AppFrame extends JFrame {
         queryToolbar.add(refreshButton);
         queryToolbar.add(resetButton);
 
-        JPanel controls = new JPanel(new GridLayout(isCurrentAdmin() ? 2 : 1, 1, 0, 8));
+        JPanel controls = new JPanel(new GridLayout(2, 1, 0, 8));
         controls.setOpaque(false);
         controls.add(wrapWithTitle("订单查询", queryToolbar));
-        if (isCurrentAdmin()) {
-            JPanel updateToolbar = toolbar();
-            JLabel selectedOrderLabel = new JLabel("请先从表格选择订单");
-            updateToolbar.add(selectedOrderLabel);
-            updateToolbar.add(new JLabel("状态改为"));
-            updateToolbar.add(updateStatusBox);
-            updateToolbar.add(updateButton);
-            controls.add(wrapWithTitle("订单状态更新", updateToolbar));
-            table.getSelectionModel().addListSelectionListener(event -> {
-                int row = table.getSelectedRow();
-                if (!event.getValueIsAdjusting() && row >= 0) {
-                    selectedOrderId[0] = Long.valueOf(String.valueOf(table.getValueAt(row, 0)));
-                    selectedOrderLabel.setText("已选择订单：" + selectedOrderId[0]);
-                    updateButton.setEnabled(true);
-                }
-            });
-        }
+        JPanel actionToolbar = toolbar();
+        JLabel selectedOrderLabel = new JLabel("请先从表格选择订单");
+        actionToolbar.add(selectedOrderLabel);
+        actionToolbar.add(payButton);
+        actionToolbar.add(cancelButton);
+        actionToolbar.add(refundButton);
+        controls.add(wrapWithTitle("订单生命周期操作", actionToolbar));
+        table.getSelectionModel().addListSelectionListener(event -> {
+            int row = table.getSelectedRow();
+            if (!event.getValueIsAdjusting() && row >= 0) {
+                int modelRow = table.convertRowIndexToModel(row);
+                selectedOrderId[0] = Long.valueOf(String.valueOf(model.getValueAt(modelRow, 0)));
+                selectedOrderLabel.setText("已选择订单：" + selectedOrderId[0]);
+                payButton.setEnabled(true);
+                cancelButton.setEnabled(true);
+                refundButton.setEnabled(true);
+            }
+        });
 
         Runnable refreshOrders = () -> runTask("订单查询", () -> {
+            orderLifecycleService.expireDueOrders(100);
             Long queryUserId = isCurrentAdmin()
                     ? parseOptionalLong(userIdField.getText())
                     : Long.valueOf(requireCurrentUserId());
@@ -706,19 +714,26 @@ public class AppFrame extends JFrame {
         }, orderViews -> {
             model.setRowCount(0);
             selectedOrderId[0] = null;
-            updateButton.setEnabled(false);
+            payButton.setEnabled(false);
+            cancelButton.setEnabled(false);
+            refundButton.setEnabled(false);
+            selectedOrderLabel.setText("请先从表格选择订单");
             for (OrderViewDTO view : orderViews) {
                 Order order = view.getOrder();
                 if (isCurrentAdmin()) {
-                    model.addRow(new Object[]{order.getOrderId(), order.getUserId(), view.getItemTitle(), order.getQuantity(),
-                            UiFormatters.money(order.getUnitPrice()), discountText(order.getDiscountRate()),
-                            UiFormatters.money(order.getAmount()), order.getPaymentMethod(),
-                            formatOrderStatus(order.getStatus()), formatDate(order.getCreatedAt())});
+                    model.addRow(new Object[]{order.getOrderId(), order.getUserId(), view.getItemTitle(),
+                            valueText(order.getTicketTypeNameSnapshot()), valueText(order.getVisitDate()), order.getQuantity(),
+                            UiFormatters.money(order.getOriginalUnitPrice()), discountText(order.getDiscountRate()),
+                            UiFormatters.money(order.getDiscountedUnitPrice()), UiFormatters.money(order.getAmount()),
+                            order.getPaymentMethod(), formatOrderStatus(order.getStatus()),
+                            formatDate(order.getExpiresAt()), formatDate(order.getCreatedAt())});
                 } else {
-                    model.addRow(new Object[]{order.getOrderId(), view.getItemTitle(), order.getQuantity(),
-                            UiFormatters.money(order.getUnitPrice()), discountText(order.getDiscountRate()),
-                            UiFormatters.money(order.getAmount()), order.getPaymentMethod(),
-                            formatOrderStatus(order.getStatus()), formatDate(order.getCreatedAt())});
+                    model.addRow(new Object[]{order.getOrderId(), view.getItemTitle(),
+                            valueText(order.getTicketTypeNameSnapshot()), valueText(order.getVisitDate()), order.getQuantity(),
+                            UiFormatters.money(order.getOriginalUnitPrice()), discountText(order.getDiscountRate()),
+                            UiFormatters.money(order.getDiscountedUnitPrice()), UiFormatters.money(order.getAmount()),
+                            order.getPaymentMethod(), formatOrderStatus(order.getStatus()),
+                            formatDate(order.getExpiresAt()), formatDate(order.getCreatedAt())});
                 }
             }
             setStatus("查询到 " + orderViews.size() + " 条订单");
@@ -733,14 +748,27 @@ public class AppFrame extends JFrame {
         });
         queryOrderIdField.addActionListener(event -> refreshOrders.run());
 
-        updateButton.addActionListener(event -> runTask("更新订单状态", () -> businessService.updateOrderStatus(
-                requireCurrentUserId(),
-                requireSelectedOrderId(selectedOrderId),
-                updateStatusBox.getSelectedIndex()
-        ), updated -> {
-            setStatus(updated ? "订单状态已更新" : "订单状态未变化");
+        payButton.addActionListener(event -> runTask("确认支付", () -> orderLifecycleService.pay(
+                requireCurrentUserId(), requireSelectedOrderId(selectedOrderId), "127.0.0.1"), action -> {
+            setStatus(action.message());
             refreshOrders.run();
         }));
+        cancelButton.addActionListener(event -> runTask("取消待支付订单", () -> orderLifecycleService.cancelPending(
+                requireCurrentUserId(), requireSelectedOrderId(selectedOrderId), "127.0.0.1"), action -> {
+            setStatus(action.message());
+            refreshOrders.run();
+        }));
+        refundButton.addActionListener(event -> {
+            String reason = JOptionPane.showInputDialog(this, "请输入退款原因", "申请模拟退款", JOptionPane.PLAIN_MESSAGE);
+            if (reason == null) {
+                return;
+            }
+            runTask("模拟退款", () -> orderLifecycleService.refund(requireCurrentUserId(),
+                    requireSelectedOrderId(selectedOrderId), reason, "127.0.0.1"), action -> {
+                setStatus(action.message());
+                refreshOrders.run();
+            });
+        });
 
         panel.add(controls, BorderLayout.NORTH);
         panel.add(new JScrollPane(table), BorderLayout.CENTER);
@@ -1663,35 +1691,58 @@ public class AppFrame extends JFrame {
             showError(new IllegalArgumentException("该景点当前未上架，暂不能购买"));
             return;
         }
+        runTask("加载可售票种", () -> ticketInventoryService.listAvailable(requireCurrentUserId(), item.getItemId(),
+                LocalDate.now(), LocalDate.now().plusDays(30)), options -> {
+            if (options.isEmpty()) {
+                showError(new IllegalArgumentException("未来 30 天暂无可售票种或库存"));
+                return;
+            }
+            showPendingOrderDialog(item, detailArea, options);
+        });
+    }
+
+    private void showPendingOrderDialog(Item item, JTextArea detailArea, List<TicketAvailabilityDTO> options) {
+        JComboBox<String> optionBox = new JComboBox<>();
+        for (TicketAvailabilityDTO option : options) {
+            optionBox.addItem(option.ticketType().getName() + " | " + option.inventory().getVisitDate()
+                    + " | 折后 " + UiFormatters.money(option.discountedPrice())
+                    + " | 可售 " + option.inventory().getAvailableStock());
+        }
         JSpinner quantitySpinner = new JSpinner(new SpinnerNumberModel(1, 1, 99, 1));
         JComboBox<String> paymentBox = new JComboBox<>(new String[]{"微信", "支付宝", "银行卡"});
         JLabel amountLabel = new JLabel();
         amountLabel.setFont(SECTION_FONT);
-        Runnable updateAmount = () -> amountLabel.setText(UiFormatters.money(UiFormatters.orderAmount(
-                item.getPrice(), item.getDiscountRate(), (Integer) quantitySpinner.getValue())));
+        Runnable updateAmount = () -> {
+            TicketAvailabilityDTO option = options.get(optionBox.getSelectedIndex());
+            amountLabel.setText(UiFormatters.money(option.discountedPrice().multiply(
+                    BigDecimal.valueOf((Integer) quantitySpinner.getValue()))));
+        };
         quantitySpinner.addChangeListener(event -> updateAmount.run());
+        optionBox.addActionListener(event -> updateAmount.run());
         updateAmount.run();
-        JPanel form = formPanel("确认购买");
+        JPanel form = formPanel("创建待支付订单");
         addField(form, 0, "景点", new JLabel(item.getTitle()));
-        addField(form, 1, "门票原价", new JLabel(UiFormatters.money(item.getPrice())));
-        addField(form, 2, "优惠", new JLabel(discountText(item.getDiscountRate())));
-        addField(form, 3, "折后单价", new JLabel(UiFormatters.money(
-                UiFormatters.discountedUnitPrice(item.getPrice(), item.getDiscountRate()))));
-        addField(form, 4, "购买票数", quantitySpinner);
-        addField(form, 5, "付款方式", paymentBox);
-        addField(form, 6, "实付总额", amountLabel);
-        int result = JOptionPane.showConfirmDialog(this, form, "购买门票",
+        addField(form, 1, "票种与日期", optionBox);
+        addField(form, 2, "购买票数", quantitySpinner);
+        addField(form, 3, "付款方式", paymentBox);
+        addField(form, 4, "待支付金额", amountLabel);
+        addField(form, 5, "支付提示", new JLabel("创建后请到“我的订单”主动确认支付，15 分钟过期"));
+        int result = JOptionPane.showConfirmDialog(this, form, "创建待支付订单",
                 JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
         if (result != JOptionPane.OK_OPTION) {
             return;
         }
-        runTask("购买门票", () -> businessService.createOrder(requireCurrentUserId(), item.getItemId(),
-                (Integer) quantitySpinner.getValue(), (String) paymentBox.getSelectedItem()), orderId ->
-                detailArea.setText("付款成功" + System.lineSeparator()
+        TicketAvailabilityDTO selected = options.get(optionBox.getSelectedIndex());
+        runTask("创建待支付订单", () -> orderLifecycleService.createPendingOrder(requireCurrentUserId(),
+                selected.ticketType().getTicketTypeId(), selected.inventory().getVisitDate(),
+                (Integer) quantitySpinner.getValue(), (String) paymentBox.getSelectedItem(), "127.0.0.1"), action ->
+                detailArea.setText(action.message() + System.lineSeparator()
                         + "景点：" + item.getTitle() + System.lineSeparator()
-                        + "订单号：" + orderId + System.lineSeparator()
-                        + "实付金额：" + amountLabel.getText() + System.lineSeparator()
-                        + "现在可以点击“发表评论”分享体验。"));
+                        + "票种：" + selected.ticketType().getName() + System.lineSeparator()
+                        + "游玩日期：" + selected.inventory().getVisitDate() + System.lineSeparator()
+                        + "订单号：" + action.orderId() + System.lineSeparator()
+                        + "待支付金额：" + amountLabel.getText() + System.lineSeparator()
+                        + "请进入“我的订单”确认支付。"));
     }
 
     private void showCommentDialog(Item item, JTextArea detailArea) {
