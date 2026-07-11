@@ -199,3 +199,4 @@ BUILD SUCCESS
 - 新增忙碌 glass pane，后台任务运行期间消费鼠标、滚轮和键盘事件，降低重复点击导致的重复提交风险；真实桌面手工点击仍留到 M10/M11。
 - `UiFormatters.chineseError` 从单一“检查数据库连接”调整为数据库、权限和通用失败三类中文提示，同时继续保留业务校验消息。
 - 默认 Java 21 `mvn clean test` 已通过：88 tests，0 failures，0 errors，2 skipped。
+- 继续抽出 `OrderTableModels`，把“我的订单”表格列定义、列宽和行填充从 `AppFrame` 移出；自动测试固定普通用户/管理员表格均显示票种和游玩日期，防止答辩演示关键字段回退。默认 Java 21 `mvn -q test` 通过：90 tests，0 failures，0 errors，2 skipped。

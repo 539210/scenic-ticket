@@ -646,16 +646,11 @@ public class AppFrame extends JFrame {
         JTextField userIdField = new JTextField(10);
         JTextField queryOrderIdField = new JTextField(10);
         JComboBox<String> queryStatusBox = new JComboBox<>(new String[]{"全部状态", "0-待支付", "1-已支付", "2-已取消", "3-已完成"});
-        DefaultTableModel model = isCurrentAdmin()
-                ? tableModel("订单号", "用户ID", "景点名称", "票种", "游玩日期", "票数", "原价", "优惠", "折后单价", "总额", "付款方式", "状态", "过期时间", "创建时间")
-                : tableModel("订单号", "景点名称", "票种", "游玩日期", "票数", "原价", "优惠", "折后单价", "总额", "付款方式", "状态", "过期时间", "创建时间");
+        boolean adminOrderView = isCurrentAdmin();
+        DefaultTableModel model = OrderTableModels.create(adminOrderView);
         JTable table = createTable(model);
         table.setAutoResizeMode(JTable.AUTO_RESIZE_ALL_COLUMNS);
-        if (isCurrentAdmin()) {
-            setColumnWidths(table, 80, 80, 170, 100, 105, 55, 85, 75, 90, 95, 85, 85, 155, 155);
-        } else {
-            setColumnWidths(table, 80, 180, 100, 105, 55, 85, 75, 90, 95, 85, 85, 155, 155);
-        }
+        setColumnWidths(table, OrderTableModels.columnWidths(adminOrderView));
         Long[] selectedOrderId = new Long[1];
 
         JPanel queryToolbar = toolbar();
@@ -716,30 +711,12 @@ public class AppFrame extends JFrame {
                     0
             );
         }, orderViews -> {
-            model.setRowCount(0);
+            OrderTableModels.fill(model, orderViews, adminOrderView);
             selectedOrderId[0] = null;
             payButton.setEnabled(false);
             cancelButton.setEnabled(false);
             refundButton.setEnabled(false);
             selectedOrderLabel.setText("请先从表格选择订单");
-            for (OrderViewDTO view : orderViews) {
-                Order order = view.getOrder();
-                if (isCurrentAdmin()) {
-                    model.addRow(new Object[]{order.getOrderId(), order.getUserId(), view.getItemTitle(),
-                            valueText(order.getTicketTypeNameSnapshot()), valueText(order.getVisitDate()), order.getQuantity(),
-                            UiFormatters.money(order.getOriginalUnitPrice()), discountText(order.getDiscountRate()),
-                            UiFormatters.money(order.getDiscountedUnitPrice()), UiFormatters.money(order.getAmount()),
-                            order.getPaymentMethod(), formatOrderStatus(order.getStatus()),
-                            formatDate(order.getExpiresAt()), formatDate(order.getCreatedAt())});
-                } else {
-                    model.addRow(new Object[]{order.getOrderId(), view.getItemTitle(),
-                            valueText(order.getTicketTypeNameSnapshot()), valueText(order.getVisitDate()), order.getQuantity(),
-                            UiFormatters.money(order.getOriginalUnitPrice()), discountText(order.getDiscountRate()),
-                            UiFormatters.money(order.getDiscountedUnitPrice()), UiFormatters.money(order.getAmount()),
-                            order.getPaymentMethod(), formatOrderStatus(order.getStatus()),
-                            formatDate(order.getExpiresAt()), formatDate(order.getCreatedAt())});
-                }
-            }
             setStatus("查询到 " + orderViews.size() + " 条订单");
         });
         listButton.addActionListener(event -> refreshOrders.run());
