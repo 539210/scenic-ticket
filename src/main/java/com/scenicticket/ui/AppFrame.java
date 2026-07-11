@@ -54,13 +54,11 @@ import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
-import javax.swing.SwingWorker;
 import javax.swing.SpinnerNumberModel;
 import javax.swing.table.DefaultTableModel;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
-import java.awt.Cursor;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Font;
@@ -78,7 +76,6 @@ import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.Callable;
-import java.util.concurrent.ExecutionException;
 import java.util.function.Consumer;
 
 public class AppFrame extends JFrame {
@@ -111,9 +108,9 @@ public class AppFrame extends JFrame {
     private final JLabel homeUserValue = new JLabel("未登录");
     private final JLabel homeRoleValue = new JLabel("-");
     private final Map<Long, String> categoryNames = new LinkedHashMap<>();
+    private final SwingTaskRunner taskRunner;
 
     private User currentUser;
-    private int runningTasks;
     private final SessionTaskGuard sessionTaskGuard = new SessionTaskGuard();
 
     public AppFrame() {
@@ -123,6 +120,7 @@ public class AppFrame extends JFrame {
         setLocationRelativeTo(null);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         getContentPane().setBackground(BACKGROUND);
+        taskRunner = new SwingTaskRunner(this, statusLabel, sessionTaskGuard, this::showError);
         showLoginView("请输入账号密码登录");
     }
 
@@ -2236,71 +2234,11 @@ public class AppFrame extends JFrame {
     }
 
     private <T> void runTask(String name, Callable<T> task, Consumer<T> onSuccess) {
-        runTask(name, task, onSuccess, null);
+        taskRunner.run(name, task, onSuccess);
     }
 
     private <T> void runTask(String name, Callable<T> task, Consumer<T> onSuccess, Consumer<String> onError) {
-        long taskGeneration = sessionTaskGuard.currentToken();
-        String processingStatus = name + "处理中...";
-        setStatus(processingStatus);
-        setBusy(true);
-        new SwingWorker<T, Void>() {
-            @Override
-            protected T doInBackground() throws Exception {
-                return task.call();
-            }
-
-            @Override
-            protected void done() {
-                try {
-                    T result = get();
-                    if (!sessionTaskGuard.isCurrent(taskGeneration)) {
-                        return;
-                    }
-                    onSuccess.accept(result);
-                    if (processingStatus.equals(statusLabel.getText())) {
-                        setStatus(name + "完成");
-                    }
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    if (sessionTaskGuard.isCurrent(taskGeneration)) {
-                        setStatus(name + "已中断");
-                    }
-                } catch (ExecutionException e) {
-                    if (!sessionTaskGuard.isCurrent(taskGeneration)) {
-                        return;
-                    }
-                    Throwable cause = e.getCause() == null ? e : e.getCause();
-                    String message = UiFormatters.chineseError(cause);
-                    if (onError == null) {
-                        showError(cause);
-                    } else {
-                        onError.accept(message);
-                    }
-                    setStatus(name + "失败：" + message);
-                } catch (RuntimeException e) {
-                    if (!sessionTaskGuard.isCurrent(taskGeneration)) {
-                        return;
-                    }
-                    String message = UiFormatters.chineseError(e);
-                    if (onError == null) {
-                        showError(e);
-                    } else {
-                        onError.accept(message);
-                    }
-                    setStatus(name + "失败：" + message);
-                } finally {
-                    setBusy(false);
-                }
-            }
-        }.execute();
-    }
-
-    private void setBusy(boolean busy) {
-        runningTasks = Math.max(0, runningTasks + (busy ? 1 : -1));
-        boolean active = runningTasks > 0;
-        getGlassPane().setVisible(active);
-        setCursor(active ? Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR) : Cursor.getDefaultCursor());
+        taskRunner.run(name, task, onSuccess, onError);
     }
 
     private void showError(Throwable throwable) {

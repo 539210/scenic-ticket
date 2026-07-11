@@ -19,6 +19,11 @@ import java.awt.FontMetrics;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
+import java.awt.event.KeyAdapter;
+import java.awt.event.KeyEvent;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
+import java.awt.event.MouseWheelEvent;
 
 public final class UiComponents {
     private UiComponents() {
@@ -131,6 +136,57 @@ public final class UiComponents {
     public static JPanel toolbar() {
         JPanel panel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 6));
         panel.setOpaque(false);
+        return panel;
+    }
+
+    public static JPanel busyGlassPane() {
+        JPanel panel = new JPanel();
+        panel.setOpaque(false);
+        panel.setFocusTraversalKeysEnabled(false);
+        panel.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mousePressed(MouseEvent event) {
+                event.consume();
+            }
+
+            @Override
+            public void mouseReleased(MouseEvent event) {
+                event.consume();
+            }
+
+            @Override
+            public void mouseClicked(MouseEvent event) {
+                event.consume();
+            }
+        });
+        panel.addMouseMotionListener(new MouseAdapter() {
+            @Override
+            public void mouseMoved(MouseEvent event) {
+                event.consume();
+            }
+
+            @Override
+            public void mouseDragged(MouseEvent event) {
+                event.consume();
+            }
+        });
+        panel.addMouseWheelListener((MouseWheelEvent event) -> event.consume());
+        panel.addKeyListener(new KeyAdapter() {
+            @Override
+            public void keyPressed(KeyEvent event) {
+                event.consume();
+            }
+
+            @Override
+            public void keyReleased(KeyEvent event) {
+                event.consume();
+            }
+
+            @Override
+            public void keyTyped(KeyEvent event) {
+                event.consume();
+            }
+        });
         return panel;
     }
 

@@ -4,7 +4,7 @@
 
 ## 当前状态
 
-- 当前里程碑：M7 评论和景点互动（资格、唯一更新与完整展示阶段）
+- 当前里程碑：M9 Swing 重构与全面巡检（异步任务与错误提示切片）
 - 当前分支：`codex/scenic-ticket-stabilization`
 - 基线提交：`90f254ca42fa47a95cfe3f5b936ae7270bba10f2`
 - 工作树基线：干净；未覆盖或撤销用户修改
@@ -191,3 +191,11 @@ BUILD SUCCESS
 - `ReportDAO` 实际调用 `sp_update_inactive_items`，并提供两个视图 `v_user_profile`、`v_item_order_summary` 的查询入口；真实集成测试在事务内验证第二存储过程会下架无订单景点并回滚测试改动。
 - 默认 Java 21 `mvn -q test` 通过：87 tests，0 failures，0 errors，2 skipped；完整真实 MySQL/MongoDB `scenic_ticket_test` 套件通过：100 tests，0 failures，0 errors，1 skipped。
 - BUG-P2-003、BUG-P2-004、BUG-P2-009、BUG-P2-010 的自动化验证已完成；最终仍需在 M10/M11 进行 Swing 手工冒烟确认。
+
+## M9 Swing 重构与巡检切片（2026-07-12）
+
+- 抽出 `SwingTaskRunner` 统一执行 Swing 后台任务，保留会话代次校验，避免退出/切换账号后的旧异步回调继续更新界面。
+- `AppFrame` 不再内联 `SwingWorker`、忙碌计数和错误分支；后续仍需按页面继续拆分，`AppFrame` 过大的结构问题尚未完全关闭。
+- 新增忙碌 glass pane，后台任务运行期间消费鼠标、滚轮和键盘事件，降低重复点击导致的重复提交风险；真实桌面手工点击仍留到 M10/M11。
+- `UiFormatters.chineseError` 从单一“检查数据库连接”调整为数据库、权限和通用失败三类中文提示，同时继续保留业务校验消息。
+- 默认 Java 21 `mvn clean test` 已通过：88 tests，0 failures，0 errors，2 skipped。

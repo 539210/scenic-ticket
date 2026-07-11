@@ -1,8 +1,10 @@
 package com.scenicticket.ui;
 
 import com.scenicticket.exception.BusinessException;
+import com.scenicticket.exception.DBException;
 
 import java.math.BigDecimal;
+import java.sql.SQLException;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
@@ -87,7 +89,14 @@ public final class UiFormatters {
             }
             current = current.getCause();
         }
-        return "操作未完成，请检查数据库连接或稍后重试";
+        if (containsCause(throwable, DBException.class) || containsCause(throwable, SQLException.class)
+                || containsClassName(throwable, "Mongo")) {
+            return "数据库操作失败，请检查数据库服务或稍后重试";
+        }
+        if (containsCause(throwable, SecurityException.class)) {
+            return "权限不足，无法完成该操作";
+        }
+        return "操作未完成，请稍后重试";
     }
 
     public static String readableText(Object value, String fallback) {
@@ -100,5 +109,27 @@ public final class UiFormatters {
             return "历史数据编码异常，暂无法显示";
         }
         return text;
+    }
+
+    private static boolean containsCause(Throwable throwable, Class<? extends Throwable> type) {
+        Throwable current = throwable;
+        while (current != null) {
+            if (type.isInstance(current)) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return false;
+    }
+
+    private static boolean containsClassName(Throwable throwable, String text) {
+        Throwable current = throwable;
+        while (current != null) {
+            if (current.getClass().getName().contains(text)) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return false;
     }
 }

@@ -1,6 +1,7 @@
 package com.scenicticket.ui;
 
 import com.scenicticket.exception.BusinessException;
+import com.scenicticket.exception.DBException;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -32,8 +33,12 @@ class UiFormattersTest {
     @Test
     void hidesTechnicalErrorsButKeepsChineseValidationMessages() {
         assertEquals("手机号格式不正确", UiFormatters.chineseError(new BusinessException("手机号格式不正确")));
-        assertEquals("操作未完成，请检查数据库连接或稍后重试",
-                UiFormatters.chineseError(new RuntimeException("connection refused")));
+        assertEquals("数据库操作失败，请检查数据库服务或稍后重试",
+                UiFormatters.chineseError(new DBException("connection refused")));
+        assertEquals("权限不足，无法完成该操作",
+                UiFormatters.chineseError(new SecurityException("denied")));
+        assertEquals("操作未完成，请稍后重试",
+                UiFormatters.chineseError(new RuntimeException("unknown")));
         assertEquals("历史数据编码异常，暂无法显示",
                 UiFormatters.readableText("????????", "暂无内容"));
         assertEquals("暂无内容", UiFormatters.readableText(" ", "暂无内容"));
