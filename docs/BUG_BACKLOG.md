@@ -1,6 +1,6 @@
 # Bug Backlog
 
-更新时间：2026-07-11
+更新时间：2026-07-12
 
 状态：`OPEN` / `IN PROGRESS` / `BLOCKED` / `FIXED` / `VERIFIED` / `CLOSED`
 
@@ -29,14 +29,14 @@
 | --- | --- | --- | --- | --- |
 | BUG-P2-001 | VERIFIED | 已知：评论区内容显示错误或混乱 | 根因确认是历史 `content` 已损坏为问号；现已使用独立评论页签、兼容数值/字符串 ID，并以专用 DTO 展示完整字段 | UTF-8 新建/更新、唯一性、脱敏用户、标签、双时间戳和真实聚合测试通过；不可逆历史问号内容保留明确降级提示 |
 | BUG-P2-002 | VERIFIED | 已知：景点简介显示错误 | 根因确认是历史 `description` 已损坏为问号；现已拆分独立简介页签、清除切换残留、兼容字符串/数值 ID，并提供管理员结构化重写入口 | UTF-8 中文、字符串 ID 原位规范化、图片/元数据及真实跨库 CRUD 测试通过；不可逆的历史问号文本需管理员按原资料重填 |
-| BUG-P2-003 | IN PROGRESS | 已知：推荐分不显示 | 当前只读 probe 返回 10 个非零分数，DTO 和列映射静态正确；旧症状未在 Service 层复现，Swing 手工验证仍待执行 | 推荐列表固定列显示分数和理由，三类推荐/空历史/手工点击验证通过 |
-| BUG-P2-004 | IN PROGRESS | 已知：系统审计条件查询不能正常使用 | 现有空/类型/级别/双条件查询返回 31/28/25/22 条；但 UI/Service 缺日期、关键词、limit、清空，组合测试不足 | 单/双/多条件、空条件、清空、时区、关键词和 limit 测试通过 |
+| BUG-P2-003 | VERIFIED | 已知：推荐分不显示 | 推荐服务返回非零分和理由；Swing 推荐表固定显示推荐分，选中景点概览显示推荐理由；乱码推荐理由已修复为 UTF-8 中文 | `RecommendServiceTest` 验证热门/高评分分数和理由；M8 默认与真实库套件通过，最终 Swing 手工冒烟保留到 M10/M11 |
+| BUG-P2-004 | VERIFIED | 已知：系统审计条件查询不能正常使用 | 新增 `AuditLogQuery`；服务/DAO 支持用户、类型、级别、日期、关键词、limit 组合；UI 增加日期、关键词、条数和清空 | `SystemLogServiceTest`、`StatisticsServiceTest` 和真实 MongoDB 组合查询通过；最终 Swing 手工冒烟保留到 M10/M11 |
 | BUG-P2-005 | VERIFIED | 评论规则允许同一用户对同一景点重复插入 | 改为兼容历史字符串 ID 的原位 upsert，保留 `created_at`、更新 `updated_at`；唯一索引并发冲突会重试为更新 | 单元测试及真实 MongoDB 测试证明再次评论更新原记录且兼容记录总数仍为 1 |
 | BUG-P2-006 | VERIFIED | 评论展示缺用户信息、标签和更新时间 | 新增评论列表 DTO，将用户表脱敏用户名与 Mongo 评论字段组合；评论使用独立页签 | 自动测试验证脱敏用户名、评分、正文、标签、创建/更新时间完整，真实 UTF-8 往返通过 |
 | BUG-P2-007 | VERIFIED | 管理员用户管理完全缺失 | 已新增查询、详情、档案、订单/行为概况、启禁和角色管理；事务行锁保护自身与最后管理员规则 | 6 项服务单元测试、2 项真实 MySQL/MongoDB 集成测试和 Swing 静态检查通过 |
 | BUG-P2-008 | VERIFIED | 退出没有写 LOGOUT 审计，异步任务可能跨会话回写 | 退出调用 `UserService.logout` 写 LOGOUT；`SessionTaskGuard` 在退出/登录切换时使旧异步回调失效 | Mongo 日志失败降级测试、会话代次回归测试和 M2 完整套件通过 |
-| BUG-P2-009 | OPEN | 热门排行只显示景点 ID | 报表直接展示 Mongo `_id`，没有跨库映射名称 | 显示景点名称且缺失主数据有明确降级 |
-| BUG-P2-010 | OPEN | 第二个存储过程和两个视图未在系统/测试中证明实际用途 | 静态脚本存在但无调用/验证 | 每个对象都有实际调用或真实集成测试并可解释 |
+| BUG-P2-009 | VERIFIED | 热门排行只显示景点 ID | `StatisticsService` 已将 Mongo 热门聚合与 MySQL `items` 主数据合并为 `HotItemRankingDTO` | UI 表格显示景点名称、ID、状态和热度指标；缺失主数据明确显示“景点不存在或已删除”；单元测试覆盖 |
+| BUG-P2-010 | VERIFIED | 第二个存储过程和两个视图未在系统/测试中证明实际用途 | `ReportDAO` 现在实际调用 `sp_update_inactive_items`，并查询 `v_user_profile`、`v_item_order_summary` | `ReportDatabaseObjectsIntegrationTest` 在 `scenic_ticket_test` 事务内验证两个视图和第二存储过程，测试后回滚 |
 
 ## P3
 
@@ -51,4 +51,4 @@
 
 - 不把最近提交或静态代码看起来已修复当作验证完成。
 - 每个问题必须记录：输入数据、操作步骤、失败现象、根因、失败测试、修复提交、相关测试、完整测试和需要的 Swing 手工步骤。
-- 当前四项均为 `IN PROGRESS`，尚未关闭。
+- 四个用户已知问题均已完成自动化验证；最终答辩前仍需按 M10/M11 手工冒烟清单复核 Swing 可见行为。

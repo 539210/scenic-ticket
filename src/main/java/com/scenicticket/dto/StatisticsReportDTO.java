@@ -6,7 +6,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class StatisticsReportDTO {
-    private List<Document> hotItems = new ArrayList<>();
+    private List<HotItemRankingDTO> hotItems = new ArrayList<>();
     private List<Document> actionTypeSummary = new ArrayList<>();
     private List<Document> dailyTrend = new ArrayList<>();
     private List<Document> hotTags = new ArrayList<>();
@@ -14,11 +14,11 @@ public class StatisticsReportDTO {
     private List<Document> systemAuditTrend = new ArrayList<>();
     private List<MonthlyOrderReportDTO> monthlyOrderReport = new ArrayList<>();
 
-    public List<Document> getHotItems() {
+    public List<HotItemRankingDTO> getHotItems() {
         return hotItems;
     }
 
-    public void setHotItems(List<Document> hotItems) {
+    public void setHotItems(List<HotItemRankingDTO> hotItems) {
         this.hotItems = hotItems;
     }
 

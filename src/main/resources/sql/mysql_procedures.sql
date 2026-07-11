@@ -37,5 +37,7 @@ BEGIN
         i.updated_at = CURRENT_TIMESTAMP
     WHERE i.status = 1
       AND (o.latest_order_time IS NULL OR o.latest_order_time < DATE_SUB(CURRENT_TIMESTAMP, INTERVAL p_days_without_orders DAY));
+
+    SELECT ROW_COUNT() AS affected_rows;
 END //
 DELIMITER ;

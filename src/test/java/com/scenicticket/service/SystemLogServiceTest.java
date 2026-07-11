@@ -40,8 +40,21 @@ class SystemLogServiceTest {
         service.queryRecentLogs(1L, 9999);
         assertEquals(500, systemLogDAO.recentLimit);
 
-        service.queryAuditLogs(1L, 1L, "LOGIN", "INFO", null, null, -1);
+        service.queryAuditLogs(1L, 1L, " LOGIN ", " INFO ", null, null, " success ", -1);
         assertEquals(50, systemLogDAO.conditionLimit);
+        assertEquals("LOGIN", systemLogDAO.conditionLogType);
+        assertEquals("INFO", systemLogDAO.conditionLogLevel);
+        assertEquals("success", systemLogDAO.conditionKeyword);
+    }
+
+    @Test
+    void queryRejectsInvalidDateRangeBeforeDaoCall() {
+        Date start = new Date(2_000L);
+        Date end = new Date(1_000L);
+
+        assertThrows(BusinessException.class,
+                () -> service.queryAuditLogs(1L, 1L, "LOGIN", "INFO", start, end, "x", 20));
+        assertEquals(0, systemLogDAO.conditionLimit);
     }
 
     private static AuthorizationService allowAdmin() {
@@ -65,6 +78,9 @@ class SystemLogServiceTest {
         private Document actionDetail;
         private int recentLimit;
         private int conditionLimit;
+        private String conditionLogType;
+        private String conditionLogLevel;
+        private String conditionKeyword;
 
         @Override
         public void record(long userId, String logType, String logLevel, String message, Document actionDetail) {
@@ -85,6 +101,16 @@ class SystemLogServiceTest {
         public List<Document> findByCondition(Long userId, String logType, String logLevel,
                                               Date startTime, Date endTime, int limit) {
             conditionLimit = limit;
+            return List.of();
+        }
+
+        @Override
+        public List<Document> findByCondition(Long userId, String logType, String logLevel,
+                                              Date startTime, Date endTime, String keyword, int limit) {
+            conditionLimit = limit;
+            conditionLogType = logType;
+            conditionLogLevel = logLevel;
+            conditionKeyword = keyword;
             return List.of();
         }
     }

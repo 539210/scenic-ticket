@@ -8,6 +8,7 @@ import org.bson.Document;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.regex.Pattern;
 
 public class SystemLogDAO extends MongoBaseDAO {
     public void insertSystemLog(Document systemLog) {
@@ -60,6 +61,11 @@ public class SystemLogDAO extends MongoBaseDAO {
 
     public List<Document> findByCondition(Long userId, String logType, String logLevel,
                                           Date startTime, Date endTime, int limit) {
+        return findByCondition(userId, logType, logLevel, startTime, endTime, null, limit);
+    }
+
+    public List<Document> findByCondition(Long userId, String logType, String logLevel,
+                                          Date startTime, Date endTime, String keyword, int limit) {
         Document filter = new Document();
         if (userId != null && userId > 0) {
             filter.append("user_id", userId);
@@ -69,6 +75,14 @@ public class SystemLogDAO extends MongoBaseDAO {
         }
         if (logLevel != null && !logLevel.isBlank()) {
             filter.append("log_level", logLevel.trim());
+        }
+        if (keyword != null && !keyword.isBlank()) {
+            String escapedKeyword = Pattern.quote(keyword.trim());
+            filter.append("$or", List.of(
+                    regexFilter("message", escapedKeyword),
+                    regexFilter("action_detail.operation", escapedKeyword),
+                    regexFilter("action_detail.ip", escapedKeyword)
+            ));
         }
         return getCollection("system_logs")
                 .find(withDateRange(filter, "timestamp", startTime, endTime))
@@ -157,5 +171,9 @@ public class SystemLogDAO extends MongoBaseDAO {
             return 50;
         }
         return Math.min(limit, 500);
+    }
+
+    private Document regexFilter(String field, String escapedKeyword) {
+        return new Document(field, new Document("$regex", escapedKeyword).append("$options", "i"));
     }
 }

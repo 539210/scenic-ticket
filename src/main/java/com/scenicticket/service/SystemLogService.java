@@ -1,6 +1,7 @@
 package com.scenicticket.service;
 
 import com.scenicticket.dao.mongo.SystemLogDAO;
+import com.scenicticket.dto.AuditLogQuery;
 import com.scenicticket.exception.BusinessException;
 import com.scenicticket.util.SecurityUtil;
 import org.bson.Document;
@@ -39,8 +40,34 @@ public class SystemLogService {
 
     public List<Document> queryAuditLogs(long actorUserId, Long userId, String logType, String logLevel,
                                          Date startTime, Date endTime, int limit) {
+        return queryAuditLogs(actorUserId, userId, logType, logLevel, startTime, endTime, null, limit);
+    }
+
+    public List<Document> queryAuditLogs(long actorUserId, Long userId, String logType, String logLevel,
+                                         Date startTime, Date endTime, String keyword, int limit) {
+        AuditLogQuery query = new AuditLogQuery();
+        query.setUserId(userId);
+        query.setLogType(logType);
+        query.setLogLevel(logLevel);
+        query.setStartTime(startTime);
+        query.setEndTime(endTime);
+        query.setKeyword(keyword);
+        query.setLimit(limit);
+        return queryAuditLogs(actorUserId, query);
+    }
+
+    public List<Document> queryAuditLogs(long actorUserId, AuditLogQuery query) {
         authorizationService.requireAdmin(actorUserId);
-        return systemLogDAO.findByCondition(userId, logType, logLevel, startTime, endTime, normalizeLimit(limit));
+        AuditLogQuery safeQuery = query == null ? new AuditLogQuery() : query;
+        validateTimeRange(safeQuery.getStartTime(), safeQuery.getEndTime());
+        return systemLogDAO.findByCondition(
+                positiveOrNull(safeQuery.getUserId()),
+                normalizeOptionalText(safeQuery.getLogType(), 50),
+                normalizeOptionalText(safeQuery.getLogLevel(), 20),
+                safeQuery.getStartTime(),
+                safeQuery.getEndTime(),
+                normalizeOptionalText(safeQuery.getKeyword(), 80),
+                normalizeLimit(safeQuery.getLimit()));
     }
 
     public List<Document> queryRecentLogs(long actorUserId, int limit) {
@@ -81,5 +108,19 @@ public class SystemLogService {
             return 50;
         }
         return Math.min(limit, 500);
+    }
+
+    private Long positiveOrNull(Long value) {
+        return value == null || value <= 0 ? null : value;
+    }
+
+    private String normalizeOptionalText(String value, int maxLength) {
+        return value == null || value.isBlank() ? null : SecurityUtil.normalizeText(value, maxLength);
+    }
+
+    private void validateTimeRange(Date startTime, Date endTime) {
+        if (startTime != null && endTime != null && startTime.after(endTime)) {
+            throw new BusinessException("审计开始时间不能晚于结束时间");
+        }
     }
 }

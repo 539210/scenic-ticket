@@ -33,6 +33,7 @@ class RecommendServiceTest {
         assertEquals(2, recommendations.size());
         assertEquals(1L, recommendations.get(0).getItem().getItemId());
         assertEquals(100.0, recommendations.get(0).getScore(), 0.001);
+        assertEquals("近期热门景点", recommendations.get(0).getReason());
         assertEquals(50.0, recommendations.get(1).getScore(), 0.001);
     }
 
@@ -48,6 +49,7 @@ class RecommendServiceTest {
         assertEquals(2, recommendations.size());
         assertEquals(1L, recommendations.get(0).getItem().getItemId());
         assertEquals(90.0, recommendations.get(0).getScore(), 0.001);
+        assertEquals("高评分景点推荐", recommendations.get(0).getReason());
         assertEquals(60.0, recommendations.get(1).getScore(), 0.001);
     }
 

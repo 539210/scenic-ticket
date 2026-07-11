@@ -25,8 +25,8 @@ src/main/java/com/scenicticket/ui/AppFrame.java
 | 景点浏览 | 按预设关键词/数据库分类查询景点；概览、简介、评论使用独立页签，过时异步详情不会覆盖新选择；评论支持标签和原位修改 | `BusinessService`、`CrossDatabaseQueryService`、`RecommendService`、`CommentService` |
 | 我的订单 | 按订单号和状态查询订单，显示票种/日期/价格快照；专用按钮执行支付、待支付取消和退款 | `BusinessService`、`OrderLifecycleService` |
 | 后台管理 | 景点、分类、用户、票种/库存和门票核销独立页签 | `BusinessService`、`AdminUserService`、`TicketInventoryService`、`AdmissionService` |
-| 统计报表 | 以表格展示月度订单、热门排行、用户报告和综合汇总 | `StatisticsService` |
-| 系统审计 | 以中文表格展示日志明细、审计汇总、趋势和用户操作汇总 | `SystemLogService` |
+| 统计报表 | 以表格展示月度订单、带景点名称的热门排行、用户报告和综合汇总 | `StatisticsService` |
+| 系统审计 | 以中文表格展示日志明细、审计汇总、趋势和用户操作汇总，支持用户/类型/级别/日期/关键词/条数组合查询 | `SystemLogService` |
 
 普通用户登录后只显示用户侧页面：`首页`、`个人档案`、`景点浏览`、`我的订单`、`统计报表`。推荐入口已合并到 `景点浏览` 页。管理员登录后显示完整页面，额外包含 `后台管理` 和 `系统审计`。
 

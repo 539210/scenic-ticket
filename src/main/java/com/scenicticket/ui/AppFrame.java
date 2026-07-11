@@ -1,6 +1,8 @@
 package com.scenicticket.ui;
 
 import com.scenicticket.dto.CrossDatabaseItemDTO;
+import com.scenicticket.dto.AuditLogQuery;
+import com.scenicticket.dto.HotItemRankingDTO;
 import com.scenicticket.dto.LoginResult;
 import com.scenicticket.dto.MonthlyOrderReportDTO;
 import com.scenicticket.dto.OrderViewDTO;
@@ -68,8 +70,10 @@ import java.awt.GridLayout;
 import java.awt.Insets;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Date;
 import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -1351,7 +1355,7 @@ public class AppFrame extends JFrame {
         JTextField monthField = new JTextField(String.valueOf(LocalDate.now().getMonthValue()), 4);
         JTextField userIdField = new JTextField(10);
         DefaultTableModel monthlyModel = tableModel("日期", "订单数", "销售金额");
-        DefaultTableModel hotModel = tableModel("排名", "景点ID", "总操作", "浏览", "下单", "平均停留(秒)");
+        DefaultTableModel hotModel = tableModel("排名", "景点名称", "景点ID", "状态", "总操作", "浏览", "下单", "平均停留(秒)");
         DefaultTableModel userModel = tableModel("指标", "数据");
         DefaultTableModel dashboardModel = tableModel("模块", "指标", "数据");
         JTable monthlyTable = createTable(monthlyModel);
@@ -1414,10 +1418,11 @@ public class AppFrame extends JFrame {
         Runnable loadHot = () -> runTask("热门排行", () -> statisticsService.getHotItemRanking(null, null, 10), documents -> {
             hotModel.setRowCount(0);
             int rank = 1;
-            for (Document document : documents) {
-                hotModel.addRow(new Object[]{rank, valueText(document.get("_id")), numberText(document.get("total_actions")),
-                        numberText(document.get("view_count")), numberText(document.get("order_count")),
-                        decimalText(document.get("avg_duration"))});
+            for (HotItemRankingDTO ranking : documents) {
+                hotModel.addRow(new Object[]{rank, ranking.getItemTitle(), ranking.getItemId(),
+                        ranking.isItemFound() ? formatItemStatus(ranking.getItemStatus()) : "-",
+                        ranking.getTotalActions(), ranking.getViewCount(), ranking.getOrderCount(),
+                        decimalText(ranking.getAvgDuration())});
                 rank += 1;
             }
             resultTabs.setSelectedIndex(1);
@@ -1469,6 +1474,10 @@ public class AppFrame extends JFrame {
     private JPanel createAuditPanel() {
         JPanel panel = pagePanel(new BorderLayout(12, 12));
         JTextField userIdField = new JTextField(10);
+        JTextField startDateField = new JTextField(10);
+        JTextField endDateField = new JTextField(10);
+        JTextField keywordField = new JTextField(12);
+        JTextField limitField = new JTextField("80", 5);
         JComboBox<String> logTypeBox = new JComboBox<>(new String[]{"全部类型", "登录", "退出", "注册", "创建订单", "景点更新", "查看报表"});
         JComboBox<String> levelBox = new JComboBox<>(new String[]{"全部级别", "正常", "警告", "错误"});
         DefaultTableModel logModel = tableModel("时间", "用户ID", "类型", "级别", "内容", "操作", "IP地址");
@@ -1494,37 +1503,43 @@ public class AppFrame extends JFrame {
         auditTabs.addTab("用户操作", userSummaryScroll);
 
         JPanel auditFilters = toolbar();
+        JPanel auditMoreFilters = toolbar();
         JPanel auditActions = toolbar();
-        JPanel auditToolbar = new JPanel(new GridLayout(2, 1, 0, 4));
+        JPanel auditToolbar = new JPanel(new GridLayout(3, 1, 0, 4));
         auditToolbar.setOpaque(false);
         JButton queryButton = primaryButton("查询日志");
         JButton summaryButton = secondaryButton("审计汇总");
         JButton trendButton = secondaryButton("审计趋势");
         JButton userSummaryButton = secondaryButton("用户操作");
         JButton refreshButton = secondaryButton("刷新当前结果");
+        JButton clearButton = secondaryButton("清空条件");
         auditFilters.add(new JLabel("用户ID"));
         auditFilters.add(userIdField);
         auditFilters.add(new JLabel("类型"));
         auditFilters.add(logTypeBox);
         auditFilters.add(new JLabel("级别"));
         auditFilters.add(levelBox);
+        auditMoreFilters.add(new JLabel("开始日期"));
+        auditMoreFilters.add(startDateField);
+        auditMoreFilters.add(new JLabel("结束日期"));
+        auditMoreFilters.add(endDateField);
+        auditMoreFilters.add(new JLabel("关键词"));
+        auditMoreFilters.add(keywordField);
+        auditMoreFilters.add(new JLabel("条数"));
+        auditMoreFilters.add(limitField);
         auditActions.add(queryButton);
         auditActions.add(summaryButton);
         auditActions.add(trendButton);
         auditActions.add(userSummaryButton);
         auditActions.add(refreshButton);
+        auditActions.add(clearButton);
         auditToolbar.add(auditFilters);
+        auditToolbar.add(auditMoreFilters);
         auditToolbar.add(auditActions);
 
         Runnable refreshAuditLogs = () -> runAdminTask("审计日志查询", () -> systemLogService.queryAuditLogs(
-                requireCurrentUserId(),
-                parseOptionalLong(userIdField.getText()),
-                selectedLogType(logTypeBox),
-                selectedLogLevel(levelBox),
-                null,
-                null,
-                80
-        ), documents -> {
+                requireCurrentUserId(), buildAuditQuery(userIdField, logTypeBox, levelBox,
+                        startDateField, endDateField, keywordField, limitField)), documents -> {
             int scrollPosition = logScroll.getVerticalScrollBar().getValue();
             logModel.setRowCount(0);
             for (Document document : documents) {
@@ -1541,7 +1556,8 @@ public class AppFrame extends JFrame {
         queryButton.addActionListener(event -> refreshAuditLogs.run());
 
         Runnable loadSummary = () -> runAdminTask("审计汇总", () -> systemLogService.getAuditSummary(
-                requireCurrentUserId(), null, null), documents -> {
+                requireCurrentUserId(), parseOptionalStartDate(startDateField.getText(), "开始日期"),
+                parseOptionalEndDate(endDateField.getText(), "结束日期")), documents -> {
             int scrollPosition = summaryScroll.getVerticalScrollBar().getValue();
             summaryModel.setRowCount(0);
             for (Document document : documents) {
@@ -1555,7 +1571,8 @@ public class AppFrame extends JFrame {
         summaryButton.addActionListener(event -> loadSummary.run());
 
         Runnable loadTrend = () -> runAdminTask("审计趋势", () -> systemLogService.getDailyAuditTrend(
-                requireCurrentUserId(), null, null), documents -> {
+                requireCurrentUserId(), parseOptionalStartDate(startDateField.getText(), "开始日期"),
+                parseOptionalEndDate(endDateField.getText(), "结束日期")), documents -> {
             int scrollPosition = trendScroll.getVerticalScrollBar().getValue();
             trendModel.setRowCount(0);
             for (Document document : documents) {
@@ -1568,7 +1585,10 @@ public class AppFrame extends JFrame {
         trendButton.addActionListener(event -> loadTrend.run());
 
         Runnable loadUserSummary = () -> runAdminTask("用户操作汇总",
-                () -> systemLogService.getUserOperationSummary(requireCurrentUserId(), null, null, 50), documents -> {
+                () -> systemLogService.getUserOperationSummary(requireCurrentUserId(),
+                        parseOptionalStartDate(startDateField.getText(), "开始日期"),
+                        parseOptionalEndDate(endDateField.getText(), "结束日期"),
+                        parseOptionalInt(limitField.getText(), 50, "条数")), documents -> {
                     int scrollPosition = userSummaryScroll.getVerticalScrollBar().getValue();
                     userSummaryModel.setRowCount(0);
                     for (Document document : documents) {
@@ -1581,6 +1601,16 @@ public class AppFrame extends JFrame {
                     restoreScrollPosition(userSummaryScroll, scrollPosition);
                 });
         userSummaryButton.addActionListener(event -> loadUserSummary.run());
+        clearButton.addActionListener(event -> {
+            userIdField.setText("");
+            startDateField.setText("");
+            endDateField.setText("");
+            keywordField.setText("");
+            limitField.setText("80");
+            logTypeBox.setSelectedIndex(0);
+            levelBox.setSelectedIndex(0);
+            refreshAuditLogs.run();
+        });
         refreshButton.addActionListener(event -> {
             switch (auditTabs.getSelectedIndex()) {
                 case 0 -> refreshAuditLogs.run();
@@ -1591,6 +1621,7 @@ public class AppFrame extends JFrame {
             }
         });
         userIdField.addActionListener(event -> refreshAuditLogs.run());
+        keywordField.addActionListener(event -> refreshAuditLogs.run());
 
         panel.add(wrapWithTitle("审计条件", auditToolbar), BorderLayout.NORTH);
         panel.add(wrapWithTitle("审计结果", auditTabs), BorderLayout.CENTER);
@@ -2056,6 +2087,21 @@ public class AppFrame extends JFrame {
         };
     }
 
+    private AuditLogQuery buildAuditQuery(JTextField userIdField, JComboBox<String> logTypeBox,
+                                          JComboBox<String> levelBox, JTextField startDateField,
+                                          JTextField endDateField, JTextField keywordField,
+                                          JTextField limitField) {
+        AuditLogQuery query = new AuditLogQuery();
+        query.setUserId(parseOptionalLong(userIdField.getText()));
+        query.setLogType(selectedLogType(logTypeBox));
+        query.setLogLevel(selectedLogLevel(levelBox));
+        query.setStartTime(parseOptionalStartDate(startDateField.getText(), "开始日期"));
+        query.setEndTime(parseOptionalEndDate(endDateField.getText(), "结束日期"));
+        query.setKeyword(keywordField.getText());
+        query.setLimit(parseOptionalInt(limitField.getText(), 80, "条数"));
+        return query;
+    }
+
     private String selectedUserRoleFilter(JComboBox<String> roleBox) {
         return switch (roleBox.getSelectedIndex()) {
             case 1 -> "ADMIN";
@@ -2100,10 +2146,10 @@ public class AppFrame extends JFrame {
 
     private void fillDashboardTable(DefaultTableModel model, StatisticsReportDTO dto) {
         model.setRowCount(0);
-        for (Document document : dto.getHotItems()) {
-            model.addRow(new Object[]{"热门景点", "景点ID " + valueText(document.get("_id")),
-                    "总操作 " + numberText(document.get("total_actions")) + "，浏览 "
-                            + numberText(document.get("view_count")) + "，下单 " + numberText(document.get("order_count"))});
+        for (HotItemRankingDTO ranking : dto.getHotItems()) {
+            model.addRow(new Object[]{"热门景点", ranking.getItemTitle() + " / ID " + ranking.getItemId(),
+                    "总操作 " + ranking.getTotalActions() + "，浏览 "
+                            + ranking.getViewCount() + "，下单 " + ranking.getOrderCount()});
         }
         for (Document document : dto.getActionTypeSummary()) {
             model.addRow(new Object[]{"用户行为", actionTypeName(document.getString("action_type")),
@@ -2481,18 +2527,19 @@ public class AppFrame extends JFrame {
         return builder.toString();
     }
 
-    private String formatHotItems(List<Document> documents) {
-        if (documents == null || documents.isEmpty()) {
+    private String formatHotItems(List<HotItemRankingDTO> rankings) {
+        if (rankings == null || rankings.isEmpty()) {
             return "暂无热门景点数据";
         }
         StringBuilder builder = new StringBuilder();
         int index = 1;
-        for (Document document : documents) {
-            builder.append(index).append(". 景点ID：").append(valueText(document.get("_id")))
-                    .append("  总操作：").append(numberText(document.get("total_actions")))
-                    .append("  浏览：").append(numberText(document.get("view_count")))
-                    .append("  下单：").append(numberText(document.get("order_count")))
-                    .append("  平均停留：").append(decimalText(document.get("avg_duration"))).append(" 秒")
+        for (HotItemRankingDTO ranking : rankings) {
+            builder.append(index).append(". 景点：").append(ranking.getItemTitle())
+                    .append("  ID：").append(ranking.getItemId())
+                    .append("  总操作：").append(ranking.getTotalActions())
+                    .append("  浏览：").append(ranking.getViewCount())
+                    .append("  下单：").append(ranking.getOrderCount())
+                    .append("  平均停留：").append(decimalText(ranking.getAvgDuration())).append(" 秒")
                     .append(System.lineSeparator());
             index += 1;
         }
@@ -2876,6 +2923,13 @@ public class AppFrame extends JFrame {
         }
     }
 
+    private int parseOptionalInt(String value, int defaultValue, String fieldName) {
+        if (value == null || value.isBlank()) {
+            return defaultValue;
+        }
+        return parseRequiredInt(value, fieldName);
+    }
+
     private BigDecimal parseRequiredAmount(String value, String fieldName) {
         if (value == null || value.isBlank()) {
             throw new IllegalArgumentException(fieldName + "不能为空");
@@ -2900,6 +2954,26 @@ public class AppFrame extends JFrame {
         } catch (java.time.format.DateTimeParseException exception) {
             throw new IllegalArgumentException(fieldName + "必须使用 yyyy-MM-dd 格式", exception);
         }
+    }
+
+    private Date parseOptionalStartDate(String value, String fieldName) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return Date.from(parseRequiredDate(value, fieldName)
+                .atStartOfDay(ZoneId.systemDefault())
+                .toInstant());
+    }
+
+    private Date parseOptionalEndDate(String value, String fieldName) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return Date.from(parseRequiredDate(value, fieldName)
+                .plusDays(1)
+                .atStartOfDay(ZoneId.systemDefault())
+                .minusNanos(1)
+                .toInstant());
     }
 
     private String blankToNull(String value) {

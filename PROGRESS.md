@@ -174,3 +174,20 @@ BUILD SUCCESS
 - 已知评论显示 BUG-P2-001、重复插入 BUG-P2-005、字段缺失 BUG-P2-006 均完成自动化验证；历史已损坏为问号的正文不可逆，保留明确降级提示，不伪造恢复。
 - Swing 审计警告对话框、状态保留及混合数字/字符串 `item_id` 统一评分摘要均已纳入最终复跑。2026-07-12 默认套件再次通过：83 tests，0 failures，0 errors，2 skipped；完整真实 `scenic_ticket_test` 套件再次通过：94 tests，0 failures，0 errors，1 skipped。
 - M7 实现与验收已完成，检查点为 `[Day 09] 完善评论资格与展示`；提交并同步远端后进入 M8。
+
+## M8 推荐、统计和审计起始审计（2026-07-12）
+
+- 推荐服务已有统一 0-100 分值，但缺少推荐理由回归断言；景点浏览表格只显示推荐分，理由依赖选中概览展示。
+- 统计热门排行直接展示 MongoDB `_id`，没有与 MySQL `items` 主数据合并，导致答辩演示只能看到景点 ID。
+- 系统审计查询服务和 UI 缺关键词、日期、limit 和清空条件；汇总、趋势、用户操作不复用日期范围。
+- `sp_update_inactive_items`、`v_user_profile`、`v_item_order_summary` 存在于脚本中，但此前没有系统或测试层实际调用证据。
+
+## M8 推荐、统计和审计验收（2026-07-12）
+
+- 新增 `AuditLogQuery`，`SystemLogDAO`/`SystemLogService` 支持用户、类型、级别、起止日期、关键词、limit 组合查询；反向日期范围在服务层拒绝。
+- 系统审计 Swing 页新增开始日期、结束日期、关键词、条数和清空条件；明细、汇总、趋势、用户操作刷新均使用当前日期范围。
+- 新增 `HotItemRankingDTO`，`StatisticsService.getHotItemRanking` 将 MongoDB 热门聚合与 MySQL `items` 主数据合并；UI 显示景点名称、ID、状态和热度指标，缺失主数据时明确显示“景点不存在或已删除”。
+- 推荐理由文本修复为 UTF-8 中文，并用单元测试验证热门推荐和高评分推荐的分数与理由。
+- `ReportDAO` 实际调用 `sp_update_inactive_items`，并提供两个视图 `v_user_profile`、`v_item_order_summary` 的查询入口；真实集成测试在事务内验证第二存储过程会下架无订单景点并回滚测试改动。
+- 默认 Java 21 `mvn -q test` 通过：87 tests，0 failures，0 errors，2 skipped；完整真实 MySQL/MongoDB `scenic_ticket_test` 套件通过：100 tests，0 failures，0 errors，1 skipped。
+- BUG-P2-003、BUG-P2-004、BUG-P2-009、BUG-P2-010 的自动化验证已完成；最终仍需在 M10/M11 进行 Swing 手工冒烟确认。

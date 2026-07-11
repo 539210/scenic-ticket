@@ -3,14 +3,20 @@ package com.scenicticket.service;
 import com.scenicticket.dao.mongo.CommentDAO;
 import com.scenicticket.dao.mongo.LogDAO;
 import com.scenicticket.dao.mongo.SystemLogDAO;
+import com.scenicticket.dao.mysql.ItemDAO;
 import com.scenicticket.dao.mysql.ReportDAO;
+import com.scenicticket.dto.AuditLogQuery;
+import com.scenicticket.dto.HotItemRankingDTO;
 import com.scenicticket.dto.MonthlyOrderReportDTO;
 import com.scenicticket.dto.StatisticsReportDTO;
 import com.scenicticket.exception.BusinessException;
+import com.scenicticket.model.Item;
 import org.bson.Document;
 
 import java.util.Date;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 public class StatisticsService {
     private final LogDAO logDAO;
@@ -18,6 +24,7 @@ public class StatisticsService {
     private final ReportDAO reportDAO;
     private final SystemLogDAO systemLogDAO;
     private final AuthorizationService authorizationService;
+    private final ItemDAO itemDAO;
 
     public StatisticsService() {
         this(new LogDAO(), new CommentDAO(), new ReportDAO(), new SystemLogDAO());
@@ -33,11 +40,17 @@ public class StatisticsService {
 
     public StatisticsService(LogDAO logDAO, CommentDAO commentDAO, ReportDAO reportDAO, SystemLogDAO systemLogDAO,
                              AuthorizationService authorizationService) {
+        this(logDAO, commentDAO, reportDAO, systemLogDAO, authorizationService, new ItemDAO());
+    }
+
+    public StatisticsService(LogDAO logDAO, CommentDAO commentDAO, ReportDAO reportDAO, SystemLogDAO systemLogDAO,
+                             AuthorizationService authorizationService, ItemDAO itemDAO) {
         this.logDAO = logDAO;
         this.commentDAO = commentDAO;
         this.reportDAO = reportDAO;
         this.systemLogDAO = systemLogDAO;
         this.authorizationService = authorizationService;
+        this.itemDAO = itemDAO;
     }
 
     public List<Document> getUserBehaviorReport(long actorUserId, long userId, Date startTime, Date endTime) {
@@ -56,8 +69,19 @@ public class StatisticsService {
         return report;
     }
 
-    public List<Document> getHotItemRanking(Date startTime, Date endTime, int limit) {
-        return logDAO.aggregateHotItems(startTime, endTime, normalizeLimit(limit));
+    public List<HotItemRankingDTO> getHotItemRanking(Date startTime, Date endTime, int limit) {
+        List<Document> hotItems = logDAO.aggregateHotItems(startTime, endTime, normalizeLimit(limit));
+        List<Long> itemIds = hotItems.stream()
+                .map(document -> readLong(document.get("_id")))
+                .filter(itemId -> itemId != null && itemId > 0)
+                .toList();
+        Map<Long, Item> itemById = new LinkedHashMap<>();
+        for (Item item : itemDAO.findByIds(itemIds)) {
+            itemById.put(item.getItemId(), item);
+        }
+        return hotItems.stream()
+                .map(document -> toHotItemRanking(document, itemById.get(readLong(document.get("_id")))))
+                .toList();
     }
 
     public List<Document> getActionTypeSummary(Date startTime, Date endTime) {
@@ -97,8 +121,34 @@ public class StatisticsService {
 
     public List<Document> querySystemAuditLogs(long actorUserId, Long userId, String logType, String logLevel,
                                                Date startTime, Date endTime, int limit) {
+        return querySystemAuditLogs(actorUserId, userId, logType, logLevel, startTime, endTime, null, limit);
+    }
+
+    public List<Document> querySystemAuditLogs(long actorUserId, Long userId, String logType, String logLevel,
+                                               Date startTime, Date endTime, String keyword, int limit) {
+        AuditLogQuery query = new AuditLogQuery();
+        query.setUserId(userId);
+        query.setLogType(logType);
+        query.setLogLevel(logLevel);
+        query.setStartTime(startTime);
+        query.setEndTime(endTime);
+        query.setKeyword(keyword);
+        query.setLimit(limit);
+        return querySystemAuditLogs(actorUserId, query);
+    }
+
+    public List<Document> querySystemAuditLogs(long actorUserId, AuditLogQuery query) {
         authorizationService.requireAdmin(actorUserId);
-        return systemLogDAO.findByCondition(userId, logType, logLevel, startTime, endTime, normalizeLimit(limit));
+        AuditLogQuery safeQuery = query == null ? new AuditLogQuery() : query;
+        validateTimeRange(safeQuery.getStartTime(), safeQuery.getEndTime());
+        return systemLogDAO.findByCondition(
+                safeQuery.getUserId(),
+                normalizeOptionalText(safeQuery.getLogType()),
+                normalizeOptionalText(safeQuery.getLogLevel()),
+                safeQuery.getStartTime(),
+                safeQuery.getEndTime(),
+                normalizeOptionalText(safeQuery.getKeyword()),
+                normalizeLimit(safeQuery.getLimit()));
     }
 
     public List<MonthlyOrderReportDTO> getMonthlyOrderReport(int year, int month) {
@@ -144,6 +194,56 @@ public class StatisticsService {
         }
         if (month < 1 || month > 12) {
             throw new BusinessException("Report month must be between 1 and 12.");
+        }
+    }
+
+    private HotItemRankingDTO toHotItemRanking(Document document, Item item) {
+        HotItemRankingDTO dto = new HotItemRankingDTO();
+        Long itemId = readLong(document.get("_id"));
+        dto.setItemId(itemId == null ? 0L : itemId);
+        dto.setTotalActions(readLongOrZero(document.get("total_actions")));
+        dto.setViewCount(readLongOrZero(document.get("view_count")));
+        dto.setOrderCount(readLongOrZero(document.get("order_count")));
+        dto.setAvgDuration(readDouble(document.get("avg_duration")));
+        if (item == null) {
+            dto.setItemTitle("景点不存在或已删除");
+            dto.setCategoryName("-");
+            dto.setItemFound(false);
+            return dto;
+        }
+        dto.setItemTitle(item.getTitle());
+        dto.setCategoryName(String.valueOf(item.getCategoryId()));
+        dto.setItemStatus(item.getStatus());
+        dto.setItemFound(true);
+        return dto;
+    }
+
+    private Long readLong(Object value) {
+        if (value instanceof Number number) {
+            return number.longValue();
+        }
+        return null;
+    }
+
+    private long readLongOrZero(Object value) {
+        Long number = readLong(value);
+        return number == null ? 0L : number;
+    }
+
+    private double readDouble(Object value) {
+        if (value instanceof Number number) {
+            return number.doubleValue();
+        }
+        return 0.0;
+    }
+
+    private String normalizeOptionalText(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
+    }
+
+    private void validateTimeRange(Date startTime, Date endTime) {
+        if (startTime != null && endTime != null && startTime.after(endTime)) {
+            throw new BusinessException("Audit start time must not be after end time.");
         }
     }
 }

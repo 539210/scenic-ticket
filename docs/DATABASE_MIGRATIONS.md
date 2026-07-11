@@ -58,6 +58,11 @@
 
 ## 待验证项
 
-- 两个视图和第二个存储过程在应用业务中实际调用（当前已完成对象创建与真实库存在性验证）。
-- 库存并发、支付/退款/核销事务回滚。
+- 库存并发、支付/退款/核销事务回滚需在 M10 从空测试库最终重跑。
 - 使用实际 `mongosh` 执行两个 Day09 Mongo 脚本；当前环境未安装 mongosh，已用 Java Driver 验证等效结构与行为。
+
+## M8 对象实际使用补充
+
+- `ReportDAO` 已调用 `sp_monthly_order_report` 和 `sp_update_inactive_items`。
+- `ReportDAO` 已查询 `v_user_profile` 和 `v_item_order_summary`。
+- `ReportDatabaseObjectsIntegrationTest` 在 `scenic_ticket_test` 事务内验证两个视图和第二个存储过程，测试结束回滚对景点状态的改动。

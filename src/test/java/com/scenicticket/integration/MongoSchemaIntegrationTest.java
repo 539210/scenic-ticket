@@ -123,6 +123,24 @@ class MongoSchemaIntegrationTest {
         assertFalse(systemLogDAO.findByCondition(1L, "LOGIN", "INFO", null, null, 20).isEmpty());
     }
 
+    @Test
+    void auditQueryCombinesUserTypeLevelDateKeywordAndLimit() {
+        SystemLogDAO systemLogDAO = new SystemLogDAO();
+        Date now = new Date();
+        database.getCollection("system_logs").insertOne(new Document("user_id", 88001L)
+                .append("log_type", "PAYMENT")
+                .append("log_level", "WARN")
+                .append("message", "支付确认审计关键词")
+                .append("action_detail", new Document("operation", "支付确认").append("ip", "127.0.0.1"))
+                .append("timestamp", now));
+
+        List<Document> results = systemLogDAO.findByCondition(88001L, "PAYMENT", "WARN",
+                new Date(now.getTime() - 1_000L), new Date(now.getTime() + 1_000L), "支付确认", 1);
+
+        assertEquals(1, results.size());
+        assertEquals("支付确认审计关键词", results.get(0).getString("message"));
+    }
+
     private static void createCollectionsAndIndexes(MongoDatabase target) {
         for (String name : List.of("action_logs", "comments", "item_details", "system_logs")) {
             target.createCollection(name);
