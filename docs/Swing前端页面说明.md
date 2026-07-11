@@ -22,7 +22,7 @@ src/main/java/com/scenicticket/ui/AppFrame.java
 | 注册页 | 从登录页跳转注册新用户，注册成功后返回登录页 | `UserService#register` |
 | 首页 | 展示当前账号、账号类型和快捷入口 | 本地 UI 状态 |
 | 个人档案 | 保存用户真实姓名、证件号、地址、个人简介 | `UserService#updateProfile` |
-| 景点浏览 | 按预设关键词/数据库分类查询景点；概览、简介、评论使用独立页签，过时异步详情不会覆盖新选择 | `BusinessService`、`CrossDatabaseQueryService`、`RecommendService`、`BehaviorLogService` |
+| 景点浏览 | 按预设关键词/数据库分类查询景点；概览、简介、评论使用独立页签，过时异步详情不会覆盖新选择；评论支持标签和原位修改 | `BusinessService`、`CrossDatabaseQueryService`、`RecommendService`、`CommentService` |
 | 我的订单 | 按订单号和状态查询订单，显示票种/日期/价格快照；专用按钮执行支付、待支付取消和退款 | `BusinessService`、`OrderLifecycleService` |
 | 后台管理 | 景点、分类、用户、票种/库存和门票核销独立页签 | `BusinessService`、`AdminUserService`、`TicketInventoryService`、`AdmissionService` |
 | 统计报表 | 以表格展示月度订单、热门排行、用户报告和综合汇总 | `StatisticsService` |
@@ -45,7 +45,8 @@ src/main/java/com/scenicticket/ui/AppFrame.java
 | `BusinessService` | `updateItemPricing` | 前端后台管理页维护景点票价和折扣 |
 | `BusinessService` | `updateCategory` / `updateItem` | 校验分类树并维护分类、景点名称和所属分类 |
 | `BusinessService` | `getItemDetailForAdmin` / `updateItemDetail` | 管理员读取并更新简介、图片地址和 JSON 扩展属性 |
-| `BusinessService` | `canComment` | 前端评论前校验用户是否购买过该景点 |
+| `BusinessService` | `canComment` | 兼容旧只读资格提示；不是提交授权边界 |
+| `CommentService` | `submit` / `listForItem` | 提交时重查支付资格，唯一新建/修改评论，并组合脱敏用户与完整展示字段 |
 | `BusinessService` | `searchOrderViews` | 联表查询订单及景点名称，避免用户依赖景点 ID |
 | `BusinessService` | `searchAllItemsForAdmin` | 管理员同时查看上架和下架景点 |
 | `AdminUserService` | `searchUsers` / `getUserDetail` | 管理员条件查询用户并查看档案、订单和行为概况 |

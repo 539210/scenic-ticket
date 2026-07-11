@@ -41,18 +41,10 @@ class BehaviorLogServiceTest {
     }
 
     @Test
-    void addCommentTrimsContentAndRecordsAction() {
-        service.addComment(3L, 4L, "  good view  ", 5, List.of("family"), "10.0.0.1");
-
-        assertEquals("good view", commentDAO.comment.getString("content"));
-        assertEquals(5, commentDAO.comment.getInteger("rating"));
-        assertEquals("COMMENT", logDAO.records.get(0).actionType);
-    }
-
-    @Test
-    void addCommentRejectsInvalidRatingAndBlankContent() {
-        assertThrows(BusinessException.class, () -> service.addComment(1L, 2L, "", 5, List.of(), null));
-        assertThrows(BusinessException.class, () -> service.addComment(1L, 2L, "ok", 6, List.of(), null));
+    void legacyCommentSubmissionIsDisabled() {
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> service.addComment(3L, 4L, "good view", 5, List.of("family"), "10.0.0.1"));
+        assertEquals("旧评论接口已停用，请使用带购买资格校验的 CommentService", exception.getMessage());
     }
 
     @Test

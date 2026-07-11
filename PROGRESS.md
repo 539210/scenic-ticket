@@ -4,7 +4,7 @@
 
 ## 当前状态
 
-- 当前里程碑：M6 入园核销（资格、数量与完成状态实现阶段）
+- 当前里程碑：M7 评论和景点互动（资格、唯一更新与完整展示阶段）
 - 当前分支：`codex/scenic-ticket-stabilization`
 - 基线提交：`90f254ca42fa47a95cfe3f5b936ae7270bba10f2`
 - 工作树基线：干净；未覆盖或撤销用户修改
@@ -155,3 +155,22 @@ BUILD SUCCESS
 - MySQL 核销提交后写 MongoDB `system_logs` 审计；审计失败不回滚核销，返回明确警告。
 - 真实流程：3 张票支付后先核销 1 张，退款被拒；再核销 2 张后订单完成，退款继续被拒；两条核销记录均可查询。
 - 默认 Java 21 `mvn clean test`：80 tests，0 failures，0 errors，2 skipped；完整真实测试库套件：90 tests，0 failures，0 errors，1 skipped。
+- M6 检查点已完成：`2f15d07 [Day 09] 实现门票核销与完成流程`。
+
+## M7 评论和景点互动起始审计（2026-07-11）
+
+- `CommentDAO.addComment` 永远插入，未使用已存在的唯一索引执行更新，也未保存 `updated_at`。
+- `BehaviorLogService.addComment` 只校验 ID/内容/评分，不在服务层重新校验有效已支付订单，直接调用可绕过 UI 的 `canComment`。
+- 用户侧评论仍以纯文本显示，缺脱敏用户名、标签和更新时间；历史中文问号内容不可逆，M7 只保证新写/更新 UTF-8 往返并明确旧数据限制。
+
+## M7 评论和景点互动验收（2026-07-11）
+
+- 新增 `CommentService` 与评论 DTO；提交时回查当前 actor 为有效用户、景点存在，并在服务层重新确认该用户有该景点已支付/完成且未退款订单，旧可绕过发布接口已 fail-closed。
+- 每用户每景点使用兼容数值/字符串 ID 的原位 upsert；首次保存写创建/更新时间，再次提交保留 `created_at` 并更新正文、评分、标签和 `updated_at`，唯一索引并发冲突重试为更新。
+- 用户侧评论保留独立页签；列表组合 MySQL 用户名并脱敏，完整显示评分、正文、标签、创建时间和更新时间。评论弹窗支持中英文逗号分隔标签。
+- MongoDB 评论成功但行为日志失败时，保存结果不回滚，界面收到明确审计警告，避免用户重复提交。
+- 真实跨库测试以测试订单完成待支付→支付，随后验证首次中文评论、再次原位修改、兼容记录唯一、UTF-8 往返、标签/双时间戳、脱敏展示和评分聚合，并清理临时数据。
+- 默认 Java 21 `mvn clean test`：83 tests，0 failures，0 errors，2 skipped；完整真实 MySQL/MongoDB `scenic_ticket_test` 套件：94 tests，0 failures，0 errors，1 skipped。
+- 已知评论显示 BUG-P2-001、重复插入 BUG-P2-005、字段缺失 BUG-P2-006 均完成自动化验证；历史已损坏为问号的正文不可逆，保留明确降级提示，不伪造恢复。
+- Swing 审计警告对话框、状态保留及混合数字/字符串 `item_id` 统一评分摘要均已纳入最终复跑。2026-07-12 默认套件再次通过：83 tests，0 failures，0 errors，2 skipped；完整真实 `scenic_ticket_test` 套件再次通过：94 tests，0 failures，0 errors，1 skipped。
+- M7 实现与验收已完成，检查点为 `[Day 09] 完善评论资格与展示`；提交并同步远端后进入 M8。

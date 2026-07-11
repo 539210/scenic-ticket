@@ -42,15 +42,7 @@ public class BehaviorLogService {
     }
 
     public void addComment(long userId, long itemId, String content, int rating, List<String> tags, String ip) {
-        validateIds(userId, itemId);
-        if (content == null || content.isBlank()) {
-            throw new BusinessException("评论内容不能为空");
-        }
-        if (rating < 1 || rating > 5) {
-            throw new BusinessException("评分必须在 1 到 5 之间");
-        }
-        commentDAO.addComment(userId, itemId, SecurityUtil.requireText(content, "评论内容", 1000), rating, tags);
-        logDAO.recordAction(userId, itemId, "COMMENT", 0, "SWING", SecurityUtil.normalizeIp(ip));
+        throw new BusinessException("旧评论接口已停用，请使用带购买资格校验的 CommentService");
     }
 
     public List<Document> queryRecentLogs(BehaviorLogQuery query) {

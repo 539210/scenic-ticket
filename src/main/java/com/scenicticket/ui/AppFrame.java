@@ -9,6 +9,7 @@ import com.scenicticket.dto.StatisticsReportDTO;
 import com.scenicticket.dto.AdminUserDetailDTO;
 import com.scenicticket.dto.UserSearchCriteria;
 import com.scenicticket.dto.TicketAvailabilityDTO;
+import com.scenicticket.dto.CommentListDTO;
 import com.scenicticket.model.Category;
 import com.scenicticket.model.Item;
 import com.scenicticket.model.Order;
@@ -28,6 +29,7 @@ import com.scenicticket.service.AdminUserService;
 import com.scenicticket.service.TicketInventoryService;
 import com.scenicticket.service.OrderLifecycleService;
 import com.scenicticket.service.AdmissionService;
+import com.scenicticket.service.CommentService;
 import org.bson.Document;
 
 import javax.swing.BorderFactory;
@@ -67,6 +69,7 @@ import java.awt.Insets;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -95,6 +98,7 @@ public class AppFrame extends JFrame {
     private final TicketInventoryService ticketInventoryService = new TicketInventoryService();
     private final OrderLifecycleService orderLifecycleService = new OrderLifecycleService();
     private final AdmissionService admissionService = new AdmissionService();
+    private final CommentService commentService = new CommentService();
 
     private final JLabel userLabel = new JLabel("未登录");
     private final JLabel statusLabel = new JLabel("就绪");
@@ -604,10 +608,11 @@ public class AppFrame extends JFrame {
         });
 
         commentsButton.addActionListener(event -> {
-            long requestedItemId = requireSelectedItem(selectedItem).getItemId();
-            runTask("游客评论", () -> crossDatabaseQueryService.getItemDetail(requestedItemId, 20), dto -> {
+            Item requestedItem = requireSelectedItem(selectedItem);
+            long requestedItemId = requestedItem.getItemId();
+            runTask("游客评论", () -> commentService.listForItem(requireCurrentUserId(), requestedItemId, 20), dto -> {
                 if (isSelectedItem(selectedItem, requestedItemId)) {
-                    commentsArea.setText(formatItemCommentsView(dto));
+                    commentsArea.setText(formatCommentViews(requestedItem.getTitle(), dto));
                     scenicInfoTabs.setSelectedIndex(2);
                 }
             });
@@ -618,13 +623,7 @@ public class AppFrame extends JFrame {
         orderButton.addActionListener(event -> showPurchaseDialog(requireSelectedItem(selectedItem), overviewArea));
         commentButton.addActionListener(event -> {
             Item item = requireSelectedItem(selectedItem);
-            runTask("检查评论资格", () -> businessService.canComment(requireCurrentUserId(), item.getItemId()), allowed -> {
-                if (!allowed) {
-                    showError(new IllegalArgumentException("购买该景点门票后才能发表评论"));
-                    return;
-                }
-                showCommentDialog(item, commentsArea);
-            });
+            showCommentDialog(item, commentsArea);
         });
 
         keywordField.addActionListener(event -> searchButton.doClick());
@@ -1795,30 +1794,34 @@ public class AppFrame extends JFrame {
     private void showCommentDialog(Item item, JTextArea detailArea) {
         JSpinner ratingSpinner = new JSpinner(new SpinnerNumberModel(5, 1, 5, 1));
         JTextArea commentArea = new JTextArea(5, 28);
+        JTextField tagsField = new JTextField(28);
         commentArea.setLineWrap(true);
         commentArea.setWrapStyleWord(true);
         JPanel form = formPanel("发表评论");
         addField(form, 0, "景点", new JLabel(item.getTitle()));
         addField(form, 1, "评分", ratingSpinner);
         addTextAreaField(form, 2, "评论内容", commentArea);
+        addField(form, 3, "标签（逗号分隔）", tagsField);
         int result = JOptionPane.showConfirmDialog(this, form, "发表评论",
                 JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
         if (result != JOptionPane.OK_OPTION) {
             return;
         }
-        runTask("发表评论", () -> {
-            if (!businessService.canComment(requireCurrentUserId(), item.getItemId())) {
-                throw new IllegalArgumentException("购买成功后才能评论该景点，请先购买门票");
+        runTask("发表评论", () -> commentService.submit(requireCurrentUserId(), item.getItemId(),
+                commentArea.getText(), (Integer) ratingSpinner.getValue(), parseTags(tagsField.getText()),
+                "127.0.0.1"), resultMessage -> {
+            setStatus(resultMessage.message());
+            if (!resultMessage.auditRecorded()) {
+                JOptionPane.showMessageDialog(this, resultMessage.message(),
+                        "评论已保存（审计警告）", JOptionPane.WARNING_MESSAGE);
             }
-            String comment = commentArea.getText().trim();
-            if (comment.isBlank()) {
-                throw new IllegalArgumentException("评论内容不能为空");
-            }
-            behaviorLogService.addComment(requireCurrentUserId(), item.getItemId(), comment,
-                    (Integer) ratingSpinner.getValue(), List.of("Swing界面"), "127.0.0.1");
-            return "评论提交成功";
-        }, message -> runTask("刷新游客评论", () -> crossDatabaseQueryService.getItemDetail(item.getItemId(), 20),
-                dto -> detailArea.setText(formatItemCommentsView(dto))));
+            runTask("刷新游客评论", () -> commentService.listForItem(
+                    requireCurrentUserId(), item.getItemId(), 20),
+                    dto -> {
+                        detailArea.setText(formatCommentViews(item.getTitle(), dto));
+                        setStatus(resultMessage.message());
+                    });
+        });
     }
 
     private Item requireSelectedItem(Item[] selectedItem) {
@@ -1963,6 +1966,17 @@ public class AppFrame extends JFrame {
             return List.of();
         }
         return text.lines().map(String::trim).filter(value -> !value.isBlank()).distinct().toList();
+    }
+
+    private List<String> parseTags(String text) {
+        if (text == null || text.isBlank()) {
+            return List.of();
+        }
+        return Arrays.stream(text.split("[,，]"))
+                .map(String::trim)
+                .filter(value -> !value.isBlank())
+                .distinct()
+                .toList();
     }
 
     private Document parseMetadataJson(String text) {
@@ -2372,6 +2386,29 @@ public class AppFrame extends JFrame {
                 .append(System.lineSeparator());
         builder.append("评论列表：").append(System.lineSeparator())
                 .append(formatComments(dto.getComments()));
+        return builder.toString();
+    }
+
+    private String formatCommentViews(String itemTitle, CommentListDTO dto) {
+        StringBuilder builder = new StringBuilder("游客评论")
+                .append(System.lineSeparator()).append(System.lineSeparator())
+                .append("景点：").append(itemTitle).append(System.lineSeparator())
+                .append("评分概览：").append(formatRatingSummary(dto.ratingSummary()))
+                .append(System.lineSeparator()).append(System.lineSeparator());
+        if (dto.comments().isEmpty()) {
+            return builder.append("暂无评论").toString();
+        }
+        int index = 1;
+        for (var comment : dto.comments()) {
+            builder.append(index++).append(". 用户：").append(comment.displayUsername())
+                    .append("  评分：").append(comment.rating()).append(System.lineSeparator())
+                    .append("   正文：").append(valueText(comment.content())).append(System.lineSeparator())
+                    .append("   标签：").append(comment.tags().isEmpty() ? "无" : String.join("、", comment.tags()))
+                    .append(System.lineSeparator())
+                    .append("   创建：").append(formatDate(comment.createdAt()))
+                    .append("  更新：").append(formatDate(comment.updatedAt()))
+                    .append(System.lineSeparator()).append(System.lineSeparator());
+        }
         return builder.toString();
     }
 
