@@ -16,7 +16,7 @@
 | ID | 状态 | 问题 | 复现证据/根因 | 验收 |
 | --- | --- | --- | --- | --- |
 | BUG-P1-001 | OPEN | 创建订单直接变为已支付 | `BusinessService.createOrder` 明确 `order.setStatus(1)`，DAO 默认也为 1；与确定流程冲突 | 创建后待支付，主动确认支付后才已支付 |
-| BUG-P1-002 | OPEN | 无票种、游玩日期和每日库存，无法防超卖 | 全仓库无 ticket_types/ticket_inventory/visit_date | 多票种、未来日期、库存行锁与并发测试通过 |
+| BUG-P1-002 | IN PROGRESS | 无票种、游玩日期和每日库存，无法防超卖 | 票种/每日库存 DAO、服务和 Swing 管理已完成；真实 20 线程争抢 10 张仅成功 10 次且库存不为负 | M4 独立库存并发已通过；需 M5 将待支付订单创建接入同一预留事务后再关闭 |
 | BUG-P1-003 | OPEN | 无退款与库存恢复 | 无 refunds 表/服务/UI | 合法退款同事务恢复库存，非法退款被拒绝 |
 | BUG-P1-004 | OPEN | 无门票核销 | 无 admissions 表/服务/UI | 合法核销、数量与完成状态测试通过 |
 | BUG-P1-005 | OPEN | MySQL 提交成功后 Mongo 日志失败会向用户显示整体失败 | `createOrder` 在 commit 后同步 `logDAO.recordAction`，异常直接传播 | 已提交业务明确成功并带警告/待补偿记录，不重复下单 |

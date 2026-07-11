@@ -4,7 +4,7 @@
 
 ## 当前状态
 
-- 当前里程碑：M3 分类、景点和详情（审计与失败测试阶段）
+- 当前里程碑：M4 票种、日期和库存（DAO/服务与并发测试阶段）
 - 当前分支：`codex/scenic-ticket-stabilization`
 - 基线提交：`90f254ca42fa47a95cfe3f5b936ae7270bba10f2`
 - 工作树基线：干净；未覆盖或撤销用户修改
@@ -103,3 +103,20 @@ BUILD SUCCESS
 - `DetailDAO` 优先读取数值 `item_id` 并兼容历史字符串 ID；再次保存时原位规范为数值 ID，避免产生第二份详情。
 - 新建景点的 MongoDB 详情写入失败时，服务会尝试立即把 MySQL 景点下架并返回明确恢复提示，避免无详情景点继续售卖。
 - 默认 Java 21 `mvn clean test`：67 tests，0 failures，0 errors，2 skipped；真实 MySQL/MongoDB `scenic_ticket_test` 完整套件：74 tests，0 failures，0 errors，1 skipped。
+- M3 检查点已完成：`8e93e69 [Day 09] 完善分类景点与详情管理`。
+
+## M4 票种、日期和库存起始审计（2026-07-11）
+
+- `ticket_types`、`ticket_inventory`、订单 `visit_date` 和价格快照字段已由 M1 迁移创建，但 Java 主代码尚无对应 Model、DAO、Service 或 Swing 管理页。
+- 每日库存约束已防止负数和账面总量超界，但应用层仍需事务与 `SELECT ... FOR UPDATE`/等效条件更新，证明并发预留不会超卖。
+- M4 将先完成票种与库存维护和未来日期可售查询；订单创建、支付、过期释放和退款恢复在 M5 统一接入同一库存事务 API。
+
+## M4 票种、日期和库存验收（2026-07-11）
+
+- 新增 `TicketType`、`TicketInventory`、对应 JDBC DAO、`TicketInventoryService` 和可售 DTO；票价、优惠、状态、日期范围和库存边界均在服务层校验。
+- 管理员后台新增“票种与库存”页，可按景点维护票种名称/价格/优惠/上下架，并按票种和日期查询、创建或调整每日总库存。
+- 普通用户可在景点页查询未来日期范围内仍有库存的上架票种，查看原价、优惠、折后价和可售数量。
+- 库存总量调整使用 MySQL 事务和 `SELECT ... FOR UPDATE`；不得小于已预留加已售数量，可售量由服务重新计算，不接受 UI 直接提交。
+- 并发测试首次发现“事务持有连接后另借连接校验票种”会耗尽 HikariCP；已改为在同一事务连接中完成票种校验和库存行锁。
+- 真实 20 线程争抢 10 张库存：成功 10、失败 10、最终可售 0、预留 10、无负库存且总量平衡。
+- 默认 Java 21 `mvn clean test`：71 tests，0 failures，0 errors，2 skipped；真实 MySQL/MongoDB `scenic_ticket_test` 完整套件：79 tests，0 failures，0 errors，1 skipped。

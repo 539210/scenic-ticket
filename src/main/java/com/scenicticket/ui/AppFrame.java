@@ -13,6 +13,8 @@ import com.scenicticket.model.Item;
 import com.scenicticket.model.Order;
 import com.scenicticket.model.Profile;
 import com.scenicticket.model.User;
+import com.scenicticket.model.TicketInventory;
+import com.scenicticket.model.TicketType;
 import com.scenicticket.service.BehaviorLogService;
 import com.scenicticket.service.BusinessService;
 import com.scenicticket.service.CrossDatabaseQueryService;
@@ -21,6 +23,7 @@ import com.scenicticket.service.StatisticsService;
 import com.scenicticket.service.SystemLogService;
 import com.scenicticket.service.UserService;
 import com.scenicticket.service.AdminUserService;
+import com.scenicticket.service.TicketInventoryService;
 import org.bson.Document;
 
 import javax.swing.BorderFactory;
@@ -85,6 +88,7 @@ public class AppFrame extends JFrame {
     private final SystemLogService systemLogService = new SystemLogService();
     private final BehaviorLogService behaviorLogService = new BehaviorLogService();
     private final AdminUserService adminUserService = new AdminUserService();
+    private final TicketInventoryService ticketInventoryService = new TicketInventoryService();
 
     private final JLabel userLabel = new JLabel("未登录");
     private final JLabel statusLabel = new JLabel("就绪");
@@ -462,18 +466,22 @@ public class AppFrame extends JFrame {
 
         JButton detailButton = secondaryButton("景点简介");
         JButton commentsButton = secondaryButton("游客评论");
+        JButton availabilityButton = secondaryButton("可售票种与日期");
         JButton orderButton = primaryButton("购买门票");
         JButton commentButton = secondaryButton("发表评论");
         detailButton.setEnabled(false);
         commentsButton.setEnabled(false);
+        availabilityButton.setEnabled(false);
         orderButton.setEnabled(false);
         commentButton.setEnabled(false);
-        JPanel detailActions = new JPanel(new GridLayout(2, 2, 10, 10));
+        JPanel detailActions = new JPanel(new GridLayout(3, 2, 10, 10));
         detailActions.setOpaque(false);
         detailActions.add(detailButton);
         detailActions.add(commentsButton);
+        detailActions.add(availabilityButton);
         detailActions.add(orderButton);
         detailActions.add(commentButton);
+        detailActions.add(new JLabel(""));
         JTabbedPane scenicInfoTabs = new JTabbedPane();
         scenicInfoTabs.addTab("景点概览", new JScrollPane(overviewArea));
         scenicInfoTabs.addTab("景点简介", new JScrollPane(introductionArea));
@@ -505,6 +513,7 @@ public class AppFrame extends JFrame {
                 scenicInfoTabs.setSelectedIndex(0);
                 detailButton.setEnabled(true);
                 commentsButton.setEnabled(true);
+                availabilityButton.setEnabled(item.getStatus() != null && item.getStatus() == 1);
                 orderButton.setEnabled(item.getStatus() != null && item.getStatus() == 1);
                 commentButton.setEnabled(true);
             }
@@ -522,7 +531,7 @@ public class AppFrame extends JFrame {
                         item.getPrice(), item.getDiscountRate())), "-", formatItemStatus(item.getStatus())
                 });
             }
-            resetItemSelection(table, selectedItem, detailButton, commentsButton, orderButton, commentButton);
+            resetItemSelection(table, selectedItem, detailButton, commentsButton, availabilityButton, orderButton, commentButton);
             overviewArea.setText(items.isEmpty() ? "没有找到符合条件的景点，请调整查询条件。" : "共找到 " + items.size() + " 个景点，请从左侧列表选择。" );
             introductionArea.setText("请选择景点后点击“景点简介”。");
             commentsArea.setText("请选择景点后点击“游客评论”。");
@@ -547,7 +556,7 @@ public class AppFrame extends JFrame {
                         formatItemStatus(item.getStatus())
                 });
             }
-            resetItemSelection(table, selectedItem, detailButton, commentsButton, orderButton, commentButton);
+            resetItemSelection(table, selectedItem, detailButton, commentsButton, availabilityButton, orderButton, commentButton);
             overviewArea.setText(recommendations.isEmpty() ? "暂时没有推荐结果。" : "已生成 " + recommendations.size() + " 个推荐结果，请选择景点查看推荐理由。" );
             introductionArea.setText("请选择景点后点击“景点简介”。");
             commentsArea.setText("请选择景点后点击“游客评论”。");
@@ -597,6 +606,8 @@ public class AppFrame extends JFrame {
                 }
             });
         });
+
+        availabilityButton.addActionListener(event -> showTicketAvailabilityDialog(requireSelectedItem(selectedItem)));
 
         orderButton.addActionListener(event -> showPurchaseDialog(requireSelectedItem(selectedItem), overviewArea));
         commentButton.addActionListener(event -> {
@@ -992,6 +1003,7 @@ public class AppFrame extends JFrame {
         manageTabs.addTab("景点管理", itemPage);
         manageTabs.addTab("分类管理", categoryPage);
         manageTabs.addTab("用户管理", createUserManagementPanel());
+        manageTabs.addTab("票种与库存", createTicketInventoryManagementPanel());
         panel.add(manageTabs, BorderLayout.CENTER);
         refreshCategories.run();
         return panel;
@@ -1111,6 +1123,151 @@ public class AppFrame extends JFrame {
         split.setDividerLocation(760);
         panel.add(wrapWithTitle("用户筛选", filters), BorderLayout.NORTH);
         panel.add(split, BorderLayout.CENTER);
+        return panel;
+    }
+
+    private JPanel createTicketInventoryManagementPanel() {
+        JPanel panel = new JPanel(new BorderLayout(12, 12));
+        panel.setOpaque(false);
+        JTabbedPane tabs = new JTabbedPane();
+
+        JPanel typePage = new JPanel(new BorderLayout(10, 10));
+        typePage.setOpaque(false);
+        JTextField itemIdField = new JTextField("1", 7);
+        JTextField typeNameField = new JTextField(12);
+        JTextField typePriceField = new JTextField("80.00", 8);
+        JTextField typeDiscountField = new JTextField("0", 6);
+        JComboBox<String> typeStatusBox = new JComboBox<>(new String[]{"下架", "上架"});
+        typeStatusBox.setSelectedIndex(1);
+        JButton queryTypesButton = primaryButton("查询票种");
+        JButton createTypeButton = primaryButton("新增票种");
+        JButton updateTypeButton = secondaryButton("更新所选票种");
+        updateTypeButton.setEnabled(false);
+        JPanel typeToolbar = toolbar();
+        typeToolbar.add(new JLabel("景点ID"));
+        typeToolbar.add(itemIdField);
+        typeToolbar.add(new JLabel("票种名称"));
+        typeToolbar.add(typeNameField);
+        typeToolbar.add(new JLabel("原价"));
+        typeToolbar.add(typePriceField);
+        typeToolbar.add(new JLabel("优惠减免%"));
+        typeToolbar.add(typeDiscountField);
+        typeToolbar.add(new JLabel("状态"));
+        typeToolbar.add(typeStatusBox);
+        typeToolbar.add(queryTypesButton);
+        typeToolbar.add(createTypeButton);
+        typeToolbar.add(updateTypeButton);
+
+        DefaultTableModel typeModel = tableModel("票种ID", "景点ID", "票种名称", "原价", "优惠", "折后价", "状态");
+        JTable typeTable = createTable(typeModel);
+        setColumnWidths(typeTable, 75, 75, 130, 90, 80, 90, 70);
+        List<TicketType> visibleTypes = new ArrayList<>();
+        TicketType[] selectedType = new TicketType[1];
+
+        JTextField inventoryTypeIdField = new JTextField(8);
+        Runnable refreshTypes = () -> runAdminTask("查询票种", () -> ticketInventoryService.listTicketTypes(
+                requireCurrentUserId(), parseRequiredLong(itemIdField.getText(), "景点ID"), true), types -> {
+            typeModel.setRowCount(0);
+            visibleTypes.clear();
+            visibleTypes.addAll(types);
+            for (TicketType type : types) {
+                typeModel.addRow(new Object[]{type.getTicketTypeId(), type.getItemId(), type.getName(),
+                        UiFormatters.money(type.getOriginalPrice()), discountText(type.getDiscountRate()),
+                        UiFormatters.money(ticketInventoryService.discountedPrice(type)),
+                        type.getStatus() != null && type.getStatus() == 1 ? "上架" : "下架"});
+            }
+            selectedType[0] = null;
+            updateTypeButton.setEnabled(false);
+            setStatus("已加载 " + types.size() + " 个票种");
+        });
+        typeTable.getSelectionModel().addListSelectionListener(event -> {
+            int row = typeTable.getSelectedRow();
+            if (!event.getValueIsAdjusting() && row >= 0) {
+                TicketType type = visibleTypes.get(typeTable.convertRowIndexToModel(row));
+                selectedType[0] = type;
+                itemIdField.setText(String.valueOf(type.getItemId()));
+                typeNameField.setText(type.getName());
+                typePriceField.setText(type.getOriginalPrice().toPlainString());
+                typeDiscountField.setText(type.getDiscountRate().stripTrailingZeros().toPlainString());
+                typeStatusBox.setSelectedIndex(type.getStatus() != null && type.getStatus() == 1 ? 1 : 0);
+                inventoryTypeIdField.setText(String.valueOf(type.getTicketTypeId()));
+                updateTypeButton.setEnabled(true);
+            }
+        });
+        queryTypesButton.addActionListener(event -> refreshTypes.run());
+        createTypeButton.addActionListener(event -> runAdminTask("新增票种", () -> ticketInventoryService.createTicketType(
+                requireCurrentUserId(), parseRequiredLong(itemIdField.getText(), "景点ID"), typeNameField.getText(),
+                parseRequiredAmount(typePriceField.getText(), "票价"),
+                parseRequiredAmount(typeDiscountField.getText(), "优惠减免比例")), id -> {
+            setStatus("票种创建成功，编号：" + id);
+            refreshTypes.run();
+        }));
+        updateTypeButton.addActionListener(event -> runAdminTask("更新票种", () -> {
+            if (selectedType[0] == null) {
+                throw new IllegalArgumentException("请先选择票种");
+            }
+            return ticketInventoryService.updateTicketType(requireCurrentUserId(), selectedType[0].getTicketTypeId(),
+                    typeNameField.getText(), parseRequiredAmount(typePriceField.getText(), "票价"),
+                    parseRequiredAmount(typeDiscountField.getText(), "优惠减免比例"), typeStatusBox.getSelectedIndex());
+        }, updated -> {
+            setStatus(updated ? "票种已更新" : "票种没有变化");
+            refreshTypes.run();
+        }));
+        typePage.add(wrapWithTitle("票种维护", typeToolbar), BorderLayout.NORTH);
+        typePage.add(wrapWithTitle("票种列表", new JScrollPane(typeTable)), BorderLayout.CENTER);
+
+        JPanel inventoryPage = new JPanel(new BorderLayout(10, 10));
+        inventoryPage.setOpaque(false);
+        JTextField startDateField = new JTextField(LocalDate.now().toString(), 10);
+        JTextField endDateField = new JTextField(LocalDate.now().plusDays(14).toString(), 10);
+        JTextField maintainDateField = new JTextField(LocalDate.now().plusDays(1).toString(), 10);
+        JTextField totalStockField = new JTextField("100", 8);
+        JButton queryInventoryButton = primaryButton("查询库存");
+        JButton saveInventoryButton = primaryButton("设置总库存");
+        JPanel inventoryToolbar = toolbar();
+        inventoryToolbar.add(new JLabel("票种ID"));
+        inventoryToolbar.add(inventoryTypeIdField);
+        inventoryToolbar.add(new JLabel("开始日期"));
+        inventoryToolbar.add(startDateField);
+        inventoryToolbar.add(new JLabel("结束日期"));
+        inventoryToolbar.add(endDateField);
+        inventoryToolbar.add(queryInventoryButton);
+        inventoryToolbar.add(new JLabel("维护日期"));
+        inventoryToolbar.add(maintainDateField);
+        inventoryToolbar.add(new JLabel("总库存"));
+        inventoryToolbar.add(totalStockField);
+        inventoryToolbar.add(saveInventoryButton);
+
+        DefaultTableModel inventoryModel = tableModel("库存ID", "票种ID", "游玩日期", "总库存", "可售", "已预留", "已售", "版本");
+        JTable inventoryTable = createTable(inventoryModel);
+        setColumnWidths(inventoryTable, 75, 75, 110, 80, 80, 80, 80, 70);
+        Runnable refreshInventory = () -> runAdminTask("查询每日库存", () -> ticketInventoryService.listInventory(
+                requireCurrentUserId(), parseRequiredLong(inventoryTypeIdField.getText(), "票种ID"),
+                parseRequiredDate(startDateField.getText(), "开始日期"),
+                parseRequiredDate(endDateField.getText(), "结束日期")), inventories -> {
+            inventoryModel.setRowCount(0);
+            for (TicketInventory inventory : inventories) {
+                inventoryModel.addRow(new Object[]{inventory.getInventoryId(), inventory.getTicketTypeId(),
+                        inventory.getVisitDate(), inventory.getTotalStock(), inventory.getAvailableStock(),
+                        inventory.getReservedStock(), inventory.getSoldStock(), inventory.getVersion()});
+            }
+            setStatus("已加载 " + inventories.size() + " 条每日库存");
+        });
+        queryInventoryButton.addActionListener(event -> refreshInventory.run());
+        saveInventoryButton.addActionListener(event -> runAdminTask("设置每日库存", () ->
+                ticketInventoryService.setTotalStock(requireCurrentUserId(),
+                        parseRequiredLong(inventoryTypeIdField.getText(), "票种ID"),
+                        parseRequiredDate(maintainDateField.getText(), "维护日期"),
+                        parseRequiredInt(totalStockField.getText(), "总库存")), inventory -> {
+            setStatus("库存已保存，可售 " + inventory.getAvailableStock() + " 张");
+            refreshInventory.run();
+        }));
+        inventoryPage.add(wrapWithTitle("按日期维护库存（日期格式 yyyy-MM-dd）", inventoryToolbar), BorderLayout.NORTH);
+        inventoryPage.add(wrapWithTitle("每日库存列表", new JScrollPane(inventoryTable)), BorderLayout.CENTER);
+
+        tabs.addTab("票种管理", typePage);
+        tabs.addTab("每日库存", inventoryPage);
+        panel.add(tabs, BorderLayout.CENTER);
         return panel;
     }
 
@@ -1468,6 +1625,36 @@ public class AppFrame extends JFrame {
                 parseRequiredAmount(priceField.getText(), "票价"), parseRequiredAmount(discountField.getText(), "优惠减免比例")), id -> {
             setStatus("景点创建成功，编号：" + id);
             refreshItems.run();
+        });
+    }
+
+    private void showTicketAvailabilityDialog(Item item) {
+        JTextField startDateField = new JTextField(LocalDate.now().plusDays(1).toString(), 12);
+        JTextField endDateField = new JTextField(LocalDate.now().plusDays(14).toString(), 12);
+        JPanel form = formPanel("查询“" + item.getTitle() + "”可售票种与日期");
+        addField(form, 0, "开始日期", startDateField);
+        addField(form, 1, "结束日期", endDateField);
+        int result = JOptionPane.showConfirmDialog(this, form, "可售票种与日期",
+                JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+        if (result != JOptionPane.OK_OPTION) {
+            return;
+        }
+        runTask("查询可售票种与日期", () -> ticketInventoryService.listAvailable(requireCurrentUserId(), item.getItemId(),
+                parseRequiredDate(startDateField.getText(), "开始日期"),
+                parseRequiredDate(endDateField.getText(), "结束日期")), options -> {
+            DefaultTableModel model = tableModel("票种ID", "票种名称", "游玩日期", "原价", "优惠", "折后价", "可售库存");
+            for (var option : options) {
+                model.addRow(new Object[]{option.ticketType().getTicketTypeId(), option.ticketType().getName(),
+                        option.inventory().getVisitDate(), UiFormatters.money(option.ticketType().getOriginalPrice()),
+                        discountText(option.ticketType().getDiscountRate()), UiFormatters.money(option.discountedPrice()),
+                        option.inventory().getAvailableStock()});
+            }
+            JTable table = createTable(model);
+            setColumnWidths(table, 75, 120, 110, 90, 80, 90, 90);
+            JOptionPane.showMessageDialog(this, options.isEmpty()
+                            ? new JLabel("所选日期范围暂无可售票种或库存")
+                            : new JScrollPane(table),
+                    "可售票种与日期", JOptionPane.INFORMATION_MESSAGE);
         });
     }
 
@@ -2566,6 +2753,17 @@ public class AppFrame extends JFrame {
             return amount;
         } catch (NumberFormatException e) {
             throw new IllegalArgumentException(fieldName + "必须是有效金额", e);
+        }
+    }
+
+    private LocalDate parseRequiredDate(String value, String fieldName) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException(fieldName + "不能为空");
+        }
+        try {
+            return LocalDate.parse(value.trim());
+        } catch (java.time.format.DateTimeParseException exception) {
+            throw new IllegalArgumentException(fieldName + "必须使用 yyyy-MM-dd 格式", exception);
         }
     }
 

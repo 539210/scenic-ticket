@@ -24,7 +24,7 @@ src/main/java/com/scenicticket/ui/AppFrame.java
 | 个人档案 | 保存用户真实姓名、证件号、地址、个人简介 | `UserService#updateProfile` |
 | 景点浏览 | 按预设关键词/数据库分类查询景点；概览、简介、评论使用独立页签，过时异步详情不会覆盖新选择 | `BusinessService`、`CrossDatabaseQueryService`、`RecommendService`、`BehaviorLogService` |
 | 我的订单 | 按订单号和状态查询订单，直接显示景点名称；管理员可按用户筛选并更新所选订单状态 | `BusinessService` |
-| 后台管理 | 景点、分类和用户管理独立页签；用户页支持条件查询、详情/概况、启禁和角色维护 | `BusinessService`、`AdminUserService` |
+| 后台管理 | 景点、分类、用户及票种/库存独立页签；支持未来日期每日库存维护 | `BusinessService`、`AdminUserService`、`TicketInventoryService` |
 | 统计报表 | 以表格展示月度订单、热门排行、用户报告和综合汇总 | `StatisticsService` |
 | 系统审计 | 以中文表格展示日志明细、审计汇总、趋势和用户操作汇总 | `SystemLogService` |
 
@@ -51,6 +51,8 @@ src/main/java/com/scenicticket/ui/AppFrame.java
 | `AdminUserService` | `searchUsers` / `getUserDetail` | 管理员条件查询用户并查看档案、订单和行为概况 |
 | `AdminUserService` | `changeUserStatus` / `changeUserRole` | 事务化用户启禁和角色维护，保护自身及最后有效管理员 |
 | `AuthorizationService` | `requireActiveUser` / `requireAdmin` | 在服务层回查 actor 状态和角色，不依赖 UI 隐藏按钮 |
+| `TicketInventoryService` | `createTicketType` / `updateTicketType` | 管理多票种价格、优惠和上下架状态 |
+| `TicketInventoryService` | `setTotalStock` / `listAvailable` | 行锁维护每日库存并向用户展示未来可售票种和日期 |
 
 ## 运行方式
 
