@@ -103,9 +103,6 @@ public class AppFrame extends JFrame {
     private final JLabel userLabel = new JLabel("未登录");
     private final JLabel statusLabel = new JLabel("就绪");
     private final JTabbedPane tabs = new JTabbedPane(JTabbedPane.LEFT);
-    private final JTextArea homeSummaryArea = createTextArea(10, 80);
-    private final JLabel homeUserValue = new JLabel("未登录");
-    private final JLabel homeRoleValue = new JLabel("-");
     private final Map<Long, String> categoryNames = new LinkedHashMap<>();
     private final SwingTaskRunner taskRunner;
 
@@ -157,7 +154,6 @@ public class AppFrame extends JFrame {
         add(createHeader(), BorderLayout.NORTH);
         add(createPages(), BorderLayout.CENTER);
         add(createFooter(), BorderLayout.SOUTH);
-        refreshHomeSummary();
         switchTo("首页");
         revalidate();
         repaint();
@@ -251,39 +247,7 @@ public class AppFrame extends JFrame {
     }
 
     private JPanel createHomePanel() {
-        JPanel panel = pagePanel(new BorderLayout(12, 12));
-
-        JPanel metrics = new JPanel(new GridLayout(1, 2, 12, 12));
-        metrics.setOpaque(false);
-        metrics.add(metricCard("当前账号", homeUserValue));
-        metrics.add(metricCard("账号类型", homeRoleValue));
-
-        JPanel quickActions = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
-        quickActions.setOpaque(false);
-        quickActions.add(navButton("完善档案", "个人档案"));
-        quickActions.add(navButton("浏览景点", "景点浏览"));
-        quickActions.add(navButton("我的订单", "我的订单"));
-        quickActions.add(navButton("查看报表", "统计报表"));
-        JButton refreshButton = secondaryButton("刷新");
-        refreshButton.addActionListener(event -> {
-            refreshHomeSummary();
-            setStatus("首页已刷新");
-        });
-        quickActions.add(refreshButton);
-        if (isCurrentAdmin()) {
-            quickActions.add(navButton("后台管理", "后台管理"));
-            quickActions.add(navButton("系统审计", "系统审计"));
-        }
-
-        JPanel top = new JPanel(new BorderLayout(0, 12));
-        top.setOpaque(false);
-        top.add(metrics, BorderLayout.CENTER);
-        top.add(quickActions, BorderLayout.SOUTH);
-
-        homeSummaryArea.setText("");
-        panel.add(top, BorderLayout.NORTH);
-        panel.add(wrapWithTitle("欢迎使用", homeSummaryArea), BorderLayout.CENTER);
-        return panel;
+        return new HomePanel(currentUser, this::switchTo, this::setStatus);
     }
 
     private JPanel createLoginPanel() {
@@ -1612,7 +1576,6 @@ public class AppFrame extends JFrame {
         sessionTaskGuard.advanceSession();
         currentUser = result.getUser();
         updateSessionLabel();
-        refreshHomeSummary();
         setStatus("登录成功：" + currentUser.getUsername());
     }
 
@@ -1622,19 +1585,6 @@ public class AppFrame extends JFrame {
             return;
         }
         userLabel.setText(currentUser.getUsername() + "  ·  " + roleDisplay(currentUser.getRole()));
-    }
-
-    private void refreshHomeSummary() {
-        if (currentUser == null) {
-            homeUserValue.setText("未登录");
-            homeRoleValue.setText("-");
-        } else {
-            homeUserValue.setText(currentUser.getUsername() + " / ID " + currentUser.getUserId());
-            homeRoleValue.setText(roleDisplay(currentUser.getRole()));
-        }
-        homeSummaryArea.setText(currentUser == null ? "请登录后使用系统。"
-                : "你好，" + currentUser.getUsername() + "。请选择上方快捷入口或左侧导航开始使用。"
-                + (isCurrentAdmin() ? System.lineSeparator() + "当前为管理员账户，可使用后台管理与系统审计。" : ""));
     }
 
     private void fillProfileForm(Profile profile, JTextField userIdField, JTextField realNameField,
@@ -1903,28 +1853,6 @@ public class AppFrame extends JFrame {
 
     private JPanel wrapWithTitle(String title, Component content) {
         return UiComponents.card(title, content);
-    }
-
-    private JPanel metricCard(String title, JLabel valueLabel) {
-        JPanel panel = new JPanel(new BorderLayout());
-        panel.setBackground(Color.WHITE);
-        panel.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(PANEL_BORDER),
-                BorderFactory.createEmptyBorder(14, 14, 14, 14)
-        ));
-        JLabel titleLabel = new JLabel(title);
-        titleLabel.setForeground(new Color(100, 110, 120));
-        valueLabel.setFont(new Font("Microsoft YaHei UI", Font.BOLD, 18));
-        valueLabel.setHorizontalAlignment(SwingConstants.LEFT);
-        panel.add(titleLabel, BorderLayout.NORTH);
-        panel.add(valueLabel, BorderLayout.CENTER);
-        return panel;
-    }
-
-    private JButton navButton(String text, String tabTitle) {
-        JButton button = secondaryButton(text);
-        button.addActionListener(event -> switchTo(tabTitle));
-        return button;
     }
 
     private JButton primaryButton(String text) {

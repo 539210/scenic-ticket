@@ -203,3 +203,4 @@ BUILD SUCCESS
 - 新增 `LatestTaskGuard` 并接入 `SwingTaskRunner`：同一会话中同名查询/刷新连续发起时，仅最新请求可以更新成功、失败或中断状态，防止旧查询后完成覆盖新结果；不同任务名互不影响。默认 Java 21 `mvn -q test` 通过：92 tests，0 failures，0 errors，2 skipped。
 - 新增 `OrderActionPolicy`：订单表格选中后仅对订单本人启用合法操作，待支付订单启用支付/取消，已支付且游玩日期未到的订单启用退款，已取消、已完成、已到游玩日或他人订单均不启用误导性按钮；服务层仍执行最终资格校验。默认 Java 21 `mvn -q test` 通过：95 tests，0 failures，0 errors，2 skipped。
 - 新增 `UiInputParsers`，集中 ID、整数、金额、ISO 日期、审计起止日期和可选文本解析；`AppFrame` 仅保留薄委托。测试发现并明确 `java.util.Date`/Mongo 日期的毫秒精度，结束日期按当天 `23:59:59.999` 包含。默认 Java 21 `mvn -q test` 通过：99 tests，0 failures，0 errors，2 skipped。
+- 完整抽出 `HomePanel`：首页账户/角色摘要、普通用户快捷入口、管理员后台/审计入口和刷新状态均由独立组件维护；`AppFrame` 删除首页专用字段、刷新方法及遗留卡片/导航辅助方法。默认 Java 21 `mvn -q test` 通过：101 tests，0 failures，0 errors，2 skipped；`AppFrame` 当前仍有 2777 行，继续保留为 M9 进行中项。
