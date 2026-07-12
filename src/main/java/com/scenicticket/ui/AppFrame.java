@@ -349,53 +349,11 @@ public class AppFrame extends JFrame {
     }
 
     private JPanel createProfilePanel() {
-        JPanel panel = pagePanel(new BorderLayout(12, 12));
-        JTextField userIdField = new JTextField(12);
-        JTextField realNameField = new JTextField(24);
-        JTextField idCardField = new JTextField(24);
-        JTextField addressField = new JTextField(32);
-        JTextArea notesArea = new JTextArea(5, 32);
-        JButton refreshButton = secondaryButton("刷新档案");
-        JButton saveButton = primaryButton("保存档案");
-        JLabel message = new JLabel(" ");
-
-        JPanel form = formPanel("个人档案");
-        userIdField.setText(String.valueOf(requireCurrentUserId()));
-        addField(form, 0, "真实姓名", realNameField);
-        addField(form, 1, "证件号", idCardField);
-        addField(form, 2, "联系地址", addressField);
-        addTextAreaField(form, 3, "个人简介", notesArea);
-        addFormButtons(form, 4, refreshButton, saveButton);
-        addFormMessage(form, 5, message);
-
-        refreshButton.addActionListener(event -> runTask("刷新档案", () -> userService.getProfile(
-                requireCurrentUserId(),
-                requireCurrentUserId()
-        ), profile -> {
-            if (profile.isPresent()) {
-                fillProfileForm(profile.get(), userIdField, realNameField, idCardField, addressField, notesArea);
-                message.setText("档案已刷新");
-            } else {
-                realNameField.setText("");
-                idCardField.setText("");
-                addressField.setText("");
-                notesArea.setText("");
-                message.setText("暂无档案信息，可以填写后保存");
-            }
-        }));
-
-        saveButton.addActionListener(event -> runTask("保存档案", () -> {
-            Profile profile = new Profile();
-            profile.setUserId(requireCurrentUserId());
-            profile.setRealName(realNameField.getText());
-            profile.setIdCard(idCardField.getText());
-            profile.setAddress(addressField.getText());
-            profile.setNotes(notesArea.getText());
-            return userService.updateProfile(requireCurrentUserId(), profile);
-        }, saved -> message.setText(saved ? "档案已保存" : "档案未更新")));
-
-        panel.add(form, BorderLayout.NORTH);
-        return panel;
+        long actorUserId = requireCurrentUserId();
+        return new ProfilePanel(actorUserId,
+                () -> userService.getProfile(actorUserId, actorUserId),
+                profile -> userService.updateProfile(actorUserId, profile),
+                taskRunner);
     }
 
     private JPanel createItemPanel() {
@@ -1585,15 +1543,6 @@ public class AppFrame extends JFrame {
             return;
         }
         userLabel.setText(currentUser.getUsername() + "  ·  " + roleDisplay(currentUser.getRole()));
-    }
-
-    private void fillProfileForm(Profile profile, JTextField userIdField, JTextField realNameField,
-                                 JTextField idCardField, JTextField addressField, JTextArea notesArea) {
-        userIdField.setText(valueText(profile.getUserId()));
-        realNameField.setText(fieldText(profile.getRealName()));
-        idCardField.setText(fieldText(profile.getIdCard()));
-        addressField.setText(fieldText(profile.getAddress()));
-        notesArea.setText(fieldText(profile.getNotes()));
     }
 
     private void styleNavigationTabs() {

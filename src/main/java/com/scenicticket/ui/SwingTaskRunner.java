@@ -8,7 +8,7 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Consumer;
 
-public class SwingTaskRunner {
+public class SwingTaskRunner implements UiTaskExecutor {
     private static final String PROCESSING_SUFFIX = "\u5904\u7406\u4e2d...";
     private static final String DONE_SUFFIX = "\u5b8c\u6210";
     private static final String INTERRUPTED_SUFFIX = "\u5df2\u4e2d\u65ad";
@@ -30,6 +30,7 @@ public class SwingTaskRunner {
         owner.setGlassPane(UiComponents.busyGlassPane());
     }
 
+    @Override
     public <T> void run(String name, Callable<T> task, Consumer<T> onSuccess) {
         run(name, task, onSuccess, null);
     }
