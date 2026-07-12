@@ -37,6 +37,7 @@
 | BUG-P2-008 | VERIFIED | 退出没有写 LOGOUT 审计，异步任务可能跨会话回写 | 退出调用 `UserService.logout` 写 LOGOUT；`SessionTaskGuard` 在退出/登录切换时使旧异步回调失效 | Mongo 日志失败降级测试、会话代次回归测试和 M2 完整套件通过 |
 | BUG-P2-009 | VERIFIED | 热门排行只显示景点 ID | `StatisticsService` 已将 Mongo 热门聚合与 MySQL `items` 主数据合并为 `HotItemRankingDTO` | UI 表格显示景点名称、ID、状态和热度指标；缺失主数据明确显示“景点不存在或已删除”；单元测试覆盖 |
 | BUG-P2-010 | VERIFIED | 第二个存储过程和两个视图未在系统/测试中证明实际用途 | `ReportDAO` 现在实际调用 `sp_update_inactive_items`，并查询 `v_user_profile`、`v_item_order_summary` | `ReportDatabaseObjectsIntegrationTest` 在 `scenic_ticket_test` 事务内验证两个视图和第二存储过程，测试后回滚 |
+| BUG-P2-011 | VERIFIED | 同一会话连续刷新可能由较慢旧请求覆盖较快新请求 | `SwingTaskRunner` 现按任务名获取 `LatestTaskGuard` 代次，成功/失败/中断回调均只接受最新代次 | `LatestTaskGuardTest` 验证同名新请求使旧请求失效，且不同任务名互不干扰；真实 Swing 连续刷新仍待 M10/M11 |
 
 ## P3
 

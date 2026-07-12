@@ -200,3 +200,4 @@ BUILD SUCCESS
 - `UiFormatters.chineseError` 从单一“检查数据库连接”调整为数据库、权限和通用失败三类中文提示，同时继续保留业务校验消息。
 - 默认 Java 21 `mvn clean test` 已通过：88 tests，0 failures，0 errors，2 skipped。
 - 继续抽出 `OrderTableModels`，把“我的订单”表格列定义、列宽和行填充从 `AppFrame` 移出；自动测试固定普通用户/管理员表格均显示票种和游玩日期，防止答辩演示关键字段回退。默认 Java 21 `mvn -q test` 通过：90 tests，0 failures，0 errors，2 skipped。
+- 新增 `LatestTaskGuard` 并接入 `SwingTaskRunner`：同一会话中同名查询/刷新连续发起时，仅最新请求可以更新成功、失败或中断状态，防止旧查询后完成覆盖新结果；不同任务名互不影响。默认 Java 21 `mvn -q test` 通过：92 tests，0 failures，0 errors，2 skipped。

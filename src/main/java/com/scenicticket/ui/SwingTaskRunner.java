@@ -17,6 +17,7 @@ public class SwingTaskRunner {
     private final JFrame owner;
     private final JLabel statusLabel;
     private final SessionTaskGuard sessionTaskGuard;
+    private final LatestTaskGuard latestTaskGuard = new LatestTaskGuard();
     private final Consumer<Throwable> errorHandler;
     private int runningTasks;
 
@@ -35,6 +36,7 @@ public class SwingTaskRunner {
 
     public <T> void run(String name, Callable<T> task, Consumer<T> onSuccess, Consumer<String> onError) {
         long taskGeneration = sessionTaskGuard.currentToken();
+        long requestGeneration = latestTaskGuard.nextToken(name);
         String processingStatus = name + PROCESSING_SUFFIX;
         statusLabel.setText(processingStatus);
         setBusy(true);
@@ -48,7 +50,7 @@ public class SwingTaskRunner {
             protected void done() {
                 try {
                     T result = get();
-                    if (!sessionTaskGuard.isCurrent(taskGeneration)) {
+                    if (!isCurrent(name, taskGeneration, requestGeneration)) {
                         return;
                     }
                     onSuccess.accept(result);
@@ -57,13 +59,14 @@ public class SwingTaskRunner {
                     }
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
-                    if (sessionTaskGuard.isCurrent(taskGeneration)) {
+                    if (isCurrent(name, taskGeneration, requestGeneration)) {
                         statusLabel.setText(name + INTERRUPTED_SUFFIX);
                     }
                 } catch (ExecutionException e) {
-                    handleFailure(name, taskGeneration, e.getCause() == null ? e : e.getCause(), onError);
+                    handleFailure(name, taskGeneration, requestGeneration,
+                            e.getCause() == null ? e : e.getCause(), onError);
                 } catch (RuntimeException e) {
-                    handleFailure(name, taskGeneration, e, onError);
+                    handleFailure(name, taskGeneration, requestGeneration, e, onError);
                 } finally {
                     setBusy(false);
                 }
@@ -71,8 +74,9 @@ public class SwingTaskRunner {
         }.execute();
     }
 
-    private void handleFailure(String name, long taskGeneration, Throwable throwable, Consumer<String> onError) {
-        if (!sessionTaskGuard.isCurrent(taskGeneration)) {
+    private void handleFailure(String name, long taskGeneration, long requestGeneration,
+                               Throwable throwable, Consumer<String> onError) {
+        if (!isCurrent(name, taskGeneration, requestGeneration)) {
             return;
         }
         String message = UiFormatters.chineseError(throwable);
@@ -82,6 +86,10 @@ public class SwingTaskRunner {
             onError.accept(message);
         }
         statusLabel.setText(name + FAILED_SUFFIX + message);
+    }
+
+    private boolean isCurrent(String name, long taskGeneration, long requestGeneration) {
+        return sessionTaskGuard.isCurrent(taskGeneration) && latestTaskGuard.isCurrent(name, requestGeneration);
     }
 
     private void setBusy(boolean busy) {
