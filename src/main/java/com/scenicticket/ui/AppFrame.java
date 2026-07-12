@@ -68,7 +68,6 @@ import java.awt.GridLayout;
 import java.awt.Insets;
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
@@ -2812,96 +2811,39 @@ public class AppFrame extends JFrame {
     }
 
     private Long parseOptionalLong(String value) {
-        if (value == null || value.isBlank()) {
-            return null;
-        }
-        try {
-            return Long.parseLong(value.trim());
-        } catch (NumberFormatException e) {
-            throw new IllegalArgumentException("ID 必须是数字，请检查输入内容", e);
-        }
+        return UiInputParsers.optionalLong(value);
     }
 
     private long parseRequiredLong(String value, String fieldName) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(fieldName + "不能为空");
-        }
-        try {
-            return Long.parseLong(value.trim());
-        } catch (NumberFormatException e) {
-            throw new IllegalArgumentException(fieldName + "必须是数字", e);
-        }
+        return UiInputParsers.requiredLong(value, fieldName);
     }
 
     private int parseRequiredInt(String value, String fieldName) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(fieldName + "不能为空");
-        }
-        try {
-            return Integer.parseInt(value.trim());
-        } catch (NumberFormatException e) {
-            throw new IllegalArgumentException(fieldName + "必须是整数", e);
-        }
+        return UiInputParsers.requiredInt(value, fieldName);
     }
 
     private int parseOptionalInt(String value, int defaultValue, String fieldName) {
-        if (value == null || value.isBlank()) {
-            return defaultValue;
-        }
-        return parseRequiredInt(value, fieldName);
+        return UiInputParsers.optionalInt(value, defaultValue, fieldName);
     }
 
     private BigDecimal parseRequiredAmount(String value, String fieldName) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(fieldName + "不能为空");
-        }
-        try {
-            BigDecimal amount = new BigDecimal(value.trim());
-            if (amount.compareTo(BigDecimal.ZERO) < 0) {
-                throw new IllegalArgumentException(fieldName + "不能小于 0");
-            }
-            return amount;
-        } catch (NumberFormatException e) {
-            throw new IllegalArgumentException(fieldName + "必须是有效金额", e);
-        }
+        return UiInputParsers.requiredAmount(value, fieldName);
     }
 
     private LocalDate parseRequiredDate(String value, String fieldName) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(fieldName + "不能为空");
-        }
-        try {
-            return LocalDate.parse(value.trim());
-        } catch (java.time.format.DateTimeParseException exception) {
-            throw new IllegalArgumentException(fieldName + "必须使用 yyyy-MM-dd 格式", exception);
-        }
+        return UiInputParsers.requiredDate(value, fieldName);
     }
 
     private Date parseOptionalStartDate(String value, String fieldName) {
-        if (value == null || value.isBlank()) {
-            return null;
-        }
-        return Date.from(parseRequiredDate(value, fieldName)
-                .atStartOfDay(ZoneId.systemDefault())
-                .toInstant());
+        return UiInputParsers.optionalStartDate(value, fieldName);
     }
 
     private Date parseOptionalEndDate(String value, String fieldName) {
-        if (value == null || value.isBlank()) {
-            return null;
-        }
-        return Date.from(parseRequiredDate(value, fieldName)
-                .plusDays(1)
-                .atStartOfDay(ZoneId.systemDefault())
-                .minusNanos(1)
-                .toInstant());
+        return UiInputParsers.optionalEndDate(value, fieldName);
     }
 
     private String blankToNull(String value) {
-        if (value == null || value.isBlank()) {
-            return null;
-        }
-        return value.trim();
+        return UiInputParsers.blankToNull(value);
     }
 
 }
