@@ -652,6 +652,7 @@ public class AppFrame extends JFrame {
         table.setAutoResizeMode(JTable.AUTO_RESIZE_ALL_COLUMNS);
         setColumnWidths(table, OrderTableModels.columnWidths(adminOrderView));
         Long[] selectedOrderId = new Long[1];
+        List<OrderViewDTO> visibleOrderViews = new ArrayList<>();
 
         JPanel queryToolbar = toolbar();
         JButton listButton = primaryButton("查询订单");
@@ -689,11 +690,14 @@ public class AppFrame extends JFrame {
             int row = table.getSelectedRow();
             if (!event.getValueIsAdjusting() && row >= 0) {
                 int modelRow = table.convertRowIndexToModel(row);
-                selectedOrderId[0] = Long.valueOf(String.valueOf(model.getValueAt(modelRow, 0)));
+                Order selectedOrder = visibleOrderViews.get(modelRow).getOrder();
+                selectedOrderId[0] = selectedOrder.getOrderId();
                 selectedOrderLabel.setText("已选择订单：" + selectedOrderId[0]);
-                payButton.setEnabled(true);
-                cancelButton.setEnabled(true);
-                refundButton.setEnabled(true);
+                OrderActionPolicy.Availability availability = OrderActionPolicy.evaluate(
+                        requireCurrentUserId(), selectedOrder, LocalDate.now());
+                payButton.setEnabled(availability.canPay());
+                cancelButton.setEnabled(availability.canCancel());
+                refundButton.setEnabled(availability.canRefund());
             }
         });
 
@@ -711,6 +715,8 @@ public class AppFrame extends JFrame {
                     0
             );
         }, orderViews -> {
+            visibleOrderViews.clear();
+            visibleOrderViews.addAll(orderViews);
             OrderTableModels.fill(model, orderViews, adminOrderView);
             selectedOrderId[0] = null;
             payButton.setEnabled(false);
