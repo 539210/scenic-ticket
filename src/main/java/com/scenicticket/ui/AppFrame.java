@@ -83,6 +83,8 @@ public class AppFrame extends JFrame {
     private final JLabel statusLabel = new JLabel("就绪");
     private final JTabbedPane tabs = new JTabbedPane(JTabbedPane.LEFT);
     private final Map<Long, String> categoryNames = new LinkedHashMap<>();
+    private final ItemDisplayFormatter itemDisplayFormatter = new ItemDisplayFormatter(
+            categoryId -> categoryNames.getOrDefault(categoryId, "未分类"));
     private final SwingTaskRunner taskRunner;
 
     private User currentUser;
@@ -308,12 +310,12 @@ public class AppFrame extends JFrame {
 
             @Override
             public String formatItemIntroduction(CrossDatabaseItemDTO dto) {
-                return AppFrame.this.formatItemIntroduction(dto);
+                return itemDisplayFormatter.formatIntroduction(dto);
             }
 
             @Override
             public String formatCommentViews(String itemTitle, CommentListDTO dto) {
-                return AppFrame.this.formatCommentViews(itemTitle, dto);
+                return itemDisplayFormatter.formatComments(itemTitle, dto);
             }
 
             @Override
@@ -716,7 +718,7 @@ public class AppFrame extends JFrame {
             runTask("刷新游客评论", () -> commentService.listForItem(
                     actorUserId, item.getItemId(), 20),
                     dto -> {
-                        detailArea.setText(formatCommentViews(item.getTitle(), dto));
+                        detailArea.setText(itemDisplayFormatter.formatComments(item.getTitle(), dto));
                         setStatus(resultMessage.message());
                     });
         });
@@ -732,17 +734,6 @@ public class AppFrame extends JFrame {
 
     private JButton secondaryButton(String text) {
         return UiComponents.secondaryButton(text);
-    }
-
-    private String categoryName(Long categoryId) {
-        if (categoryId == null) {
-            return "-";
-        }
-        return categoryNames.getOrDefault(categoryId, "未分类");
-    }
-
-    private String discountText(BigDecimal discountRate) {
-        return UiFormatters.discount(discountRate);
     }
 
     private <T> void runAdminTask(String name, Callable<T> task, Consumer<T> onSuccess) {
@@ -785,94 +776,6 @@ public class AppFrame extends JFrame {
                 return;
             }
         }
-    }
-
-    private String formatItemIntroduction(CrossDatabaseItemDTO dto) {
-        StringBuilder builder = new StringBuilder();
-        Item item = dto.getItem();
-        builder.append("景点简介").append(System.lineSeparator()).append(System.lineSeparator());
-        builder.append(item.getTitle()).append(System.lineSeparator());
-        builder.append("类型：").append(categoryName(item.getCategoryId())).append(System.lineSeparator());
-        builder.append("门票原价：").append(UiFormatters.money(item.getPrice())).append(System.lineSeparator());
-        builder.append("优惠：").append(discountText(item.getDiscountRate())).append(System.lineSeparator());
-        builder.append("折后单价：").append(UiFormatters.money(UiFormatters.discountedUnitPrice(
-                item.getPrice(), item.getDiscountRate()))).append(System.lineSeparator());
-        builder.append("状态：").append(formatItemStatus(item.getStatus())).append(System.lineSeparator())
-                .append(System.lineSeparator());
-        Document detail = dto.getDetail();
-        builder.append("简介：").append(formatItemDetailDocument(detail));
-        if (detail != null) {
-            List<?> images = detail.getList("images", Object.class);
-            Document metadata = detail.get("metadata", Document.class);
-            builder.append(System.lineSeparator()).append(System.lineSeparator())
-                    .append("图片地址：").append(images == null || images.isEmpty() ? "暂无" : images)
-                    .append(System.lineSeparator())
-                    .append("扩展属性：").append(metadata == null || metadata.isEmpty() ? "暂无" : metadata.toJson());
-        }
-        return builder.toString();
-    }
-
-    private String formatCommentViews(String itemTitle, CommentListDTO dto) {
-        StringBuilder builder = new StringBuilder("游客评论")
-                .append(System.lineSeparator()).append(System.lineSeparator())
-                .append("景点：").append(itemTitle).append(System.lineSeparator())
-                .append("评分概览：").append(formatRatingSummary(dto.ratingSummary()))
-                .append(System.lineSeparator()).append(System.lineSeparator());
-        if (dto.comments().isEmpty()) {
-            return builder.append("暂无评论").toString();
-        }
-        int index = 1;
-        for (var comment : dto.comments()) {
-            builder.append(index++).append(". 用户：").append(comment.displayUsername())
-                    .append("  评分：").append(comment.rating()).append(System.lineSeparator())
-                    .append("   正文：").append(valueText(comment.content())).append(System.lineSeparator())
-                    .append("   标签：").append(comment.tags().isEmpty() ? "无" : String.join("、", comment.tags()))
-                    .append(System.lineSeparator())
-                    .append("   创建：").append(formatDate(comment.createdAt()))
-                    .append("  更新：").append(formatDate(comment.updatedAt()))
-                    .append(System.lineSeparator()).append(System.lineSeparator());
-        }
-        return builder.toString();
-    }
-
-    private String formatItemDetailDocument(Document detail) {
-        if (detail == null || detail.isEmpty()) {
-            return "管理员暂未填写景点简介";
-        }
-        return UiFormatters.readableText(detail.get("description"), "管理员暂未填写景点简介");
-    }
-
-    private String formatRatingSummary(Document document) {
-        if (document == null || document.isEmpty()) {
-            return "暂无评分";
-        }
-        return "评论数：" + numberText(document.get("comment_count"))
-                + "，平均分：" + decimalText(document.get("avg_rating"))
-                + "，最高分：" + numberText(document.get("max_rating"))
-                + "，最低分：" + numberText(document.get("min_rating"));
-    }
-
-    private String formatDate(Object value) {
-        return UiFormatters.date(value);
-    }
-
-    private String valueText(Object value) {
-        return value == null ? "-" : String.valueOf(value);
-    }
-
-    private String numberText(Object value) {
-        return value instanceof Number number ? String.valueOf(number.longValue()) : valueText(value);
-    }
-
-    private String decimalText(Object value) {
-        if (value instanceof Number number) {
-            return String.format("%.2f", number.doubleValue());
-        }
-        return valueText(value);
-    }
-
-    private String formatItemStatus(Integer status) {
-        return UiFormatters.itemStatus(status);
     }
 
     private long requireCurrentUserId() {

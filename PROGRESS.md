@@ -4,7 +4,7 @@
 
 ## 当前状态
 
-- 当前里程碑：M9 Swing 重构与全面巡检（异步任务与错误提示切片）
+- 当前里程碑：M9 Swing 重构与全面巡检已完成；下一里程碑为 M10 真实数据库集成验证
 - 当前分支：`codex/scenic-ticket-stabilization`
 - 基线提交：`90f254ca42fa47a95cfe3f5b936ae7270bba10f2`
 - 工作树基线：干净；未覆盖或撤销用户修改
@@ -217,3 +217,12 @@ BUILD SUCCESS
 - 完整抽出 `LoginPanel` 与 `RegisterPanel`，将认证字段、行内结果、失败状态和页面导航从 `AppFrame` 移出，并扩展 `UiTaskExecutor` 的可选错误回调以继续复用统一后台执行器。密码提交后立即清空 Swing 字段并擦除临时字符数组；页面测试覆盖成功登录、禁用账号、服务异常、注册成功/失败和返回登录。删除认证专用死代码后 `AppFrame` 从 1281 行降至 1167 行。默认 Java 21 `mvn clean test` 通过：136 tests，0 failures，0 errors，2 skipped。
 - 抽出 `PurchaseDialogPanel` 与 `CommentDialogPanel`：购票选项切换会按当前可售库存动态限制数量，确认时冻结票种/日期/数量/支付方式；评论确认时冻结正文、评分和中英文逗号标签。巡检发现调价窗口期成功页仍显示加载时的客户端估价，订单数据库金额虽正确但 UI 可能不一致；新增 `PendingOrderResult` 返回服务端实际总额、票种名、日期和数量快照，成功页只以该结果为准，并明确将弹窗金额标为“下单前估算”。`AppFrame` 从 1167 行降至 1117 行。默认 Java 21 `mvn clean test` 通过：142 tests，0 failures，0 errors，2 skipped。
 - 抽出 `CreateItemDialogPanel` 与 `TicketAvailabilityDialogPanel`：新增景点表单冻结完整分类、简介、价格、优惠、图片和 JSON 快照；可售查询默认未来 1–14 天，在发起后台查询前拒绝过期、反向或非法日期，结果表固定七个只读业务列并提供明确空状态。`UiInputParsers` 新增图片行去空/去重和 metadata JSON 解析，新增与编辑入口共用；表单解析异常在 EDT 转为可见中文错误。同步删除主窗体旧表单/表格辅助方法、旧评论渲染器和未使用的 `BehaviorLogService`，`AppFrame` 从 1117 行降至 885 行。默认 Java 21 `mvn clean test` 通过：149 tests，0 failures，0 errors，2 skipped。
+- 抽出 `ItemDisplayFormatter`，独立固定景点类型/原价/优惠/折后价/状态/简介/图片/metadata，以及评论脱敏用户、评分、正文、标签、创建/更新时间和评分摘要。退出审计发现专用评论 DTO 渲染曾绕过 `readableText`，历史 `????????` 会直接显示，与 BUG-P2-001 文档不一致；现改为明确的“历史数据编码异常，暂无法显示”，并对缺详情、旧 Map metadata、空评论和完整中文字段补回归。`AppFrame` 从 885 行降至 788 行，仅保留窗口、权限、服务装配和对话框编排。默认 Java 21 `mvn clean test` 通过：153 tests，0 failures，0 errors，2 skipped。
+
+## M9 退出结论（2026-07-13）
+
+- 所有主要页面、后台子页、认证页、业务弹窗、输入解析、表格模型、按钮策略和展示格式化均已形成可测试组件；`AppFrame` 不再承载页面业务状态。
+- UI 层只有 `AppFrame` 装配服务，所有数据库查询/写入按钮路径均进入统一 `SwingTaskRunner`；`SwingWorker` 只存在于该执行器。
+- 会话切换、同名请求竞态、重复点击遮罩、订单操作资格、输入边界、空结果、Mongo 审计失败和已知四个显示问题均有自动/静态证据。
+- `UI_ACTION_MATRIX` 中无法在当前环境真实点击验证的快速连点、断库恢复、滚动视觉和重登全流程仍明确标为 M10/M11 手工项，没有伪造“手工通过”。
+- M9 退出条件满足；下一步严格进入 M10，重建隔离测试库并执行 MySQL、MongoDB、跨库及普通用户/管理员完整流程。
