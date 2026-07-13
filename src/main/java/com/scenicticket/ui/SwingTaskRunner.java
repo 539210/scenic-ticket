@@ -35,6 +35,7 @@ public class SwingTaskRunner implements UiTaskExecutor {
         run(name, task, onSuccess, null);
     }
 
+    @Override
     public <T> void run(String name, Callable<T> task, Consumer<T> onSuccess, Consumer<String> onError) {
         long taskGeneration = sessionTaskGuard.currentToken();
         long requestGeneration = latestTaskGuard.nextToken(name);

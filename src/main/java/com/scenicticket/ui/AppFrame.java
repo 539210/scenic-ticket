@@ -43,7 +43,6 @@ import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
-import javax.swing.JPasswordField;
 import javax.swing.JSpinner;
 import javax.swing.JScrollBar;
 import javax.swing.JScrollPane;
@@ -247,101 +246,30 @@ public class AppFrame extends JFrame {
     }
 
     private JPanel createLoginPanel() {
-        JTextField loginUsername = new JTextField(22);
-        JPasswordField loginPassword = new JPasswordField(22);
-        JButton loginButton = primaryButton("登录");
-        JButton registerPageButton = secondaryButton("注册新账号");
-        JLabel loginResult = new JLabel(" ");
-
-        JPanel loginPanel = formPanel("用户登录");
-        loginPanel.setPreferredSize(new Dimension(420, 265));
-        addField(loginPanel, 0, "用户名", loginUsername);
-        addField(loginPanel, 1, "密码", loginPassword);
-        addFormButton(loginPanel, 2, loginButton);
-        addFormButton(loginPanel, 3, registerPageButton);
-        addFormMessage(loginPanel, 4, loginResult);
-
-        loginButton.addActionListener(event -> runTask("用户登录", () -> userService.login(
-                loginUsername.getText(),
-                new String(loginPassword.getPassword()),
-                "127.0.0.1"
-        ), result -> {
-            loginResult.setText(result.getMessage());
-            loginPassword.setText("");
-            if (result.isSuccess()) {
-                loginUsername.setText("");
-                setCurrentUser(result);
-                showSystemView();
-            } else {
-                loginResult.setForeground(UiTheme.DANGER);
-                setStatus(result.getMessage());
-            }
-        }, message -> {
-            loginResult.setForeground(UiTheme.DANGER);
-            loginResult.setText(message);
-        }));
-
-        registerPageButton.addActionListener(event -> showRegisterView());
-        getRootPane().setDefaultButton(loginButton);
-
-        JPanel holder = pagePanel(new GridBagLayout());
-        GridBagConstraints gbc = new GridBagConstraints();
-        gbc.gridx = 0;
-        gbc.gridy = 0;
-        gbc.weightx = 1;
-        gbc.weighty = 1;
-        gbc.anchor = GridBagConstraints.CENTER;
-        gbc.fill = GridBagConstraints.NONE;
-        gbc.insets = new Insets(24, 24, 24, 24);
-        holder.add(loginPanel, gbc);
-        return holder;
+        LoginPanel panel = new LoginPanel(
+                (username, password) -> userService.login(username, password, "127.0.0.1"),
+                result -> {
+                    setCurrentUser(result);
+                    showSystemView();
+                },
+                this::showRegisterView,
+                this::setStatus,
+                taskRunner
+        );
+        getRootPane().setDefaultButton(panel.defaultButton());
+        return panel;
     }
 
     private JPanel createRegisterPanel() {
-        JTextField registerUsername = new JTextField(22);
-        JPasswordField registerPassword = new JPasswordField(22);
-        JTextField registerEmail = new JTextField(22);
-        JTextField registerPhone = new JTextField(22);
-        JButton registerButton = primaryButton("注册");
-        JButton backButton = secondaryButton("返回登录");
-        JLabel registerResult = new JLabel(" ");
-
-        JPanel registerPanel = formPanel("用户注册");
-        registerPanel.setPreferredSize(new Dimension(460, 300));
-        addField(registerPanel, 0, "用户名", registerUsername);
-        addField(registerPanel, 1, "密码", registerPassword);
-        addField(registerPanel, 2, "邮箱", registerEmail);
-        addField(registerPanel, 3, "手机号", registerPhone);
-        addFormButtons(registerPanel, 4, registerButton, backButton);
-        addFormMessage(registerPanel, 5, registerResult);
-
-        registerButton.addActionListener(event -> runTask("用户注册", () -> userService.register(
-                registerUsername.getText(),
-                new String(registerPassword.getPassword()),
-                registerEmail.getText(),
-                registerPhone.getText()
-        ), userId -> {
-            clearTextFields(registerPanel);
-            showLoginView("注册成功，用户ID：" + userId + "，请登录");
-        }, message -> {
-            registerResult.setForeground(UiTheme.DANGER);
-            registerResult.setText(message);
-        }));
-
-        backButton.addActionListener(event -> showLoginView("请输入账号密码登录"));
-        getRootPane().setDefaultButton(registerButton);
-
-        JPanel holder = pagePanel(new GridBagLayout());
-        GridBagConstraints gbc = new GridBagConstraints();
-        gbc.gridx = 0;
-        gbc.gridy = 0;
-        gbc.weightx = 1;
-        gbc.weighty = 1;
-        gbc.anchor = GridBagConstraints.CENTER;
-        gbc.fill = GridBagConstraints.NONE;
-        gbc.insets = new Insets(24, 24, 24, 24);
-        holder.add(registerPanel, gbc);
-        return holder;
+        RegisterPanel panel = new RegisterPanel(
+                userService::register,
+                userId -> showLoginView("注册成功，用户ID：" + userId + "，请登录"),
+                () -> showLoginView("请输入账号密码登录"),
+                this::setStatus,
+                taskRunner
+        );
+        getRootPane().setDefaultButton(panel.defaultButton());
+        return panel;
     }
 
     private JPanel createProfilePanel() {
@@ -1009,32 +937,6 @@ public class AppFrame extends JFrame {
         addField(formPanel, row, label, new JScrollPane(textArea));
     }
 
-    private void addFormButton(JPanel formPanel, int row, JButton button) {
-        JPanel fields = (JPanel) formPanel.getComponent(1);
-        GridBagConstraints gbc = formConstraints(row, 1);
-        gbc.fill = GridBagConstraints.NONE;
-        fields.add(button, gbc);
-    }
-
-    private void addFormButtons(JPanel formPanel, int row, JButton... buttons) {
-        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
-        buttonPanel.setOpaque(false);
-        for (JButton button : buttons) {
-            buttonPanel.add(button);
-        }
-        JPanel fields = (JPanel) formPanel.getComponent(1);
-        GridBagConstraints gbc = formConstraints(row, 1);
-        gbc.fill = GridBagConstraints.NONE;
-        fields.add(buttonPanel, gbc);
-    }
-
-    private void addFormMessage(JPanel formPanel, int row, JLabel message) {
-        JPanel fields = (JPanel) formPanel.getComponent(1);
-        GridBagConstraints gbc = formConstraints(row, 1);
-        gbc.fill = GridBagConstraints.HORIZONTAL;
-        fields.add(message, gbc);
-    }
-
     private GridBagConstraints formConstraints(int row, int column) {
         GridBagConstraints gbc = new GridBagConstraints();
         gbc.gridx = column;
@@ -1054,10 +956,6 @@ public class AppFrame extends JFrame {
 
     private <T> void runTask(String name, Callable<T> task, Consumer<T> onSuccess) {
         taskRunner.run(name, task, onSuccess);
-    }
-
-    private <T> void runTask(String name, Callable<T> task, Consumer<T> onSuccess, Consumer<String> onError) {
-        taskRunner.run(name, task, onSuccess, onError);
     }
 
     private void showError(Throwable throwable) {
@@ -1088,18 +986,6 @@ public class AppFrame extends JFrame {
             verticalBar.setValue(Math.min(verticalValue, verticalBar.getMaximum()));
             horizontalBar.setValue(Math.min(horizontalValue, horizontalBar.getMaximum()));
         });
-    }
-
-    private void clearTextFields(Component component) {
-        if (component instanceof JTextField textField) {
-            textField.setText("");
-            return;
-        }
-        if (component instanceof java.awt.Container container) {
-            for (Component child : container.getComponents()) {
-                clearTextFields(child);
-            }
-        }
     }
 
     private String roleDisplay(String role) {

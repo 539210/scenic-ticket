@@ -1,6 +1,6 @@
 # Bug Backlog
 
-更新时间：2026-07-12
+更新时间：2026-07-13
 
 状态：`OPEN` / `IN PROGRESS` / `BLOCKED` / `FIXED` / `VERIFIED` / `CLOSED`
 
@@ -47,7 +47,7 @@
 | ID | 状态 | 问题 | 说明 |
 | --- | --- | --- | --- |
 | BUG-P3-001 | VERIFIED | 启动脚本硬编码本机绝对 JDK/Maven 路径 | 已删除机器路径，支持标准 `JAVA_HOME`/`MAVEN_HOME`/PATH、Maven Wrapper及 `SCENIC_*` 显式覆盖；`--check` 两种配置实跑通过，自动测试禁止回退 |
-| BUG-P3-002 | IN PROGRESS | `AppFrame` 过大 | M9 已抽出完整后台 `ManagementPanel` 及九个独立页面组件，并清除旧实现/渲染器；`AppFrame` 已降至 1281 行，登录/注册和对话框边界继续收口 |
+| BUG-P3-002 | IN PROGRESS | `AppFrame` 过大 | M9 已抽出完整后台 `ManagementPanel`、登录/注册及九个业务页面组件，并清除旧实现/渲染器；`AppFrame` 已降至 1167 行，购买/评论等业务对话框边界继续收口 |
 | BUG-P3-003 | VERIFIED | 文档数据库版本写成 MySQL 8.0.45 / MongoDB 8.3.2 | README 与需求规格已改为 MySQL 8.0+ / MongoDB 5.0+；快捷启动文档明确精确版本仅为本机验证记录，自动测试固定主要求文档 |
 | BUG-P3-004 | VERIFIED | 错误提示过度归一为“检查数据库连接” | `UiFormatters.chineseError` 已区分数据库、权限和通用失败，并保留业务校验消息；`UiFormattersTest` 覆盖分类文案 |
 | BUG-P3-005 | VERIFIED | 核销成功后自动刷新记录会覆盖服务返回的成功或审计降级消息 | `AdmissionPanel` 在刷新同订单记录后恢复本次业务结果文案，普通查询仍显示记录数/空结果 | 页面测试确认核销参数、同订单刷新及最终状态仍为“核销成功” |
