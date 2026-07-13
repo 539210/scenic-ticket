@@ -1,10 +1,13 @@
 package com.scenicticket.ui;
 
+import org.bson.Document;
+
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeParseException;
 import java.util.Date;
+import java.util.List;
 
 public final class UiInputParsers {
     private UiInputParsers() {
@@ -90,6 +93,28 @@ public final class UiInputParsers {
 
     public static String blankToNull(String value) {
         return value == null || value.isBlank() ? null : value.trim();
+    }
+
+    public static List<String> imageLines(String value) {
+        if (value == null || value.isBlank()) {
+            return List.of();
+        }
+        return value.lines()
+                .map(String::trim)
+                .filter(line -> !line.isBlank())
+                .distinct()
+                .toList();
+    }
+
+    public static Document metadataDocument(String value) {
+        if (value == null || value.isBlank()) {
+            return new Document();
+        }
+        try {
+            return Document.parse(value.trim());
+        } catch (RuntimeException exception) {
+            throw new IllegalArgumentException("扩展属性必须是合法 JSON 对象", exception);
+        }
     }
 
     private static void requireText(String value, String fieldName) {

@@ -6,6 +6,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -50,5 +51,14 @@ class UiInputParsersTest {
     void normalizesOptionalText() {
         assertNull(UiInputParsers.blankToNull(" \t"));
         assertEquals("hello", UiInputParsers.blankToNull(" hello "));
+    }
+
+    @Test
+    void parsesDistinctImageLinesAndMetadataJson() {
+        assertEquals(List.of("https://img/a.jpg", "https://img/b.jpg"),
+                UiInputParsers.imageLines(" https://img/a.jpg\n\nhttps://img/b.jpg\nhttps://img/a.jpg "));
+        assertEquals("Swing", UiInputParsers.metadataDocument(" {\"source\":\"Swing\"} ").getString("source"));
+        assertEquals(0, UiInputParsers.metadataDocument(" ").size());
+        assertThrows(IllegalArgumentException.class, () -> UiInputParsers.metadataDocument("{broken}"));
     }
 }

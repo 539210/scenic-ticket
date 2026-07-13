@@ -22,7 +22,6 @@ import com.scenicticket.model.User;
 import com.scenicticket.model.TicketInventory;
 import com.scenicticket.model.TicketType;
 import com.scenicticket.model.Admission;
-import com.scenicticket.service.BehaviorLogService;
 import com.scenicticket.service.BusinessService;
 import com.scenicticket.service.CrossDatabaseQueryService;
 import com.scenicticket.service.RecommendService;
@@ -38,34 +37,25 @@ import org.bson.Document;
 
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
-import javax.swing.JComboBox;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
-import javax.swing.JScrollBar;
 import javax.swing.JScrollPane;
 import javax.swing.JSplitPane;
 import javax.swing.JTabbedPane;
-import javax.swing.JTable;
 import javax.swing.JTextArea;
-import javax.swing.JTextField;
 import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
-import javax.swing.table.DefaultTableModel;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Font;
-import java.awt.GridBagConstraints;
-import java.awt.GridBagLayout;
 import java.awt.GridLayout;
-import java.awt.Insets;
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.LinkedHashMap;
@@ -75,9 +65,7 @@ import java.util.function.Consumer;
 
 public class AppFrame extends JFrame {
     private static final Color BACKGROUND = UiTheme.BACKGROUND;
-    private static final Color PANEL_BORDER = UiTheme.BORDER;
     private static final Font TITLE_FONT = UiTheme.TITLE_FONT;
-    private static final Font SECTION_FONT = UiTheme.SECTION_FONT;
 
     private final UserService userService = new UserService();
     private final BusinessService businessService = new BusinessService();
@@ -85,7 +73,6 @@ public class AppFrame extends JFrame {
     private final RecommendService recommendService = new RecommendService();
     private final StatisticsService statisticsService = new StatisticsService();
     private final SystemLogService systemLogService = new SystemLogService();
-    private final BehaviorLogService behaviorLogService = new BehaviorLogService();
     private final AdminUserService adminUserService = new AdminUserService();
     private final TicketInventoryService ticketInventoryService = new TicketInventoryService();
     private final OrderLifecycleService orderLifecycleService = new OrderLifecycleService();
@@ -434,7 +421,7 @@ public class AppFrame extends JFrame {
             @Override
             public boolean updateItemDetail(long itemId, String description, String images, String metadata) {
                 return businessService.updateItemDetail(actorUserId, itemId, description,
-                        parseImageLines(images), parseMetadataJson(metadata));
+                        UiInputParsers.imageLines(images), UiInputParsers.metadataDocument(metadata));
             }
 
             @Override
@@ -638,67 +625,45 @@ public class AppFrame extends JFrame {
             showError(new IllegalStateException("景点类型尚未加载，请先刷新分类"));
             return;
         }
-        JTextField titleField = new JTextField(24);
-        JComboBox<CategoryOption> categoryBox = new JComboBox<>();
-        categoryNames.forEach((id, name) -> categoryBox.addItem(new CategoryOption(name, id)));
-        JTextArea descriptionArea = new JTextArea(5, 24);
-        descriptionArea.setLineWrap(true);
-        descriptionArea.setWrapStyleWord(true);
-        JTextField priceField = new JTextField("80.00", 10);
-        JTextField discountField = new JTextField("0", 10);
-        JTextArea imagesArea = new JTextArea(3, 24);
-        JTextArea metadataArea = new JTextArea("{\"source\": \"Swing后台\"}", 3, 24);
-        imagesArea.setLineWrap(true);
-        metadataArea.setLineWrap(true);
-        JPanel form = formPanel("新增景点");
-        addField(form, 0, "景点名称", titleField);
-        addField(form, 1, "景点类型", categoryBox);
-        addTextAreaField(form, 2, "景点简介", descriptionArea);
-        addField(form, 3, "固定票价", priceField);
-        addField(form, 4, "优惠减免%", discountField);
-        addTextAreaField(form, 5, "图片地址（每行一个）", imagesArea);
-        addTextAreaField(form, 6, "扩展属性（JSON）", metadataArea);
+        long actorUserId = requireCurrentUserId();
+        CreateItemDialogPanel form = new CreateItemDialogPanel(new LinkedHashMap<>(categoryNames));
         int result = JOptionPane.showConfirmDialog(this, form, "新增景点",
                 JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
         if (result != JOptionPane.OK_OPTION) {
             return;
         }
-        runAdminTask("新增景点", () -> businessService.createItem(requireCurrentUserId(), titleField.getText(), requireCategoryId(categoryBox),
-                descriptionArea.getText(), parseImageLines(imagesArea.getText()), parseMetadataJson(metadataArea.getText()),
-                parseRequiredAmount(priceField.getText(), "票价"), parseRequiredAmount(discountField.getText(), "优惠减免比例")), id -> {
+        CreateItemDialogPanel.CreateItemRequest request;
+        try {
+            request = form.request();
+        } catch (RuntimeException exception) {
+            showError(exception);
+            return;
+        }
+        runAdminTask("新增景点", () -> businessService.createItem(actorUserId, request.title(), request.categoryId(),
+                request.description(), request.images(), request.metadata(), request.price(), request.discountRate()), id -> {
             setStatus("景点创建成功，编号：" + id);
             refreshItems.run();
         });
     }
 
     private void showTicketAvailabilityDialog(Item item) {
-        JTextField startDateField = new JTextField(LocalDate.now().plusDays(1).toString(), 12);
-        JTextField endDateField = new JTextField(LocalDate.now().plusDays(14).toString(), 12);
-        JPanel form = formPanel("查询“" + item.getTitle() + "”可售票种与日期");
-        addField(form, 0, "开始日期", startDateField);
-        addField(form, 1, "结束日期", endDateField);
+        long actorUserId = requireCurrentUserId();
+        TicketAvailabilityDialogPanel form = new TicketAvailabilityDialogPanel(item.getTitle(), LocalDate.now());
         int result = JOptionPane.showConfirmDialog(this, form, "可售票种与日期",
                 JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
         if (result != JOptionPane.OK_OPTION) {
             return;
         }
-        runTask("查询可售票种与日期", () -> ticketInventoryService.listAvailable(requireCurrentUserId(), item.getItemId(),
-                parseRequiredDate(startDateField.getText(), "开始日期"),
-                parseRequiredDate(endDateField.getText(), "结束日期")), options -> {
-            DefaultTableModel model = tableModel("票种ID", "票种名称", "游玩日期", "原价", "优惠", "折后价", "可售库存");
-            for (var option : options) {
-                model.addRow(new Object[]{option.ticketType().getTicketTypeId(), option.ticketType().getName(),
-                        option.inventory().getVisitDate(), UiFormatters.money(option.ticketType().getOriginalPrice()),
-                        discountText(option.ticketType().getDiscountRate()), UiFormatters.money(option.discountedPrice()),
-                        option.inventory().getAvailableStock()});
-            }
-            JTable table = createTable(model);
-            setColumnWidths(table, 75, 120, 110, 90, 80, 90, 90);
-            JOptionPane.showMessageDialog(this, options.isEmpty()
-                            ? new JLabel("所选日期范围暂无可售票种或库存")
-                            : new JScrollPane(table),
-                    "可售票种与日期", JOptionPane.INFORMATION_MESSAGE);
-        });
+        TicketAvailabilityDialogPanel.DateRange request;
+        try {
+            request = form.request();
+        } catch (RuntimeException exception) {
+            showError(exception);
+            return;
+        }
+        runTask("查询可售票种与日期", () -> ticketInventoryService.listAvailable(actorUserId, item.getItemId(),
+                request.startDate(), request.endDate()), options -> JOptionPane.showMessageDialog(this,
+                TicketAvailabilityDialogPanel.results(options), "可售票种与日期", JOptionPane.INFORMATION_MESSAGE));
     }
 
     private void showPurchaseDialog(Item item, JTextArea detailArea) {
@@ -757,13 +722,6 @@ public class AppFrame extends JFrame {
         });
     }
 
-    private JPanel pagePanel(java.awt.LayoutManager layout) {
-        JPanel panel = new JPanel(layout);
-        panel.setBorder(BorderFactory.createEmptyBorder(14, 14, 14, 14));
-        panel.setBackground(BACKGROUND);
-        return panel;
-    }
-
     private JScrollPane scrollPage(Component content) {
         JScrollPane scrollPane = new JScrollPane(content);
         scrollPane.setBorder(BorderFactory.createEmptyBorder());
@@ -772,85 +730,8 @@ public class AppFrame extends JFrame {
         return scrollPane;
     }
 
-    private JPanel formPanel(String title) {
-        JPanel outer = new JPanel(new BorderLayout());
-        outer.setBackground(Color.WHITE);
-        outer.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(PANEL_BORDER),
-                BorderFactory.createEmptyBorder(16, 16, 16, 16)
-        ));
-        JLabel heading = new JLabel(title);
-        heading.setFont(SECTION_FONT);
-        heading.setBorder(BorderFactory.createEmptyBorder(0, 0, 12, 0));
-        JPanel fields = new JPanel(new GridBagLayout());
-        fields.setOpaque(false);
-        outer.add(heading, BorderLayout.NORTH);
-        outer.add(fields, BorderLayout.CENTER);
-        return outer;
-    }
-
-    private JPanel wrapWithTitle(String title, Component content) {
-        return UiComponents.card(title, content);
-    }
-
-    private JButton primaryButton(String text) {
-        return UiComponents.primaryButton(text);
-    }
-
     private JButton secondaryButton(String text) {
         return UiComponents.secondaryButton(text);
-    }
-
-    private JPanel toolbar() {
-        return UiComponents.toolbar();
-    }
-
-    private JTextArea createTextArea(int rows, int columns) {
-        return UiComponents.readOnlyTextArea(rows, columns);
-    }
-
-    private JTable createTable(DefaultTableModel model) {
-        JTable table = UiComponents.table(model);
-        table.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
-        return table;
-    }
-
-    private void setColumnWidths(JTable table, int... widths) {
-        int columnCount = Math.min(table.getColumnCount(), widths.length);
-        for (int i = 0; i < columnCount; i += 1) {
-            table.getColumnModel().getColumn(i).setPreferredWidth(widths[i]);
-        }
-    }
-
-    private Long selectedCategoryId(JComboBox<CategoryOption> categoryBox) {
-        CategoryOption choice = (CategoryOption) categoryBox.getSelectedItem();
-        return choice == null ? null : choice.categoryId();
-    }
-
-    private List<String> parseImageLines(String text) {
-        if (text == null || text.isBlank()) {
-            return List.of();
-        }
-        return text.lines().map(String::trim).filter(value -> !value.isBlank()).distinct().toList();
-    }
-
-    private Document parseMetadataJson(String text) {
-        if (text == null || text.isBlank()) {
-            return new Document();
-        }
-        try {
-            return Document.parse(text.trim());
-        } catch (RuntimeException exception) {
-            throw new IllegalArgumentException("扩展属性必须是合法 JSON 对象", exception);
-        }
-    }
-
-    private long requireCategoryId(JComboBox<CategoryOption> categoryBox) {
-        Long categoryId = selectedCategoryId(categoryBox);
-        if (categoryId == null || categoryId <= 0) {
-            throw new IllegalArgumentException("请选择景点类型");
-        }
-        return categoryId;
     }
 
     private String categoryName(Long categoryId) {
@@ -862,38 +743,6 @@ public class AppFrame extends JFrame {
 
     private String discountText(BigDecimal discountRate) {
         return UiFormatters.discount(discountRate);
-    }
-
-    private DefaultTableModel tableModel(String... columns) {
-        return new DefaultTableModel(columns, 0) {
-            @Override
-            public boolean isCellEditable(int row, int column) {
-                return false;
-            }
-        };
-    }
-
-    private void addField(JPanel formPanel, int row, String label, Component field) {
-        JPanel fields = (JPanel) formPanel.getComponent(1);
-        GridBagConstraints labelConstraints = formConstraints(row, 0);
-        fields.add(new JLabel(label), labelConstraints);
-        GridBagConstraints fieldConstraints = formConstraints(row, 1);
-        fieldConstraints.fill = GridBagConstraints.HORIZONTAL;
-        fieldConstraints.weightx = 1;
-        fields.add(field, fieldConstraints);
-    }
-
-    private void addTextAreaField(JPanel formPanel, int row, String label, JTextArea textArea) {
-        addField(formPanel, row, label, new JScrollPane(textArea));
-    }
-
-    private GridBagConstraints formConstraints(int row, int column) {
-        GridBagConstraints gbc = new GridBagConstraints();
-        gbc.gridx = column;
-        gbc.gridy = row;
-        gbc.insets = new Insets(6, 6, 6, 6);
-        gbc.anchor = GridBagConstraints.WEST;
-        return gbc;
     }
 
     private <T> void runAdminTask(String name, Callable<T> task, Consumer<T> onSuccess) {
@@ -919,23 +768,6 @@ public class AppFrame extends JFrame {
 
     private void setStatus(String message) {
         statusLabel.setText(message);
-    }
-
-    private void setTextKeepingScroll(JTextArea textArea, String text) {
-        JScrollPane scrollPane = (JScrollPane) SwingUtilities.getAncestorOfClass(JScrollPane.class, textArea);
-        if (scrollPane == null) {
-            textArea.setText(text);
-            return;
-        }
-        JScrollBar verticalBar = scrollPane.getVerticalScrollBar();
-        JScrollBar horizontalBar = scrollPane.getHorizontalScrollBar();
-        int verticalValue = verticalBar.getValue();
-        int horizontalValue = horizontalBar.getValue();
-        textArea.setText(text);
-        SwingUtilities.invokeLater(() -> {
-            verticalBar.setValue(Math.min(verticalValue, verticalBar.getMaximum()));
-            horizontalBar.setValue(Math.min(horizontalValue, horizontalBar.getMaximum()));
-        });
     }
 
     private String roleDisplay(String role) {
@@ -980,17 +812,6 @@ public class AppFrame extends JFrame {
         return builder.toString();
     }
 
-    private String formatItemCommentsView(CrossDatabaseItemDTO dto) {
-        StringBuilder builder = new StringBuilder();
-        builder.append("游客评论").append(System.lineSeparator()).append(System.lineSeparator());
-        builder.append("景点：").append(dto.getItem().getTitle()).append(System.lineSeparator());
-        builder.append("评分概览：").append(formatRatingSummary(dto.getRatingSummary()))
-                .append(System.lineSeparator());
-        builder.append("评论列表：").append(System.lineSeparator())
-                .append(formatComments(dto.getComments()));
-        return builder.toString();
-    }
-
     private String formatCommentViews(String itemTitle, CommentListDTO dto) {
         StringBuilder builder = new StringBuilder("游客评论")
                 .append(System.lineSeparator()).append(System.lineSeparator())
@@ -1031,33 +852,12 @@ public class AppFrame extends JFrame {
                 + "，最低分：" + numberText(document.get("min_rating"));
     }
 
-    private String formatComments(List<Document> documents) {
-        if (documents == null || documents.isEmpty()) {
-            return "暂无评论";
-        }
-        StringBuilder builder = new StringBuilder();
-        int index = 1;
-        for (Document document : documents) {
-            builder.append(index).append(". 评分：").append(numberText(document.get("rating")))
-                    .append("  时间：").append(formatDate(document.get("created_at")))
-                    .append(System.lineSeparator())
-                    .append("   内容：").append(UiFormatters.readableText(document.get("content"), "该评论没有文字内容"))
-                    .append(System.lineSeparator());
-            index += 1;
-        }
-        return builder.toString();
-    }
-
     private String formatDate(Object value) {
         return UiFormatters.date(value);
     }
 
     private String valueText(Object value) {
         return value == null ? "-" : String.valueOf(value);
-    }
-
-    private String fieldText(Object value) {
-        return value == null ? "" : String.valueOf(value);
     }
 
     private String numberText(Object value) {
@@ -1075,43 +875,11 @@ public class AppFrame extends JFrame {
         return UiFormatters.itemStatus(status);
     }
 
-    private String formatOrderStatus(Integer status) {
-        return UiFormatters.orderStatus(status);
-    }
-
     private long requireCurrentUserId() {
         if (currentUser == null || currentUser.getUserId() == null || currentUser.getUserId() <= 0) {
             throw new IllegalStateException("请先登录或填写用户ID");
         }
         return currentUser.getUserId();
-    }
-
-    private Long parseOptionalLong(String value) {
-        return UiInputParsers.optionalLong(value);
-    }
-
-    private long parseRequiredLong(String value, String fieldName) {
-        return UiInputParsers.requiredLong(value, fieldName);
-    }
-
-    private int parseRequiredInt(String value, String fieldName) {
-        return UiInputParsers.requiredInt(value, fieldName);
-    }
-
-    private int parseOptionalInt(String value, int defaultValue, String fieldName) {
-        return UiInputParsers.optionalInt(value, defaultValue, fieldName);
-    }
-
-    private BigDecimal parseRequiredAmount(String value, String fieldName) {
-        return UiInputParsers.requiredAmount(value, fieldName);
-    }
-
-    private LocalDate parseRequiredDate(String value, String fieldName) {
-        return UiInputParsers.requiredDate(value, fieldName);
-    }
-
-    private String blankToNull(String value) {
-        return UiInputParsers.blankToNull(value);
     }
 
 }
