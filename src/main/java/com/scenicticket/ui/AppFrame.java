@@ -864,148 +864,40 @@ public class AppFrame extends JFrame {
     }
 
     private JPanel createTicketInventoryManagementPanel() {
-        JPanel panel = new JPanel(new BorderLayout(12, 12));
-        panel.setOpaque(false);
-        JTabbedPane tabs = new JTabbedPane();
-
-        JPanel typePage = new JPanel(new BorderLayout(10, 10));
-        typePage.setOpaque(false);
-        JTextField itemIdField = new JTextField("1", 7);
-        JTextField typeNameField = new JTextField(12);
-        JTextField typePriceField = new JTextField("80.00", 8);
-        JTextField typeDiscountField = new JTextField("0", 6);
-        JComboBox<String> typeStatusBox = new JComboBox<>(new String[]{"下架", "上架"});
-        typeStatusBox.setSelectedIndex(1);
-        JButton queryTypesButton = primaryButton("查询票种");
-        JButton createTypeButton = primaryButton("新增票种");
-        JButton updateTypeButton = secondaryButton("更新所选票种");
-        updateTypeButton.setEnabled(false);
-        JPanel typeToolbar = toolbar();
-        typeToolbar.add(new JLabel("景点ID"));
-        typeToolbar.add(itemIdField);
-        typeToolbar.add(new JLabel("票种名称"));
-        typeToolbar.add(typeNameField);
-        typeToolbar.add(new JLabel("原价"));
-        typeToolbar.add(typePriceField);
-        typeToolbar.add(new JLabel("优惠减免%"));
-        typeToolbar.add(typeDiscountField);
-        typeToolbar.add(new JLabel("状态"));
-        typeToolbar.add(typeStatusBox);
-        typeToolbar.add(queryTypesButton);
-        typeToolbar.add(createTypeButton);
-        typeToolbar.add(updateTypeButton);
-
-        DefaultTableModel typeModel = tableModel("票种ID", "景点ID", "票种名称", "原价", "优惠", "折后价", "状态");
-        JTable typeTable = createTable(typeModel);
-        setColumnWidths(typeTable, 75, 75, 130, 90, 80, 90, 70);
-        List<TicketType> visibleTypes = new ArrayList<>();
-        TicketType[] selectedType = new TicketType[1];
-
-        JTextField inventoryTypeIdField = new JTextField(8);
-        Runnable refreshTypes = () -> runAdminTask("查询票种", () -> ticketInventoryService.listTicketTypes(
-                requireCurrentUserId(), parseRequiredLong(itemIdField.getText(), "景点ID"), true), types -> {
-            typeModel.setRowCount(0);
-            visibleTypes.clear();
-            visibleTypes.addAll(types);
-            for (TicketType type : types) {
-                typeModel.addRow(new Object[]{type.getTicketTypeId(), type.getItemId(), type.getName(),
-                        UiFormatters.money(type.getOriginalPrice()), discountText(type.getDiscountRate()),
-                        UiFormatters.money(ticketInventoryService.discountedPrice(type)),
-                        type.getStatus() != null && type.getStatus() == 1 ? "上架" : "下架"});
+        long actorUserId = requireCurrentUserId();
+        return new TicketInventoryPanel(taskRunner, new TicketInventoryPanel.Actions() {
+            @Override
+            public List<TicketType> listTypes(long itemId) {
+                return ticketInventoryService.listTicketTypes(actorUserId, itemId, true);
             }
-            selectedType[0] = null;
-            updateTypeButton.setEnabled(false);
-            setStatus("已加载 " + types.size() + " 个票种");
-        });
-        typeTable.getSelectionModel().addListSelectionListener(event -> {
-            int row = typeTable.getSelectedRow();
-            if (!event.getValueIsAdjusting() && row >= 0) {
-                TicketType type = visibleTypes.get(typeTable.convertRowIndexToModel(row));
-                selectedType[0] = type;
-                itemIdField.setText(String.valueOf(type.getItemId()));
-                typeNameField.setText(type.getName());
-                typePriceField.setText(type.getOriginalPrice().toPlainString());
-                typeDiscountField.setText(type.getDiscountRate().stripTrailingZeros().toPlainString());
-                typeStatusBox.setSelectedIndex(type.getStatus() != null && type.getStatus() == 1 ? 1 : 0);
-                inventoryTypeIdField.setText(String.valueOf(type.getTicketTypeId()));
-                updateTypeButton.setEnabled(true);
+
+            @Override
+            public long createType(long itemId, String name, BigDecimal price, BigDecimal discount) {
+                return ticketInventoryService.createTicketType(actorUserId, itemId, name, price, discount);
+            }
+
+            @Override
+            public boolean updateType(long ticketTypeId, String name, BigDecimal price,
+                                      BigDecimal discount, int status) {
+                return ticketInventoryService.updateTicketType(
+                        actorUserId, ticketTypeId, name, price, discount, status);
+            }
+
+            @Override
+            public List<TicketInventory> listInventory(long ticketTypeId, LocalDate startDate, LocalDate endDate) {
+                return ticketInventoryService.listInventory(actorUserId, ticketTypeId, startDate, endDate);
+            }
+
+            @Override
+            public TicketInventory setTotalStock(long ticketTypeId, LocalDate visitDate, int totalStock) {
+                return ticketInventoryService.setTotalStock(actorUserId, ticketTypeId, visitDate, totalStock);
+            }
+
+            @Override
+            public void setStatus(String message) {
+                AppFrame.this.setStatus(message);
             }
         });
-        queryTypesButton.addActionListener(event -> refreshTypes.run());
-        createTypeButton.addActionListener(event -> runAdminTask("新增票种", () -> ticketInventoryService.createTicketType(
-                requireCurrentUserId(), parseRequiredLong(itemIdField.getText(), "景点ID"), typeNameField.getText(),
-                parseRequiredAmount(typePriceField.getText(), "票价"),
-                parseRequiredAmount(typeDiscountField.getText(), "优惠减免比例")), id -> {
-            setStatus("票种创建成功，编号：" + id);
-            refreshTypes.run();
-        }));
-        updateTypeButton.addActionListener(event -> runAdminTask("更新票种", () -> {
-            if (selectedType[0] == null) {
-                throw new IllegalArgumentException("请先选择票种");
-            }
-            return ticketInventoryService.updateTicketType(requireCurrentUserId(), selectedType[0].getTicketTypeId(),
-                    typeNameField.getText(), parseRequiredAmount(typePriceField.getText(), "票价"),
-                    parseRequiredAmount(typeDiscountField.getText(), "优惠减免比例"), typeStatusBox.getSelectedIndex());
-        }, updated -> {
-            setStatus(updated ? "票种已更新" : "票种没有变化");
-            refreshTypes.run();
-        }));
-        typePage.add(wrapWithTitle("票种维护", typeToolbar), BorderLayout.NORTH);
-        typePage.add(wrapWithTitle("票种列表", new JScrollPane(typeTable)), BorderLayout.CENTER);
-
-        JPanel inventoryPage = new JPanel(new BorderLayout(10, 10));
-        inventoryPage.setOpaque(false);
-        JTextField startDateField = new JTextField(LocalDate.now().toString(), 10);
-        JTextField endDateField = new JTextField(LocalDate.now().plusDays(14).toString(), 10);
-        JTextField maintainDateField = new JTextField(LocalDate.now().plusDays(1).toString(), 10);
-        JTextField totalStockField = new JTextField("100", 8);
-        JButton queryInventoryButton = primaryButton("查询库存");
-        JButton saveInventoryButton = primaryButton("设置总库存");
-        JPanel inventoryToolbar = toolbar();
-        inventoryToolbar.add(new JLabel("票种ID"));
-        inventoryToolbar.add(inventoryTypeIdField);
-        inventoryToolbar.add(new JLabel("开始日期"));
-        inventoryToolbar.add(startDateField);
-        inventoryToolbar.add(new JLabel("结束日期"));
-        inventoryToolbar.add(endDateField);
-        inventoryToolbar.add(queryInventoryButton);
-        inventoryToolbar.add(new JLabel("维护日期"));
-        inventoryToolbar.add(maintainDateField);
-        inventoryToolbar.add(new JLabel("总库存"));
-        inventoryToolbar.add(totalStockField);
-        inventoryToolbar.add(saveInventoryButton);
-
-        DefaultTableModel inventoryModel = tableModel("库存ID", "票种ID", "游玩日期", "总库存", "可售", "已预留", "已售", "版本");
-        JTable inventoryTable = createTable(inventoryModel);
-        setColumnWidths(inventoryTable, 75, 75, 110, 80, 80, 80, 80, 70);
-        Runnable refreshInventory = () -> runAdminTask("查询每日库存", () -> ticketInventoryService.listInventory(
-                requireCurrentUserId(), parseRequiredLong(inventoryTypeIdField.getText(), "票种ID"),
-                parseRequiredDate(startDateField.getText(), "开始日期"),
-                parseRequiredDate(endDateField.getText(), "结束日期")), inventories -> {
-            inventoryModel.setRowCount(0);
-            for (TicketInventory inventory : inventories) {
-                inventoryModel.addRow(new Object[]{inventory.getInventoryId(), inventory.getTicketTypeId(),
-                        inventory.getVisitDate(), inventory.getTotalStock(), inventory.getAvailableStock(),
-                        inventory.getReservedStock(), inventory.getSoldStock(), inventory.getVersion()});
-            }
-            setStatus("已加载 " + inventories.size() + " 条每日库存");
-        });
-        queryInventoryButton.addActionListener(event -> refreshInventory.run());
-        saveInventoryButton.addActionListener(event -> runAdminTask("设置每日库存", () ->
-                ticketInventoryService.setTotalStock(requireCurrentUserId(),
-                        parseRequiredLong(inventoryTypeIdField.getText(), "票种ID"),
-                        parseRequiredDate(maintainDateField.getText(), "维护日期"),
-                        parseRequiredInt(totalStockField.getText(), "总库存")), inventory -> {
-            setStatus("库存已保存，可售 " + inventory.getAvailableStock() + " 张");
-            refreshInventory.run();
-        }));
-        inventoryPage.add(wrapWithTitle("按日期维护库存（日期格式 yyyy-MM-dd）", inventoryToolbar), BorderLayout.NORTH);
-        inventoryPage.add(wrapWithTitle("每日库存列表", new JScrollPane(inventoryTable)), BorderLayout.CENTER);
-
-        tabs.addTab("票种管理", typePage);
-        tabs.addTab("每日库存", inventoryPage);
-        panel.add(tabs, BorderLayout.CENTER);
-        return panel;
     }
 
     private JPanel createReportPanel() {

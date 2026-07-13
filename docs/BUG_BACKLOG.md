@@ -47,10 +47,11 @@
 | ID | 状态 | 问题 | 说明 |
 | --- | --- | --- | --- |
 | BUG-P3-001 | VERIFIED | 启动脚本硬编码本机绝对 JDK/Maven 路径 | 已删除机器路径，支持标准 `JAVA_HOME`/`MAVEN_HOME`/PATH、Maven Wrapper及 `SCENIC_*` 显式覆盖；`--check` 两种配置实跑通过，自动测试禁止回退 |
-| BUG-P3-002 | IN PROGRESS | `AppFrame` 过大 | M9 已完整抽出 `HomePanel`、`ProfilePanel`、`ScenicBrowsePanel`、`OrderPanel`、`AuditPanel`、`ReportPanel`、`AdmissionPanel`，并清除旧渲染器；`AppFrame` 已降至 1787 行，其它后台页面继续拆分 |
+| BUG-P3-002 | IN PROGRESS | `AppFrame` 过大 | M9 已完整抽出八个页面组件（含票种库存），并清除旧渲染器；`AppFrame` 已降至 1679 行，其它后台页面继续拆分 |
 | BUG-P3-003 | VERIFIED | 文档数据库版本写成 MySQL 8.0.45 / MongoDB 8.3.2 | README 与需求规格已改为 MySQL 8.0+ / MongoDB 5.0+；快捷启动文档明确精确版本仅为本机验证记录，自动测试固定主要求文档 |
 | BUG-P3-004 | VERIFIED | 错误提示过度归一为“检查数据库连接” | `UiFormatters.chineseError` 已区分数据库、权限和通用失败，并保留业务校验消息；`UiFormattersTest` 覆盖分类文案 |
 | BUG-P3-005 | VERIFIED | 核销成功后自动刷新记录会覆盖服务返回的成功或审计降级消息 | `AdmissionPanel` 在刷新同订单记录后恢复本次业务结果文案，普通查询仍显示记录数/空结果 | 页面测试确认核销参数、同订单刷新及最终状态仍为“核销成功” |
+| BUG-P3-006 | VERIFIED | 票种新增/更新和库存保存后的自动刷新覆盖业务结果消息 | `TicketInventoryPanel` 使用点击时参数快照刷新同一景点/票种日期范围，并在刷新后保留创建编号、更新或库存可售结果 | 页面测试覆盖票种 CRUD、库存保存、刷新参数及最终状态消息 |
 
 ## 已知四问题复现纪律
 
