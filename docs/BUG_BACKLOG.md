@@ -33,7 +33,7 @@
 | BUG-P2-004 | VERIFIED | 已知：系统审计条件查询不能正常使用 | 新增 `AuditLogQuery`；服务/DAO 支持用户、类型、级别、日期、关键词、limit 组合；独立 `AuditPanel` 维护四类结果与当前页刷新 | 服务/真实 MongoDB 组合查询及页面级全筛选、清空、日期全天边界、汇总刷新测试均通过；最终桌面视觉冒烟保留到 M10/M11 |
 | BUG-P2-005 | VERIFIED | 评论规则允许同一用户对同一景点重复插入 | 改为兼容历史字符串 ID 的原位 upsert，保留 `created_at`、更新 `updated_at`；唯一索引并发冲突会重试为更新 | 单元测试及真实 MongoDB 测试证明再次评论更新原记录且兼容记录总数仍为 1 |
 | BUG-P2-006 | VERIFIED | 评论展示缺用户信息、标签和更新时间 | 新增评论列表 DTO，将用户表脱敏用户名与 Mongo 评论字段组合；评论使用独立页签 | 自动测试验证脱敏用户名、评分、正文、标签、创建/更新时间完整，真实 UTF-8 往返通过 |
-| BUG-P2-007 | VERIFIED | 管理员用户管理完全缺失 | 已新增查询、详情、档案、订单/行为概况、启禁和角色管理；事务行锁保护自身与最后管理员规则 | 6 项服务单元测试、2 项真实 MySQL/MongoDB 集成测试和 Swing 静态检查通过 |
+| BUG-P2-007 | VERIFIED | 管理员用户管理完全缺失 | 独立 `UserManagementPanel` 支持查询、详情、档案、订单/行为概况、启禁和角色管理；事务行锁保护自身与最后管理员规则 | 服务/真实库测试及页面级筛选、选择、本人保护、变更消息与 Mongo 降级测试通过 |
 | BUG-P2-008 | VERIFIED | 退出没有写 LOGOUT 审计，异步任务可能跨会话回写 | 退出调用 `UserService.logout` 写 LOGOUT；`SessionTaskGuard` 在退出/登录切换时使旧异步回调失效 | Mongo 日志失败降级测试、会话代次回归测试和 M2 完整套件通过 |
 | BUG-P2-009 | VERIFIED | 热门排行只显示景点 ID | `StatisticsService` 将 Mongo 热门聚合与 MySQL 主数据合并为 `HotItemRankingDTO`，独立 `ReportPanel` 固定名称/ID/状态/热度列 | 服务测试覆盖缺失主数据降级；页面测试覆盖真实名称、状态及刷新保持热门页签 |
 | BUG-P2-010 | VERIFIED | 第二个存储过程和两个视图未在系统/测试中证明实际用途 | `ReportDAO` 现在实际调用 `sp_update_inactive_items`，并查询 `v_user_profile`、`v_item_order_summary` | `ReportDatabaseObjectsIntegrationTest` 在 `scenic_ticket_test` 事务内验证两个视图和第二存储过程，测试后回滚 |
@@ -47,11 +47,12 @@
 | ID | 状态 | 问题 | 说明 |
 | --- | --- | --- | --- |
 | BUG-P3-001 | VERIFIED | 启动脚本硬编码本机绝对 JDK/Maven 路径 | 已删除机器路径，支持标准 `JAVA_HOME`/`MAVEN_HOME`/PATH、Maven Wrapper及 `SCENIC_*` 显式覆盖；`--check` 两种配置实跑通过，自动测试禁止回退 |
-| BUG-P3-002 | IN PROGRESS | `AppFrame` 过大 | M9 已完整抽出八个页面组件（含票种库存），并清除旧渲染器；`AppFrame` 已降至 1679 行，其它后台页面继续拆分 |
+| BUG-P3-002 | IN PROGRESS | `AppFrame` 过大 | M9 已完整抽出九个页面组件（含用户管理），并清除旧渲染器；`AppFrame` 已降至 1532 行，剩余景点/分类后台继续拆分 |
 | BUG-P3-003 | VERIFIED | 文档数据库版本写成 MySQL 8.0.45 / MongoDB 8.3.2 | README 与需求规格已改为 MySQL 8.0+ / MongoDB 5.0+；快捷启动文档明确精确版本仅为本机验证记录，自动测试固定主要求文档 |
 | BUG-P3-004 | VERIFIED | 错误提示过度归一为“检查数据库连接” | `UiFormatters.chineseError` 已区分数据库、权限和通用失败，并保留业务校验消息；`UiFormattersTest` 覆盖分类文案 |
 | BUG-P3-005 | VERIFIED | 核销成功后自动刷新记录会覆盖服务返回的成功或审计降级消息 | `AdmissionPanel` 在刷新同订单记录后恢复本次业务结果文案，普通查询仍显示记录数/空结果 | 页面测试确认核销参数、同订单刷新及最终状态仍为“核销成功” |
 | BUG-P3-006 | VERIFIED | 票种新增/更新和库存保存后的自动刷新覆盖业务结果消息 | `TicketInventoryPanel` 使用点击时参数快照刷新同一景点/票种日期范围，并在刷新后保留创建编号、更新或库存可售结果 | 页面测试覆盖票种 CRUD、库存保存、刷新参数及最终状态消息 |
+| BUG-P3-007 | VERIFIED | 用户管理允许当前管理员点击自禁用/自降权，且变更结果会被列表刷新消息覆盖 | `UserManagementPanel` 对当前会话本人禁用两个变更按钮；其他目标冻结 ID，并在刷新后保留服务结果 | 页面测试覆盖本人保护、其他用户状态/角色目标及最终消息；最后管理员规则仍由服务事务校验 |
 
 ## 已知四问题复现纪律
 

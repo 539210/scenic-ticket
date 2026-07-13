@@ -10,6 +10,7 @@ import com.scenicticket.dto.OrderViewDTO;
 import com.scenicticket.dto.RecommendationDTO;
 import com.scenicticket.dto.StatisticsReportDTO;
 import com.scenicticket.dto.AdminUserDetailDTO;
+import com.scenicticket.dto.AdminChangeResult;
 import com.scenicticket.dto.AdmissionResult;
 import com.scenicticket.dto.UserSearchCriteria;
 import com.scenicticket.dto.TicketAvailabilityDTO;
@@ -17,7 +18,6 @@ import com.scenicticket.dto.CommentListDTO;
 import com.scenicticket.model.Category;
 import com.scenicticket.model.Item;
 import com.scenicticket.model.Order;
-import com.scenicticket.model.Profile;
 import com.scenicticket.model.User;
 import com.scenicticket.model.TicketInventory;
 import com.scenicticket.model.TicketType;
@@ -727,120 +727,33 @@ public class AppFrame extends JFrame {
     }
 
     private JPanel createUserManagementPanel() {
-        JPanel panel = new JPanel(new BorderLayout(12, 12));
-        panel.setOpaque(false);
-        JTextField usernameField = new JTextField(12);
-        JTextField emailField = new JTextField(16);
-        JComboBox<String> roleFilter = new JComboBox<>(new String[]{"全部角色", "管理员", "普通用户"});
-        JComboBox<String> statusFilter = new JComboBox<>(new String[]{"全部状态", "启用", "禁用"});
-        JButton queryButton = primaryButton("查询用户");
-        JButton resetButton = secondaryButton("重置");
-
-        JPanel filters = toolbar();
-        filters.add(new JLabel("用户名"));
-        filters.add(usernameField);
-        filters.add(new JLabel("邮箱"));
-        filters.add(emailField);
-        filters.add(new JLabel("角色"));
-        filters.add(roleFilter);
-        filters.add(new JLabel("状态"));
-        filters.add(statusFilter);
-        filters.add(queryButton);
-        filters.add(resetButton);
-
-        DefaultTableModel model = tableModel("用户ID", "用户名", "邮箱", "手机号", "角色", "状态", "创建时间");
-        JTable table = createTable(model);
-        table.setAutoResizeMode(JTable.AUTO_RESIZE_ALL_COLUMNS);
-        setColumnWidths(table, 70, 120, 190, 120, 90, 70, 170);
-        List<User> visibleUsers = new ArrayList<>();
-        User[] selectedUser = new User[1];
-
-        JTextArea detailArea = createTextArea(14, 38);
-        detailArea.setText("请先查询并选择用户。\n服务层会再次校验管理员权限。");
-        JComboBox<String> targetStatusBox = new JComboBox<>(new String[]{"禁用", "启用"});
-        JComboBox<String> targetRoleBox = new JComboBox<>(new String[]{"普通用户", "管理员"});
-        JButton statusButton = primaryButton("更新状态");
-        JButton roleButton = secondaryButton("更新角色");
-        statusButton.setEnabled(false);
-        roleButton.setEnabled(false);
-        JPanel actions = toolbar();
-        actions.add(new JLabel("状态"));
-        actions.add(targetStatusBox);
-        actions.add(statusButton);
-        actions.add(new JLabel("角色"));
-        actions.add(targetRoleBox);
-        actions.add(roleButton);
-
-        JPanel detailPanel = new JPanel(new BorderLayout(0, 10));
-        detailPanel.setOpaque(false);
-        detailPanel.add(new JScrollPane(detailArea), BorderLayout.CENTER);
-        detailPanel.add(actions, BorderLayout.SOUTH);
-
-        Runnable refreshUsers = () -> runAdminTask("查询用户", () -> adminUserService.searchUsers(
-                requireCurrentUserId(), new UserSearchCriteria(
-                        blankToNull(usernameField.getText()), blankToNull(emailField.getText()),
-                        selectedUserRoleFilter(roleFilter), selectedUserStatusFilter(statusFilter), 100, 0)
-        ), users -> {
-            visibleUsers.clear();
-            visibleUsers.addAll(users);
-            model.setRowCount(0);
-            for (User user : users) {
-                model.addRow(new Object[]{user.getUserId(), user.getUsername(), user.getEmail(), user.getPhone(),
-                        roleDisplay(user.getRole()), user.getStatus() != null && user.getStatus() == 1 ? "启用" : "禁用",
-                        formatDate(user.getCreatedAt())});
+        long actorUserId = requireCurrentUserId();
+        return new UserManagementPanel(actorUserId, taskRunner, new UserManagementPanel.Actions() {
+            @Override
+            public List<User> search(UserSearchCriteria criteria) {
+                return adminUserService.searchUsers(actorUserId, criteria);
             }
-            selectedUser[0] = null;
-            statusButton.setEnabled(false);
-            roleButton.setEnabled(false);
-            detailArea.setText(users.isEmpty() ? "没有找到符合条件的用户。" : "查询到 " + users.size() + " 个用户，请选择查看详情。");
-            setStatus("查询到 " + users.size() + " 个用户");
-        });
 
-        table.getSelectionModel().addListSelectionListener(event -> {
-            int viewRow = table.getSelectedRow();
-            if (!event.getValueIsAdjusting() && viewRow >= 0) {
-                selectedUser[0] = visibleUsers.get(table.convertRowIndexToModel(viewRow));
-                User target = selectedUser[0];
-                targetStatusBox.setSelectedIndex(target.getStatus() != null && target.getStatus() == 1 ? 1 : 0);
-                targetRoleBox.setSelectedIndex("ADMIN".equals(target.getRole()) ? 1 : 0);
-                statusButton.setEnabled(true);
-                roleButton.setEnabled(true);
-                runAdminTask("加载用户详情", () -> adminUserService.getUserDetail(
-                        requireCurrentUserId(), target.getUserId()), detail -> detailArea.setText(formatAdminUserDetail(detail)));
+            @Override
+            public AdminUserDetailDTO detail(long targetUserId) {
+                return adminUserService.getUserDetail(actorUserId, targetUserId);
+            }
+
+            @Override
+            public AdminChangeResult changeStatus(long targetUserId, int status) {
+                return adminUserService.changeUserStatus(actorUserId, targetUserId, status);
+            }
+
+            @Override
+            public AdminChangeResult changeRole(long targetUserId, String role) {
+                return adminUserService.changeUserRole(actorUserId, targetUserId, role);
+            }
+
+            @Override
+            public void setStatus(String message) {
+                AppFrame.this.setStatus(message);
             }
         });
-
-        queryButton.addActionListener(event -> refreshUsers.run());
-        resetButton.addActionListener(event -> {
-            usernameField.setText("");
-            emailField.setText("");
-            roleFilter.setSelectedIndex(0);
-            statusFilter.setSelectedIndex(0);
-            refreshUsers.run();
-        });
-        usernameField.addActionListener(event -> refreshUsers.run());
-        emailField.addActionListener(event -> refreshUsers.run());
-        statusButton.addActionListener(event -> runAdminTask("更新用户状态", () -> adminUserService.changeUserStatus(
-                requireCurrentUserId(), requireSelectedUser(selectedUser).getUserId(), targetStatusBox.getSelectedIndex()
-        ), result -> {
-            setStatus(result.message());
-            refreshUsers.run();
-        }));
-        roleButton.addActionListener(event -> runAdminTask("更新用户角色", () -> adminUserService.changeUserRole(
-                requireCurrentUserId(), requireSelectedUser(selectedUser).getUserId(),
-                targetRoleBox.getSelectedIndex() == 1 ? "ADMIN" : "USER"
-        ), result -> {
-            setStatus(result.message());
-            refreshUsers.run();
-        }));
-
-        JSplitPane split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT,
-                wrapWithTitle("用户列表", new JScrollPane(table)), wrapWithTitle("用户详情与操作", detailPanel));
-        split.setResizeWeight(0.62);
-        split.setDividerLocation(760);
-        panel.add(wrapWithTitle("用户筛选", filters), BorderLayout.NORTH);
-        panel.add(split, BorderLayout.CENTER);
-        return panel;
     }
 
     private JPanel createAdmissionManagementPanel() {
@@ -1176,13 +1089,6 @@ public class AppFrame extends JFrame {
                 && selectedItem[0].getItemId() != null && selectedItem[0].getItemId() == itemId;
     }
 
-    private User requireSelectedUser(User[] selectedUser) {
-        if (selectedUser == null || selectedUser.length == 0 || selectedUser[0] == null) {
-            throw new IllegalArgumentException("请先从表格中选择一个用户");
-        }
-        return selectedUser[0];
-    }
-
     private void resetItemSelection(JTable table, Item[] selectedItem, JButton... actionButtons) {
         table.clearSelection();
         selectedItem[0] = null;
@@ -1329,22 +1235,6 @@ public class AppFrame extends JFrame {
 
     private String discountText(BigDecimal discountRate) {
         return UiFormatters.discount(discountRate);
-    }
-
-    private String selectedUserRoleFilter(JComboBox<String> roleBox) {
-        return switch (roleBox.getSelectedIndex()) {
-            case 1 -> "ADMIN";
-            case 2 -> "USER";
-            default -> null;
-        };
-    }
-
-    private Integer selectedUserStatusFilter(JComboBox<String> statusBox) {
-        return switch (statusBox.getSelectedIndex()) {
-            case 1 -> 1;
-            case 2 -> 0;
-            default -> null;
-        };
     }
 
     private DefaultTableModel tableModel(String... columns) {
@@ -1502,43 +1392,6 @@ public class AppFrame extends JFrame {
                     .append(System.lineSeparator())
                     .append("扩展属性：").append(metadata == null || metadata.isEmpty() ? "暂无" : metadata.toJson());
         }
-        return builder.toString();
-    }
-
-    private String formatAdminUserDetail(AdminUserDetailDTO detail) {
-        User user = detail.getUser();
-        Profile profile = detail.getProfile();
-        var orders = detail.getOrderSummary();
-        StringBuilder builder = new StringBuilder("用户基本信息")
-                .append(System.lineSeparator()).append(System.lineSeparator())
-                .append("用户ID：").append(valueText(user.getUserId())).append(System.lineSeparator())
-                .append("用户名：").append(valueText(user.getUsername())).append(System.lineSeparator())
-                .append("邮箱：").append(valueText(user.getEmail())).append(System.lineSeparator())
-                .append("手机号：").append(valueText(user.getPhone())).append(System.lineSeparator())
-                .append("角色：").append(roleDisplay(user.getRole())).append(System.lineSeparator())
-                .append("状态：").append(user.getStatus() != null && user.getStatus() == 1 ? "启用" : "禁用")
-                .append(System.lineSeparator()).append(System.lineSeparator())
-                .append("用户档案").append(System.lineSeparator());
-        if (profile == null) {
-            builder.append("暂无档案").append(System.lineSeparator());
-        } else {
-            builder.append("真实姓名：").append(valueText(profile.getRealName())).append(System.lineSeparator())
-                    .append("证件号：").append(valueText(profile.getIdCard())).append(System.lineSeparator())
-                    .append("地址：").append(valueText(profile.getAddress())).append(System.lineSeparator())
-                    .append("备注：").append(valueText(profile.getNotes())).append(System.lineSeparator());
-        }
-        builder.append(System.lineSeparator()).append("订单概况").append(System.lineSeparator())
-                .append("总订单：").append(orders.getTotalOrders())
-                .append("，待支付：").append(orders.getPendingOrders())
-                .append("，已支付：").append(orders.getPaidOrders())
-                .append("，已取消：").append(orders.getCancelledOrders())
-                .append("，已完成：").append(orders.getCompletedOrders()).append(System.lineSeparator())
-                .append("有效订单金额：").append(UiFormatters.money(orders.getPaidAmount()))
-                .append(System.lineSeparator()).append(System.lineSeparator())
-                .append("行为概况").append(System.lineSeparator())
-                .append(detail.isBehaviorDataAvailable()
-                        ? "行为日志数量：" + detail.getBehaviorCount()
-                        : "MongoDB 行为数据暂不可用，MySQL 用户信息仍可管理");
         return builder.toString();
     }
 
