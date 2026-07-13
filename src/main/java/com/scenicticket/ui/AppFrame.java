@@ -43,7 +43,6 @@ import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
-import javax.swing.JSpinner;
 import javax.swing.JScrollBar;
 import javax.swing.JScrollPane;
 import javax.swing.JSplitPane;
@@ -53,7 +52,6 @@ import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
-import javax.swing.SpinnerNumberModel;
 import javax.swing.table.DefaultTableModel;
 import java.awt.BorderLayout;
 import java.awt.Color;
@@ -68,7 +66,6 @@ import java.awt.Insets;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
 import java.util.LinkedHashMap;
@@ -709,86 +706,50 @@ public class AppFrame extends JFrame {
             showError(new IllegalArgumentException("该景点当前未上架，暂不能购买"));
             return;
         }
-        runTask("加载可售票种", () -> ticketInventoryService.listAvailable(requireCurrentUserId(), item.getItemId(),
+        long actorUserId = requireCurrentUserId();
+        runTask("加载可售票种", () -> ticketInventoryService.listAvailable(actorUserId, item.getItemId(),
                 LocalDate.now(), LocalDate.now().plusDays(30)), options -> {
             if (options.isEmpty()) {
                 showError(new IllegalArgumentException("未来 30 天暂无可售票种或库存"));
                 return;
             }
-            showPendingOrderDialog(item, detailArea, options);
+            showPendingOrderDialog(actorUserId, item, detailArea, options);
         });
     }
 
-    private void showPendingOrderDialog(Item item, JTextArea detailArea, List<TicketAvailabilityDTO> options) {
-        JComboBox<String> optionBox = new JComboBox<>();
-        for (TicketAvailabilityDTO option : options) {
-            optionBox.addItem(option.ticketType().getName() + " | " + option.inventory().getVisitDate()
-                    + " | 折后 " + UiFormatters.money(option.discountedPrice())
-                    + " | 可售 " + option.inventory().getAvailableStock());
-        }
-        JSpinner quantitySpinner = new JSpinner(new SpinnerNumberModel(1, 1, 99, 1));
-        JComboBox<String> paymentBox = new JComboBox<>(new String[]{"微信", "支付宝", "银行卡"});
-        JLabel amountLabel = new JLabel();
-        amountLabel.setFont(SECTION_FONT);
-        Runnable updateAmount = () -> {
-            TicketAvailabilityDTO option = options.get(optionBox.getSelectedIndex());
-            amountLabel.setText(UiFormatters.money(option.discountedPrice().multiply(
-                    BigDecimal.valueOf((Integer) quantitySpinner.getValue()))));
-        };
-        quantitySpinner.addChangeListener(event -> updateAmount.run());
-        optionBox.addActionListener(event -> updateAmount.run());
-        updateAmount.run();
-        JPanel form = formPanel("创建待支付订单");
-        addField(form, 0, "景点", new JLabel(item.getTitle()));
-        addField(form, 1, "票种与日期", optionBox);
-        addField(form, 2, "购买票数", quantitySpinner);
-        addField(form, 3, "付款方式", paymentBox);
-        addField(form, 4, "待支付金额", amountLabel);
-        addField(form, 5, "支付提示", new JLabel("创建后请到“我的订单”主动确认支付，15 分钟过期"));
+    private void showPendingOrderDialog(long actorUserId, Item item, JTextArea detailArea,
+                                        List<TicketAvailabilityDTO> options) {
+        PurchaseDialogPanel form = new PurchaseDialogPanel(item.getTitle(), options);
         int result = JOptionPane.showConfirmDialog(this, form, "创建待支付订单",
                 JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
         if (result != JOptionPane.OK_OPTION) {
             return;
         }
-        TicketAvailabilityDTO selected = options.get(optionBox.getSelectedIndex());
-        runTask("创建待支付订单", () -> orderLifecycleService.createPendingOrder(requireCurrentUserId(),
-                selected.ticketType().getTicketTypeId(), selected.inventory().getVisitDate(),
-                (Integer) quantitySpinner.getValue(), (String) paymentBox.getSelectedItem(), "127.0.0.1"), action ->
-                detailArea.setText(action.message() + System.lineSeparator()
-                        + "景点：" + item.getTitle() + System.lineSeparator()
-                        + "票种：" + selected.ticketType().getName() + System.lineSeparator()
-                        + "游玩日期：" + selected.inventory().getVisitDate() + System.lineSeparator()
-                        + "订单号：" + action.orderId() + System.lineSeparator()
-                        + "待支付金额：" + amountLabel.getText() + System.lineSeparator()
-                        + "请进入“我的订单”确认支付。"));
+        PurchaseDialogPanel.PendingOrderRequest request = form.request();
+        runTask("创建待支付订单", () -> orderLifecycleService.createPendingOrder(actorUserId,
+                request.ticketTypeId(), request.visitDate(), request.quantity(), request.paymentMethod(),
+                "127.0.0.1"), action -> detailArea.setText(
+                PurchaseDialogPanel.successText(item.getTitle(), action)));
     }
 
     private void showCommentDialog(Item item, JTextArea detailArea) {
-        JSpinner ratingSpinner = new JSpinner(new SpinnerNumberModel(5, 1, 5, 1));
-        JTextArea commentArea = new JTextArea(5, 28);
-        JTextField tagsField = new JTextField(28);
-        commentArea.setLineWrap(true);
-        commentArea.setWrapStyleWord(true);
-        JPanel form = formPanel("发表评论");
-        addField(form, 0, "景点", new JLabel(item.getTitle()));
-        addField(form, 1, "评分", ratingSpinner);
-        addTextAreaField(form, 2, "评论内容", commentArea);
-        addField(form, 3, "标签（逗号分隔）", tagsField);
+        long actorUserId = requireCurrentUserId();
+        CommentDialogPanel form = new CommentDialogPanel(item.getTitle());
         int result = JOptionPane.showConfirmDialog(this, form, "发表评论",
                 JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
         if (result != JOptionPane.OK_OPTION) {
             return;
         }
-        runTask("发表评论", () -> commentService.submit(requireCurrentUserId(), item.getItemId(),
-                commentArea.getText(), (Integer) ratingSpinner.getValue(), parseTags(tagsField.getText()),
-                "127.0.0.1"), resultMessage -> {
+        CommentDialogPanel.CommentSubmission submission = form.submission();
+        runTask("发表评论", () -> commentService.submit(actorUserId, item.getItemId(),
+                submission.content(), submission.rating(), submission.tags(), "127.0.0.1"), resultMessage -> {
             setStatus(resultMessage.message());
             if (!resultMessage.auditRecorded()) {
                 JOptionPane.showMessageDialog(this, resultMessage.message(),
                         "评论已保存（审计警告）", JOptionPane.WARNING_MESSAGE);
             }
             runTask("刷新游客评论", () -> commentService.listForItem(
-                    requireCurrentUserId(), item.getItemId(), 20),
+                    actorUserId, item.getItemId(), 20),
                     dto -> {
                         detailArea.setText(formatCommentViews(item.getTitle(), dto));
                         setStatus(resultMessage.message());
@@ -871,17 +832,6 @@ public class AppFrame extends JFrame {
             return List.of();
         }
         return text.lines().map(String::trim).filter(value -> !value.isBlank()).distinct().toList();
-    }
-
-    private List<String> parseTags(String text) {
-        if (text == null || text.isBlank()) {
-            return List.of();
-        }
-        return Arrays.stream(text.split("[,，]"))
-                .map(String::trim)
-                .filter(value -> !value.isBlank())
-                .distinct()
-                .toList();
     }
 
     private Document parseMetadataJson(String text) {

@@ -43,6 +43,10 @@ class OrderLifecycleServiceTest {
 
         Order order = fixture.orders.created;
         assertEquals(55L, result.orderId());
+        assertEquals(new BigDecimal("160.00"), result.totalAmount());
+        assertEquals("学生票", result.ticketTypeName());
+        assertEquals(LocalDate.of(2026, 7, 20), result.visitDate());
+        assertEquals(2, result.quantity());
         assertEquals(OrderLifecycleService.STATUS_PENDING, order.getStatus());
         assertEquals("学生票", order.getTicketTypeNameSnapshot());
         assertEquals(new BigDecimal("100.00"), order.getOriginalUnitPrice());

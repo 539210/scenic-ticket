@@ -7,6 +7,7 @@ import com.scenicticket.dao.mysql.RefundDAO;
 import com.scenicticket.dao.mysql.TicketInventoryDAO;
 import com.scenicticket.dao.mysql.TicketTypeDAO;
 import com.scenicticket.dto.OrderActionResult;
+import com.scenicticket.dto.PendingOrderResult;
 import com.scenicticket.exception.BusinessException;
 import com.scenicticket.exception.DBException;
 import com.scenicticket.model.Item;
@@ -65,14 +66,16 @@ public class OrderLifecycleService {
         this.clock = clock;
     }
 
-    public OrderActionResult createPendingOrder(long userId, long ticketTypeId, LocalDate visitDate,
-                                                int quantity, String paymentMethod, String ip) {
+    public PendingOrderResult createPendingOrder(long userId, long ticketTypeId, LocalDate visitDate,
+                                                 int quantity, String paymentMethod, String ip) {
         authorizationService.requireActiveUser(userId);
         validateVisitDate(visitDate);
         validateQuantity(quantity);
         String safePaymentMethod = normalizePaymentMethod(paymentMethod);
         long orderId;
         long itemId;
+        BigDecimal totalAmount;
+        String ticketTypeName;
         try (Connection connection = connectionProvider.getConnection()) {
             connection.setAutoCommit(false);
             try {
@@ -106,6 +109,8 @@ public class OrderLifecycleService {
                 order.setStatus(STATUS_PENDING);
                 orderId = orderDAO.create(connection, order);
                 itemId = ticketType.getItemId();
+                totalAmount = order.getAmount();
+                ticketTypeName = order.getTicketTypeNameSnapshot();
                 connection.commit();
             } catch (RuntimeException | SQLException exception) {
                 rollback(connection, exception);
@@ -120,7 +125,9 @@ public class OrderLifecycleService {
             throw new DBException("创建待支付订单事务失败", exception);
         }
         boolean audited = safeAudit(userId, itemId, "ORDER_CREATE", ip);
-        return result(orderId, true, audited, "待支付订单已创建，请在 15 分钟内确认支付");
+        String message = "待支付订单已创建，请在 15 分钟内确认支付";
+        return new PendingOrderResult(orderId, totalAmount, ticketTypeName, visitDate, quantity, audited,
+                audited ? message : message + "；但审计日志写入失败，请联系管理员");
     }
 
     public OrderActionResult pay(long actorUserId, long orderId, String ip) {

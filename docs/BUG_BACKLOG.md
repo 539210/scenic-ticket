@@ -41,13 +41,14 @@
 | BUG-P2-012 | VERIFIED | 订单表格选择任意订单都会同时启用支付、取消和退款按钮 | 新增 `OrderActionPolicy`，按当前 actor、订单所有者、状态和游玩日期计算按钮可用性；服务层资格校验继续保留 | `OrderActionPolicyTest` 覆盖本人待支付、本人可/不可退款、他人订单、已取消和已完成订单 |
 | BUG-P2-013 | VERIFIED | 管理员订单查询留空用户 ID 时发生 `null` 隐式拆箱并抛出 NPE | 独立 `OrderPanel` 使用显式管理员/普通用户分支，管理员空用户 ID 保持为无筛选，普通用户始终绑定当前会话 ID | `OrderPanelTest` 覆盖管理员空筛选、普通用户强制本人及生命周期按钮联动 |
 | BUG-P2-014 | VERIFIED | 点击订单生命周期操作后、后台任务执行前切换选择可能使操作读取到另一订单 ID | 支付、取消和退款均在点击事件中冻结订单 ID，后台任务只使用请求快照 | 延迟执行测试在点击支付后切换至另一行，确认服务仍收到点击时订单 ID |
+| BUG-P2-015 | VERIFIED | 管理员在购票弹窗打开期间调价时，订单按服务端新价落库但成功页仍显示旧客户端估价 | `PendingOrderResult` 返回事务实际保存的金额及票种/日期/数量快照；弹窗明确标注“下单前估算”，成功页只展示服务端实际金额 | 服务测试固定返回快照等于订单快照；`PurchaseDialogPanelTest` 使用与估价不同的服务端金额验证成功页显示服务端值 |
 
 ## P3
 
 | ID | 状态 | 问题 | 说明 |
 | --- | --- | --- | --- |
 | BUG-P3-001 | VERIFIED | 启动脚本硬编码本机绝对 JDK/Maven 路径 | 已删除机器路径，支持标准 `JAVA_HOME`/`MAVEN_HOME`/PATH、Maven Wrapper及 `SCENIC_*` 显式覆盖；`--check` 两种配置实跑通过，自动测试禁止回退 |
-| BUG-P3-002 | IN PROGRESS | `AppFrame` 过大 | M9 已抽出完整后台 `ManagementPanel`、登录/注册及九个业务页面组件，并清除旧实现/渲染器；`AppFrame` 已降至 1167 行，购买/评论等业务对话框边界继续收口 |
+| BUG-P3-002 | IN PROGRESS | `AppFrame` 过大 | M9 已抽出完整后台、登录/注册、购买/评论及九个业务页面组件，并清除旧实现/渲染器；`AppFrame` 已降至 1117 行，景点创建/可售查询及遗留格式化边界继续收口 |
 | BUG-P3-003 | VERIFIED | 文档数据库版本写成 MySQL 8.0.45 / MongoDB 8.3.2 | README 与需求规格已改为 MySQL 8.0+ / MongoDB 5.0+；快捷启动文档明确精确版本仅为本机验证记录，自动测试固定主要求文档 |
 | BUG-P3-004 | VERIFIED | 错误提示过度归一为“检查数据库连接” | `UiFormatters.chineseError` 已区分数据库、权限和通用失败，并保留业务校验消息；`UiFormattersTest` 覆盖分类文案 |
 | BUG-P3-005 | VERIFIED | 核销成功后自动刷新记录会覆盖服务返回的成功或审计降级消息 | `AdmissionPanel` 在刷新同订单记录后恢复本次业务结果文案，普通查询仍显示记录数/空结果 | 页面测试确认核销参数、同订单刷新及最终状态仍为“核销成功” |
