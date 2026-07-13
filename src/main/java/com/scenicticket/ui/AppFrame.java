@@ -43,8 +43,6 @@ import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JPasswordField;
 import javax.swing.JSpinner;
-import javax.swing.JMenuItem;
-import javax.swing.JPopupMenu;
 import javax.swing.JScrollBar;
 import javax.swing.JScrollPane;
 import javax.swing.JSplitPane;
@@ -82,10 +80,6 @@ public class AppFrame extends JFrame {
     private static final Color PANEL_BORDER = UiTheme.BORDER;
     private static final Font TITLE_FONT = UiTheme.TITLE_FONT;
     private static final Font SECTION_FONT = UiTheme.SECTION_FONT;
-    private static final String ALL_OPTION = "全部";
-    private static final String[] KEYWORD_OPTIONS = {
-            ALL_OPTION, "南山", "云岭", "青河", "古城", "海湾", "星湖", "观景", "博物馆", "亲子", "水上", "森林"
-    };
 
     private final UserService userService = new UserService();
     private final BusinessService businessService = new BusinessService();
@@ -357,209 +351,77 @@ public class AppFrame extends JFrame {
     }
 
     private JPanel createItemPanel() {
-        JPanel panel = pagePanel(new BorderLayout(12, 12));
-        JComboBox<String> keywordBox = new JComboBox<>(KEYWORD_OPTIONS);
-        JTextField keywordField = new JTextField(14);
-        JComboBox<CategoryOption> categoryBox = new JComboBox<>();
-        categoryBox.addItem(new CategoryOption("全部类型", null));
-        JTextArea overviewArea = createTextArea(18, 34);
-        JTextArea introductionArea = createTextArea(18, 34);
-        JTextArea commentsArea = createTextArea(18, 34);
-        DefaultTableModel tableModel = tableModel("景点名称", "类型", "原价", "优惠", "折后价", "推荐分", "状态");
-        JTable table = createTable(tableModel);
-        table.setAutoResizeMode(JTable.AUTO_RESIZE_ALL_COLUMNS);
-        setColumnWidths(table, 210, 110, 85, 90, 90, 80, 75);
-        overviewArea.setText("请选择查询条件，或点击“查询”浏览全部景点。");
-        introductionArea.setText("请选择景点后点击“景点简介”。");
-        commentsArea.setText("请选择景点后点击“游客评论”。");
-        List<Item> visibleItems = new ArrayList<>();
-        Map<Long, String> recommendationReasons = new LinkedHashMap<>();
-        Item[] selectedItem = new Item[1];
+        return new ScenicBrowsePanel(taskRunner, new ScenicBrowsePanel.Actions() {
+            @Override
+            public List<Category> loadCategories() {
+                return businessService.listCategories();
+            }
 
-        JPanel searchToolbar = toolbar();
-        JButton searchButton = primaryButton("查询");
-        JButton recommendButton = secondaryButton("推荐");
-        JPopupMenu recommendMenu = new JPopupMenu();
-        JMenuItem personalRecommendItem = new JMenuItem("为你推荐");
-        JMenuItem hotRecommendItem = new JMenuItem("热门");
-        JMenuItem ratedRecommendItem = new JMenuItem("高分");
-        recommendMenu.add(personalRecommendItem);
-        recommendMenu.add(hotRecommendItem);
-        recommendMenu.add(ratedRecommendItem);
-        JButton clearButton = secondaryButton("重置");
-        searchToolbar.add(new JLabel("关键词"));
-        searchToolbar.add(keywordBox);
-        searchToolbar.add(new JLabel("自定义"));
-        searchToolbar.add(keywordField);
-        searchToolbar.add(new JLabel("景点类型"));
-        searchToolbar.add(categoryBox);
-        searchToolbar.add(searchButton);
-        searchToolbar.add(recommendButton);
-        searchToolbar.add(clearButton);
+            @Override
+            public void categoriesLoaded(List<Category> categories) {
+                updateCategoryCache(categories);
+            }
 
-        JButton detailButton = secondaryButton("景点简介");
-        JButton commentsButton = secondaryButton("游客评论");
-        JButton availabilityButton = secondaryButton("可售票种与日期");
-        JButton orderButton = primaryButton("购买门票");
-        JButton commentButton = secondaryButton("发表评论");
-        detailButton.setEnabled(false);
-        commentsButton.setEnabled(false);
-        availabilityButton.setEnabled(false);
-        orderButton.setEnabled(false);
-        commentButton.setEnabled(false);
-        JPanel detailActions = new JPanel(new GridLayout(3, 2, 10, 10));
-        detailActions.setOpaque(false);
-        detailActions.add(detailButton);
-        detailActions.add(commentsButton);
-        detailActions.add(availabilityButton);
-        detailActions.add(orderButton);
-        detailActions.add(commentButton);
-        detailActions.add(new JLabel(""));
-        JTabbedPane scenicInfoTabs = new JTabbedPane();
-        scenicInfoTabs.addTab("景点概览", new JScrollPane(overviewArea));
-        scenicInfoTabs.addTab("景点简介", new JScrollPane(introductionArea));
-        scenicInfoTabs.addTab("游客评论", new JScrollPane(commentsArea));
-        JPanel detailPanel = new JPanel(new BorderLayout(0, 10));
-        detailPanel.setOpaque(false);
-        detailPanel.add(scenicInfoTabs, BorderLayout.CENTER);
-        detailPanel.add(detailActions, BorderLayout.SOUTH);
+            @Override
+            public List<Item> searchItems(String keyword, Long categoryId) {
+                return businessService.searchItems(keyword, categoryId, 50, 0);
+            }
 
-        table.getSelectionModel().addListSelectionListener(event -> {
-            int viewRow = table.getSelectedRow();
-            if (!event.getValueIsAdjusting() && viewRow >= 0) {
-                int modelRow = table.convertRowIndexToModel(viewRow);
-                selectedItem[0] = visibleItems.get(modelRow);
-                Item item = selectedItem[0];
-                String reason = recommendationReasons.get(item.getItemId());
-                overviewArea.setText(item.getTitle() + System.lineSeparator()
-                        + "类型：" + categoryName(item.getCategoryId()) + System.lineSeparator()
-                        + "原价：" + UiFormatters.money(item.getPrice()) + "    优惠："
-                        + discountText(item.getDiscountRate()) + System.lineSeparator()
-                        + "折后价：" + UiFormatters.money(UiFormatters.discountedUnitPrice(
-                        item.getPrice(), item.getDiscountRate())) + System.lineSeparator()
-                        + "状态：" + formatItemStatus(item.getStatus())
-                        + (reason == null ? "" : System.lineSeparator() + "推荐理由：" + reason)
-                        + System.lineSeparator() + System.lineSeparator()
-                        + "点击“景点简介”查看景区介绍，点击“游客评论”查看评价。" );
-                introductionArea.setText("尚未加载“" + item.getTitle() + "”的景点简介。");
-                commentsArea.setText("尚未加载“" + item.getTitle() + "”的游客评论。");
-                scenicInfoTabs.setSelectedIndex(0);
-                detailButton.setEnabled(true);
-                commentsButton.setEnabled(true);
-                availabilityButton.setEnabled(item.getStatus() != null && item.getStatus() == 1);
-                orderButton.setEnabled(item.getStatus() != null && item.getStatus() == 1);
-                commentButton.setEnabled(true);
+            @Override
+            public List<RecommendationDTO> recommendForUser() {
+                return recommendService.recommendForUser(requireCurrentUserId(), 10);
+            }
+
+            @Override
+            public List<RecommendationDTO> recommendTopRated() {
+                return recommendService.recommendTopRatedItems(10);
+            }
+
+            @Override
+            public List<RecommendationDTO> recommendHot() {
+                return recommendService.recommendHotItems(null, null, 10);
+            }
+
+            @Override
+            public CrossDatabaseItemDTO loadItemDetail(long itemId) {
+                return crossDatabaseQueryService.getItemDetail(itemId, 8);
+            }
+
+            @Override
+            public CommentListDTO loadComments(long itemId) {
+                return commentService.listForItem(requireCurrentUserId(), itemId, 20);
+            }
+
+            @Override
+            public String formatItemIntroduction(CrossDatabaseItemDTO dto) {
+                return AppFrame.this.formatItemIntroduction(dto);
+            }
+
+            @Override
+            public String formatCommentViews(String itemTitle, CommentListDTO dto) {
+                return AppFrame.this.formatCommentViews(itemTitle, dto);
+            }
+
+            @Override
+            public void showTicketAvailability(Item item) {
+                showTicketAvailabilityDialog(item);
+            }
+
+            @Override
+            public void showPurchase(Item item, JTextArea detailArea) {
+                showPurchaseDialog(item, detailArea);
+            }
+
+            @Override
+            public void showComment(Item item, JTextArea commentsArea) {
+                showCommentDialog(item, commentsArea);
+            }
+
+            @Override
+            public void setStatus(String message) {
+                AppFrame.this.setStatus(message);
             }
         });
-
-        Consumer<List<Item>> fillItems = items -> {
-            tableModel.setRowCount(0);
-            visibleItems.clear();
-            recommendationReasons.clear();
-            for (Item item : items) {
-                visibleItems.add(item);
-                tableModel.addRow(new Object[]{
-                        item.getTitle(), categoryName(item.getCategoryId()), UiFormatters.money(item.getPrice()),
-                        discountText(item.getDiscountRate()), UiFormatters.money(UiFormatters.discountedUnitPrice(
-                        item.getPrice(), item.getDiscountRate())), "-", formatItemStatus(item.getStatus())
-                });
-            }
-            resetItemSelection(table, selectedItem, detailButton, commentsButton, availabilityButton, orderButton, commentButton);
-            overviewArea.setText(items.isEmpty() ? "没有找到符合条件的景点，请调整查询条件。" : "共找到 " + items.size() + " 个景点，请从左侧列表选择。" );
-            introductionArea.setText("请选择景点后点击“景点简介”。");
-            commentsArea.setText("请选择景点后点击“游客评论”。");
-            setStatus("查询到 " + items.size() + " 个景点");
-        };
-
-        Consumer<List<RecommendationDTO>> fillRecommendations = recommendations -> {
-            tableModel.setRowCount(0);
-            visibleItems.clear();
-            recommendationReasons.clear();
-            for (RecommendationDTO recommendation : recommendations) {
-                Item item = recommendation.getItem();
-                if (item == null) {
-                    continue;
-                }
-                visibleItems.add(item);
-                recommendationReasons.put(item.getItemId(), recommendation.getReason());
-                tableModel.addRow(new Object[]{
-                        item.getTitle(), categoryName(item.getCategoryId()), UiFormatters.money(item.getPrice()),
-                        discountText(item.getDiscountRate()), UiFormatters.money(UiFormatters.discountedUnitPrice(
-                        item.getPrice(), item.getDiscountRate())), formatRecommendationScore(recommendation.getScore()),
-                        formatItemStatus(item.getStatus())
-                });
-            }
-            resetItemSelection(table, selectedItem, detailButton, commentsButton, availabilityButton, orderButton, commentButton);
-            overviewArea.setText(recommendations.isEmpty() ? "暂时没有推荐结果。" : "已生成 " + recommendations.size() + " 个推荐结果，请选择景点查看推荐理由。" );
-            introductionArea.setText("请选择景点后点击“景点简介”。");
-            commentsArea.setText("请选择景点后点击“游客评论”。");
-            setStatus("已生成 " + recommendations.size() + " 个推荐景点");
-        };
-
-        searchButton.addActionListener(event -> runTask("景点查询", () -> businessService.searchItems(
-                buildSearchKeyword((String) keywordBox.getSelectedItem(), keywordField.getText()),
-                selectedCategoryId(categoryBox), 50, 0
-        ), fillItems));
-
-        recommendButton.addActionListener(event -> recommendMenu.show(recommendButton, 0, recommendButton.getHeight()));
-
-        personalRecommendItem.addActionListener(event -> runTask("为你推荐", () -> recommendService.recommendForUser(
-                requireCurrentUserId(), 10
-        ), fillRecommendations));
-
-        ratedRecommendItem.addActionListener(event -> runTask("高分推荐", () -> recommendService.recommendTopRatedItems(10),
-                fillRecommendations));
-
-        hotRecommendItem.addActionListener(event -> runTask("热门推荐", () -> recommendService.recommendHotItems(null, null, 10),
-                fillRecommendations));
-
-        clearButton.addActionListener(event -> {
-            keywordBox.setSelectedItem(ALL_OPTION);
-            keywordField.setText("");
-            categoryBox.setSelectedIndex(0);
-            runTask("重置景点列表", () -> businessService.searchItems(null, null, 50, 0), fillItems);
-        });
-
-        detailButton.addActionListener(event -> {
-            long requestedItemId = requireSelectedItem(selectedItem).getItemId();
-            runTask("景点详情", () -> crossDatabaseQueryService.getItemDetail(requestedItemId, 8), dto -> {
-                if (isSelectedItem(selectedItem, requestedItemId)) {
-                    introductionArea.setText(formatItemIntroduction(dto));
-                    scenicInfoTabs.setSelectedIndex(1);
-                }
-            });
-        });
-
-        commentsButton.addActionListener(event -> {
-            Item requestedItem = requireSelectedItem(selectedItem);
-            long requestedItemId = requestedItem.getItemId();
-            runTask("游客评论", () -> commentService.listForItem(requireCurrentUserId(), requestedItemId, 20), dto -> {
-                if (isSelectedItem(selectedItem, requestedItemId)) {
-                    commentsArea.setText(formatCommentViews(requestedItem.getTitle(), dto));
-                    scenicInfoTabs.setSelectedIndex(2);
-                }
-            });
-        });
-
-        availabilityButton.addActionListener(event -> showTicketAvailabilityDialog(requireSelectedItem(selectedItem)));
-
-        orderButton.addActionListener(event -> showPurchaseDialog(requireSelectedItem(selectedItem), overviewArea));
-        commentButton.addActionListener(event -> {
-            Item item = requireSelectedItem(selectedItem);
-            showCommentDialog(item, commentsArea);
-        });
-
-        keywordField.addActionListener(event -> searchButton.doClick());
-        loadCategoryChoices(categoryBox, true);
-
-        JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT,
-                wrapWithTitle("景点列表", new JScrollPane(table)),
-                wrapWithTitle("景点信息", detailPanel));
-        splitPane.setResizeWeight(0.64);
-        splitPane.setDividerLocation(760);
-        panel.add(wrapWithTitle("查询景点", searchToolbar), BorderLayout.NORTH);
-        panel.add(splitPane, BorderLayout.CENTER);
-        return panel;
     }
 
     private JPanel createOrderPanel() {
@@ -1897,12 +1759,6 @@ public class AppFrame extends JFrame {
         return categoryId;
     }
 
-    private String buildSearchKeyword(String presetKeyword, String customKeyword) {
-        String preset = presetKeyword == null || ALL_OPTION.equals(presetKeyword) ? "" : presetKeyword.trim();
-        String custom = customKeyword == null ? "" : customKeyword.trim();
-        return custom.isBlank() ? preset : custom;
-    }
-
     private String categoryName(Long categoryId) {
         if (categoryId == null) {
             return "-";
@@ -1912,10 +1768,6 @@ public class AppFrame extends JFrame {
 
     private String discountText(BigDecimal discountRate) {
         return UiFormatters.discount(discountRate);
-    }
-
-    private String formatRecommendationScore(double score) {
-        return UiFormatters.recommendationScore(score);
     }
 
     private Integer selectedOrderStatus(JComboBox<String> statusBox) {

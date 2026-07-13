@@ -45,7 +45,7 @@
 | ID | 状态 | 问题 | 说明 |
 | --- | --- | --- | --- |
 | BUG-P3-001 | OPEN | 启动脚本硬编码本机绝对 JDK/Maven 路径 | 应优先通用 PATH/环境变量并将本机路径仅作为兼容 fallback |
-| BUG-P3-002 | IN PROGRESS | `AppFrame` 过大 | M9 已完整抽出 `HomePanel`、`ProfilePanel`，并抽出 `SwingTaskRunner`、`OrderTableModels`、`OrderActionPolicy` 和 `UiInputParsers`；其它页面级拆分仍需继续推进 |
+| BUG-P3-002 | IN PROGRESS | `AppFrame` 过大 | M9 已完整抽出 `HomePanel`、`ProfilePanel`、`ScenicBrowsePanel`，并抽出 `SwingTaskRunner`、`OrderTableModels`、`OrderActionPolicy` 和 `UiInputParsers`；其它页面级拆分仍需继续推进 |
 | BUG-P3-003 | OPEN | 文档数据库版本写成 MySQL 8.0.45 / MongoDB 8.3.2 | 目标要求兼容 MySQL 8.0+ / MongoDB 5.0+，文档不应暗示仅支持本机版本 |
 | BUG-P3-004 | VERIFIED | 错误提示过度归一为“检查数据库连接” | `UiFormatters.chineseError` 已区分数据库、权限和通用失败，并保留业务校验消息；`UiFormattersTest` 覆盖分类文案 |
 

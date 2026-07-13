@@ -205,3 +205,4 @@ BUILD SUCCESS
 - 新增 `UiInputParsers`，集中 ID、整数、金额、ISO 日期、审计起止日期和可选文本解析；`AppFrame` 仅保留薄委托。测试发现并明确 `java.util.Date`/Mongo 日期的毫秒精度，结束日期按当天 `23:59:59.999` 包含。默认 Java 21 `mvn -q test` 通过：99 tests，0 failures，0 errors，2 skipped。
 - 完整抽出 `HomePanel`：首页账户/角色摘要、普通用户快捷入口、管理员后台/审计入口和刷新状态均由独立组件维护；`AppFrame` 删除首页专用字段、刷新方法及遗留卡片/导航辅助方法。默认 Java 21 `mvn -q test` 通过：101 tests，0 failures，0 errors，2 skipped；`AppFrame` 当前仍有 2777 行，继续保留为 M9 进行中项。
 - 完整抽出 `ProfilePanel`，通过可注入 `UiTaskExecutor` 复用统一异步执行；加载、表单绑定、空档案清理、保存和消息状态均移出 `AppFrame`。删除未展示的冗余 `userIdField`，保存对象始终绑定当前会话用户 ID。默认 Java 21 `mvn -q test` 通过：103 tests，0 failures，0 errors，2 skipped；`AppFrame` 从 2777 行降至 2726 行。
+- 完整抽出 `ScenicBrowsePanel`，将关键词/类型筛选、推荐列表、选中概览、简介/评论异步回写保护及购票按钮状态集中到独立组件；新增自动测试固定类型与折后价展示、上下架购买权限、推荐分 0–100 边界及推荐理由。分类缓存更新明确回到 EDT 成功回调，避免后台线程修改 Swing 共享状态；`AppFrame` 从 2726 行降至 2578 行。默认 Java 21 `mvn -q test` 通过：105 tests，0 failures，0 errors，2 skipped。
