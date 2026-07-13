@@ -1153,160 +1153,33 @@ public class AppFrame extends JFrame {
     }
 
     private JPanel createAuditPanel() {
-        JPanel panel = pagePanel(new BorderLayout(12, 12));
-        JTextField userIdField = new JTextField(10);
-        JTextField startDateField = new JTextField(10);
-        JTextField endDateField = new JTextField(10);
-        JTextField keywordField = new JTextField(12);
-        JTextField limitField = new JTextField("80", 5);
-        JComboBox<String> logTypeBox = new JComboBox<>(new String[]{"全部类型", "登录", "退出", "注册", "创建订单", "景点更新", "查看报表"});
-        JComboBox<String> levelBox = new JComboBox<>(new String[]{"全部级别", "正常", "警告", "错误"});
-        DefaultTableModel logModel = tableModel("时间", "用户ID", "类型", "级别", "内容", "操作", "IP地址");
-        DefaultTableModel summaryModel = tableModel("类型", "级别", "操作次数", "涉及用户", "最近时间");
-        DefaultTableModel trendModel = tableModel("日期", "类型", "级别", "次数");
-        DefaultTableModel userSummaryModel = tableModel("用户ID", "操作次数", "警告", "错误", "最近时间", "操作类型");
-        JTable logTable = createTable(logModel);
-        JTable summaryTable = createTable(summaryModel);
-        JTable trendTable = createTable(trendModel);
-        JTable userSummaryTable = createTable(userSummaryModel);
-        logTable.setAutoResizeMode(JTable.AUTO_RESIZE_ALL_COLUMNS);
-        summaryTable.setAutoResizeMode(JTable.AUTO_RESIZE_ALL_COLUMNS);
-        trendTable.setAutoResizeMode(JTable.AUTO_RESIZE_ALL_COLUMNS);
-        userSummaryTable.setAutoResizeMode(JTable.AUTO_RESIZE_ALL_COLUMNS);
-        JScrollPane logScroll = new JScrollPane(logTable);
-        JScrollPane summaryScroll = new JScrollPane(summaryTable);
-        JScrollPane trendScroll = new JScrollPane(trendTable);
-        JScrollPane userSummaryScroll = new JScrollPane(userSummaryTable);
-        JTabbedPane auditTabs = new JTabbedPane(JTabbedPane.TOP);
-        auditTabs.addTab("日志明细", logScroll);
-        auditTabs.addTab("审计汇总", summaryScroll);
-        auditTabs.addTab("审计趋势", trendScroll);
-        auditTabs.addTab("用户操作", userSummaryScroll);
-
-        JPanel auditFilters = toolbar();
-        JPanel auditMoreFilters = toolbar();
-        JPanel auditActions = toolbar();
-        JPanel auditToolbar = new JPanel(new GridLayout(3, 1, 0, 4));
-        auditToolbar.setOpaque(false);
-        JButton queryButton = primaryButton("查询日志");
-        JButton summaryButton = secondaryButton("审计汇总");
-        JButton trendButton = secondaryButton("审计趋势");
-        JButton userSummaryButton = secondaryButton("用户操作");
-        JButton refreshButton = secondaryButton("刷新当前结果");
-        JButton clearButton = secondaryButton("清空条件");
-        auditFilters.add(new JLabel("用户ID"));
-        auditFilters.add(userIdField);
-        auditFilters.add(new JLabel("类型"));
-        auditFilters.add(logTypeBox);
-        auditFilters.add(new JLabel("级别"));
-        auditFilters.add(levelBox);
-        auditMoreFilters.add(new JLabel("开始日期"));
-        auditMoreFilters.add(startDateField);
-        auditMoreFilters.add(new JLabel("结束日期"));
-        auditMoreFilters.add(endDateField);
-        auditMoreFilters.add(new JLabel("关键词"));
-        auditMoreFilters.add(keywordField);
-        auditMoreFilters.add(new JLabel("条数"));
-        auditMoreFilters.add(limitField);
-        auditActions.add(queryButton);
-        auditActions.add(summaryButton);
-        auditActions.add(trendButton);
-        auditActions.add(userSummaryButton);
-        auditActions.add(refreshButton);
-        auditActions.add(clearButton);
-        auditToolbar.add(auditFilters);
-        auditToolbar.add(auditMoreFilters);
-        auditToolbar.add(auditActions);
-
-        Runnable refreshAuditLogs = () -> runAdminTask("审计日志查询", () -> systemLogService.queryAuditLogs(
-                requireCurrentUserId(), buildAuditQuery(userIdField, logTypeBox, levelBox,
-                        startDateField, endDateField, keywordField, limitField)), documents -> {
-            int scrollPosition = logScroll.getVerticalScrollBar().getValue();
-            logModel.setRowCount(0);
-            for (Document document : documents) {
-                Document detail = document.get("action_detail", Document.class);
-                logModel.addRow(new Object[]{formatDate(document.get("timestamp")), valueText(document.get("user_id")),
-                        logTypeName(document.getString("log_type")), logLevelName(document.getString("log_level")),
-                        valueText(document.get("message")), detail == null ? "-" : valueText(detail.get("operation")),
-                        detail == null ? "-" : valueText(detail.get("ip"))});
+        long actorUserId = requireCurrentUserId();
+        return new AuditPanel(taskRunner, new AuditPanel.Actions() {
+            @Override
+            public List<Document> query(AuditLogQuery query) {
+                return systemLogService.queryAuditLogs(actorUserId, query);
             }
-            auditTabs.setSelectedIndex(0);
-            restoreScrollPosition(logScroll, scrollPosition);
-            setStatus("查询到 " + documents.size() + " 条审计日志");
-        });
-        queryButton.addActionListener(event -> refreshAuditLogs.run());
 
-        Runnable loadSummary = () -> runAdminTask("审计汇总", () -> systemLogService.getAuditSummary(
-                requireCurrentUserId(), parseOptionalStartDate(startDateField.getText(), "开始日期"),
-                parseOptionalEndDate(endDateField.getText(), "结束日期")), documents -> {
-            int scrollPosition = summaryScroll.getVerticalScrollBar().getValue();
-            summaryModel.setRowCount(0);
-            for (Document document : documents) {
-                summaryModel.addRow(new Object[]{logTypeName(document.getString("log_type")),
-                        logLevelName(document.getString("log_level")), numberText(document.get("operation_count")),
-                        numberText(document.get("user_count")), formatDate(document.get("latest_timestamp"))});
+            @Override
+            public List<Document> summary(Date startTime, Date endTime) {
+                return systemLogService.getAuditSummary(actorUserId, startTime, endTime);
             }
-            auditTabs.setSelectedIndex(1);
-            restoreScrollPosition(summaryScroll, scrollPosition);
-        });
-        summaryButton.addActionListener(event -> loadSummary.run());
 
-        Runnable loadTrend = () -> runAdminTask("审计趋势", () -> systemLogService.getDailyAuditTrend(
-                requireCurrentUserId(), parseOptionalStartDate(startDateField.getText(), "开始日期"),
-                parseOptionalEndDate(endDateField.getText(), "结束日期")), documents -> {
-            int scrollPosition = trendScroll.getVerticalScrollBar().getValue();
-            trendModel.setRowCount(0);
-            for (Document document : documents) {
-                trendModel.addRow(new Object[]{valueText(document.get("date")), logTypeName(document.getString("log_type")),
-                        logLevelName(document.getString("log_level")), numberText(document.get("operation_count"))});
+            @Override
+            public List<Document> trend(Date startTime, Date endTime) {
+                return systemLogService.getDailyAuditTrend(actorUserId, startTime, endTime);
             }
-            auditTabs.setSelectedIndex(2);
-            restoreScrollPosition(trendScroll, scrollPosition);
-        });
-        trendButton.addActionListener(event -> loadTrend.run());
 
-        Runnable loadUserSummary = () -> runAdminTask("用户操作汇总",
-                () -> systemLogService.getUserOperationSummary(requireCurrentUserId(),
-                        parseOptionalStartDate(startDateField.getText(), "开始日期"),
-                        parseOptionalEndDate(endDateField.getText(), "结束日期"),
-                        parseOptionalInt(limitField.getText(), 50, "条数")), documents -> {
-                    int scrollPosition = userSummaryScroll.getVerticalScrollBar().getValue();
-                    userSummaryModel.setRowCount(0);
-                    for (Document document : documents) {
-                        userSummaryModel.addRow(new Object[]{valueText(document.get("user_id")),
-                                numberText(document.get("operation_count")), numberText(document.get("warn_count")),
-                                numberText(document.get("error_count")), formatDate(document.get("latest_timestamp")),
-                                logTypeListText(document.get("log_types"))});
-                    }
-                    auditTabs.setSelectedIndex(3);
-                    restoreScrollPosition(userSummaryScroll, scrollPosition);
-                });
-        userSummaryButton.addActionListener(event -> loadUserSummary.run());
-        clearButton.addActionListener(event -> {
-            userIdField.setText("");
-            startDateField.setText("");
-            endDateField.setText("");
-            keywordField.setText("");
-            limitField.setText("80");
-            logTypeBox.setSelectedIndex(0);
-            levelBox.setSelectedIndex(0);
-            refreshAuditLogs.run();
-        });
-        refreshButton.addActionListener(event -> {
-            switch (auditTabs.getSelectedIndex()) {
-                case 0 -> refreshAuditLogs.run();
-                case 1 -> loadSummary.run();
-                case 2 -> loadTrend.run();
-                case 3 -> loadUserSummary.run();
-                default -> refreshAuditLogs.run();
+            @Override
+            public List<Document> userSummary(Date startTime, Date endTime, int limit) {
+                return systemLogService.getUserOperationSummary(actorUserId, startTime, endTime, limit);
+            }
+
+            @Override
+            public void setStatus(String message) {
+                AppFrame.this.setStatus(message);
             }
         });
-        userIdField.addActionListener(event -> refreshAuditLogs.run());
-        keywordField.addActionListener(event -> refreshAuditLogs.run());
-
-        panel.add(wrapWithTitle("审计条件", auditToolbar), BorderLayout.NORTH);
-        panel.add(wrapWithTitle("审计结果", auditTabs), BorderLayout.CENTER);
-        return panel;
     }
 
     private void setCurrentUser(LoginResult result) {
@@ -1680,42 +1553,6 @@ public class AppFrame extends JFrame {
         return UiFormatters.discount(discountRate);
     }
 
-    private String selectedLogType(JComboBox<String> logTypeBox) {
-        return switch (logTypeBox.getSelectedIndex()) {
-            case 1 -> "LOGIN";
-            case 2 -> "LOGOUT";
-            case 3 -> "REGISTER";
-            case 4 -> "ORDER_CREATE";
-            case 5 -> "ITEM_UPDATE";
-            case 6 -> "REPORT_VIEW";
-            default -> null;
-        };
-    }
-
-    private String selectedLogLevel(JComboBox<String> levelBox) {
-        return switch (levelBox.getSelectedIndex()) {
-            case 1 -> "INFO";
-            case 2 -> "WARN";
-            case 3 -> "ERROR";
-            default -> null;
-        };
-    }
-
-    private AuditLogQuery buildAuditQuery(JTextField userIdField, JComboBox<String> logTypeBox,
-                                          JComboBox<String> levelBox, JTextField startDateField,
-                                          JTextField endDateField, JTextField keywordField,
-                                          JTextField limitField) {
-        AuditLogQuery query = new AuditLogQuery();
-        query.setUserId(parseOptionalLong(userIdField.getText()));
-        query.setLogType(selectedLogType(logTypeBox));
-        query.setLogLevel(selectedLogLevel(levelBox));
-        query.setStartTime(parseOptionalStartDate(startDateField.getText(), "开始日期"));
-        query.setEndTime(parseOptionalEndDate(endDateField.getText(), "结束日期"));
-        query.setKeyword(keywordField.getText());
-        query.setLimit(parseOptionalInt(limitField.getText(), 80, "条数"));
-        return query;
-    }
-
     private String selectedUserRoleFilter(JComboBox<String> roleBox) {
         return switch (roleBox.getSelectedIndex()) {
             case 1 -> "ADMIN";
@@ -1730,10 +1567,6 @@ public class AppFrame extends JFrame {
             case 2 -> 0;
             default -> null;
         };
-    }
-
-    private void restoreScrollPosition(JScrollPane scrollPane, int position) {
-        SwingUtilities.invokeLater(() -> scrollPane.getVerticalScrollBar().setValue(position));
     }
 
     private void fillUserReportTable(DefaultTableModel model, Document document) {
@@ -2466,14 +2299,6 @@ public class AppFrame extends JFrame {
 
     private LocalDate parseRequiredDate(String value, String fieldName) {
         return UiInputParsers.requiredDate(value, fieldName);
-    }
-
-    private Date parseOptionalStartDate(String value, String fieldName) {
-        return UiInputParsers.optionalStartDate(value, fieldName);
-    }
-
-    private Date parseOptionalEndDate(String value, String fieldName) {
-        return UiInputParsers.optionalEndDate(value, fieldName);
     }
 
     private String blankToNull(String value) {

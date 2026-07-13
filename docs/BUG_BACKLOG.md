@@ -30,7 +30,7 @@
 | BUG-P2-001 | VERIFIED | 已知：评论区内容显示错误或混乱 | 根因确认是历史 `content` 已损坏为问号；现已使用独立评论页签、兼容数值/字符串 ID，并以专用 DTO 展示完整字段 | UTF-8 新建/更新、唯一性、脱敏用户、标签、双时间戳和真实聚合测试通过；不可逆历史问号内容保留明确降级提示 |
 | BUG-P2-002 | VERIFIED | 已知：景点简介显示错误 | 根因确认是历史 `description` 已损坏为问号；现已拆分独立简介页签、清除切换残留、兼容字符串/数值 ID，并提供管理员结构化重写入口 | UTF-8 中文、字符串 ID 原位规范化、图片/元数据及真实跨库 CRUD 测试通过；不可逆的历史问号文本需管理员按原资料重填 |
 | BUG-P2-003 | VERIFIED | 已知：推荐分不显示 | 推荐服务返回非零分和理由；Swing 推荐表固定显示推荐分，选中景点概览显示推荐理由；乱码推荐理由已修复为 UTF-8 中文 | `RecommendServiceTest` 验证热门/高评分分数和理由；M8 默认与真实库套件通过，最终 Swing 手工冒烟保留到 M10/M11 |
-| BUG-P2-004 | VERIFIED | 已知：系统审计条件查询不能正常使用 | 新增 `AuditLogQuery`；服务/DAO 支持用户、类型、级别、日期、关键词、limit 组合；UI 增加日期、关键词、条数和清空 | `SystemLogServiceTest`、`StatisticsServiceTest` 和真实 MongoDB 组合查询通过；最终 Swing 手工冒烟保留到 M10/M11 |
+| BUG-P2-004 | VERIFIED | 已知：系统审计条件查询不能正常使用 | 新增 `AuditLogQuery`；服务/DAO 支持用户、类型、级别、日期、关键词、limit 组合；独立 `AuditPanel` 维护四类结果与当前页刷新 | 服务/真实 MongoDB 组合查询及页面级全筛选、清空、日期全天边界、汇总刷新测试均通过；最终桌面视觉冒烟保留到 M10/M11 |
 | BUG-P2-005 | VERIFIED | 评论规则允许同一用户对同一景点重复插入 | 改为兼容历史字符串 ID 的原位 upsert，保留 `created_at`、更新 `updated_at`；唯一索引并发冲突会重试为更新 | 单元测试及真实 MongoDB 测试证明再次评论更新原记录且兼容记录总数仍为 1 |
 | BUG-P2-006 | VERIFIED | 评论展示缺用户信息、标签和更新时间 | 新增评论列表 DTO，将用户表脱敏用户名与 Mongo 评论字段组合；评论使用独立页签 | 自动测试验证脱敏用户名、评分、正文、标签、创建/更新时间完整，真实 UTF-8 往返通过 |
 | BUG-P2-007 | VERIFIED | 管理员用户管理完全缺失 | 已新增查询、详情、档案、订单/行为概况、启禁和角色管理；事务行锁保护自身与最后管理员规则 | 6 项服务单元测试、2 项真实 MySQL/MongoDB 集成测试和 Swing 静态检查通过 |
@@ -47,7 +47,7 @@
 | ID | 状态 | 问题 | 说明 |
 | --- | --- | --- | --- |
 | BUG-P3-001 | VERIFIED | 启动脚本硬编码本机绝对 JDK/Maven 路径 | 已删除机器路径，支持标准 `JAVA_HOME`/`MAVEN_HOME`/PATH、Maven Wrapper及 `SCENIC_*` 显式覆盖；`--check` 两种配置实跑通过，自动测试禁止回退 |
-| BUG-P3-002 | IN PROGRESS | `AppFrame` 过大 | M9 已完整抽出 `HomePanel`、`ProfilePanel`、`ScenicBrowsePanel`、`OrderPanel`，并抽出 `SwingTaskRunner`、`OrderTableModels`、`OrderActionPolicy` 和 `UiInputParsers`；其它页面级拆分仍需继续推进 |
+| BUG-P3-002 | IN PROGRESS | `AppFrame` 过大 | M9 已完整抽出 `HomePanel`、`ProfilePanel`、`ScenicBrowsePanel`、`OrderPanel`、`AuditPanel`，并抽出任务、表格、策略和解析组件；`AppFrame` 已降至 2308 行，其它后台页面继续拆分 |
 | BUG-P3-003 | VERIFIED | 文档数据库版本写成 MySQL 8.0.45 / MongoDB 8.3.2 | README 与需求规格已改为 MySQL 8.0+ / MongoDB 5.0+；快捷启动文档明确精确版本仅为本机验证记录，自动测试固定主要求文档 |
 | BUG-P3-004 | VERIFIED | 错误提示过度归一为“检查数据库连接” | `UiFormatters.chineseError` 已区分数据库、权限和通用失败，并保留业务校验消息；`UiFormattersTest` 覆盖分类文案 |
 
