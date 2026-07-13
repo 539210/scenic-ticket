@@ -10,6 +10,7 @@ import com.scenicticket.dto.OrderViewDTO;
 import com.scenicticket.dto.RecommendationDTO;
 import com.scenicticket.dto.StatisticsReportDTO;
 import com.scenicticket.dto.AdminUserDetailDTO;
+import com.scenicticket.dto.AdmissionResult;
 import com.scenicticket.dto.UserSearchCriteria;
 import com.scenicticket.dto.TicketAvailabilityDTO;
 import com.scenicticket.dto.CommentListDTO;
@@ -843,46 +844,23 @@ public class AppFrame extends JFrame {
     }
 
     private JPanel createAdmissionManagementPanel() {
-        JPanel panel = new JPanel(new BorderLayout(10, 10));
-        panel.setOpaque(false);
-        JTextField orderIdField = new JTextField(10);
-        JSpinner quantitySpinner = new JSpinner(new SpinnerNumberModel(1, 1, 99, 1));
-        JTextField noteField = new JTextField(24);
-        JButton queryButton = secondaryButton("查询核销记录");
-        JButton admitButton = primaryButton("确认核销");
-        JPanel toolbar = toolbar();
-        toolbar.add(new JLabel("订单ID"));
-        toolbar.add(orderIdField);
-        toolbar.add(new JLabel("本次数量"));
-        toolbar.add(quantitySpinner);
-        toolbar.add(new JLabel("备注"));
-        toolbar.add(noteField);
-        toolbar.add(queryButton);
-        toolbar.add(admitButton);
-
-        DefaultTableModel model = tableModel("核销ID", "订单ID", "数量", "操作员ID", "核销时间", "备注");
-        JTable table = createTable(model);
-        setColumnWidths(table, 75, 80, 65, 90, 165, 230);
-        Runnable refresh = () -> runAdminTask("查询核销记录", () -> admissionService.listByOrder(
-                requireCurrentUserId(), parseRequiredLong(orderIdField.getText(), "订单ID")), admissions -> {
-            model.setRowCount(0);
-            for (Admission admission : admissions) {
-                model.addRow(new Object[]{admission.getAdmissionId(), admission.getOrderId(), admission.getQuantity(),
-                        admission.getOperatorUserId(), formatDate(admission.getAdmittedAt()), valueText(admission.getNote())});
+        long actorUserId = requireCurrentUserId();
+        return new AdmissionPanel(taskRunner, new AdmissionPanel.Actions() {
+            @Override
+            public List<Admission> listByOrder(long orderId) {
+                return admissionService.listByOrder(actorUserId, orderId);
             }
-            setStatus("已加载 " + admissions.size() + " 条核销记录");
+
+            @Override
+            public AdmissionResult admit(long orderId, int quantity, String note) {
+                return admissionService.admit(actorUserId, orderId, quantity, note);
+            }
+
+            @Override
+            public void setStatus(String message) {
+                AppFrame.this.setStatus(message);
+            }
         });
-        queryButton.addActionListener(event -> refresh.run());
-        orderIdField.addActionListener(event -> refresh.run());
-        admitButton.addActionListener(event -> runAdminTask("门票核销", () -> admissionService.admit(
-                requireCurrentUserId(), parseRequiredLong(orderIdField.getText(), "订单ID"),
-                (Integer) quantitySpinner.getValue(), noteField.getText()), result -> {
-            setStatus(result.message());
-            refresh.run();
-        }));
-        panel.add(wrapWithTitle("管理员门票核销（仅游玩日期当天的已支付订单）", toolbar), BorderLayout.NORTH);
-        panel.add(wrapWithTitle("核销记录", new JScrollPane(table)), BorderLayout.CENTER);
-        return panel;
     }
 
     private JPanel createTicketInventoryManagementPanel() {
