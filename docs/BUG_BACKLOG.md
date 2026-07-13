@@ -35,7 +35,7 @@
 | BUG-P2-006 | VERIFIED | 评论展示缺用户信息、标签和更新时间 | 新增评论列表 DTO，将用户表脱敏用户名与 Mongo 评论字段组合；评论使用独立页签 | 自动测试验证脱敏用户名、评分、正文、标签、创建/更新时间完整，真实 UTF-8 往返通过 |
 | BUG-P2-007 | VERIFIED | 管理员用户管理完全缺失 | 已新增查询、详情、档案、订单/行为概况、启禁和角色管理；事务行锁保护自身与最后管理员规则 | 6 项服务单元测试、2 项真实 MySQL/MongoDB 集成测试和 Swing 静态检查通过 |
 | BUG-P2-008 | VERIFIED | 退出没有写 LOGOUT 审计，异步任务可能跨会话回写 | 退出调用 `UserService.logout` 写 LOGOUT；`SessionTaskGuard` 在退出/登录切换时使旧异步回调失效 | Mongo 日志失败降级测试、会话代次回归测试和 M2 完整套件通过 |
-| BUG-P2-009 | VERIFIED | 热门排行只显示景点 ID | `StatisticsService` 已将 Mongo 热门聚合与 MySQL `items` 主数据合并为 `HotItemRankingDTO` | UI 表格显示景点名称、ID、状态和热度指标；缺失主数据明确显示“景点不存在或已删除”；单元测试覆盖 |
+| BUG-P2-009 | VERIFIED | 热门排行只显示景点 ID | `StatisticsService` 将 Mongo 热门聚合与 MySQL 主数据合并为 `HotItemRankingDTO`，独立 `ReportPanel` 固定名称/ID/状态/热度列 | 服务测试覆盖缺失主数据降级；页面测试覆盖真实名称、状态及刷新保持热门页签 |
 | BUG-P2-010 | VERIFIED | 第二个存储过程和两个视图未在系统/测试中证明实际用途 | `ReportDAO` 现在实际调用 `sp_update_inactive_items`，并查询 `v_user_profile`、`v_item_order_summary` | `ReportDatabaseObjectsIntegrationTest` 在 `scenic_ticket_test` 事务内验证两个视图和第二存储过程，测试后回滚 |
 | BUG-P2-011 | VERIFIED | 同一会话连续刷新可能由较慢旧请求覆盖较快新请求 | `SwingTaskRunner` 现按任务名获取 `LatestTaskGuard` 代次，成功/失败/中断回调均只接受最新代次 | `LatestTaskGuardTest` 验证同名新请求使旧请求失效，且不同任务名互不干扰；真实 Swing 连续刷新仍待 M10/M11 |
 | BUG-P2-012 | VERIFIED | 订单表格选择任意订单都会同时启用支付、取消和退款按钮 | 新增 `OrderActionPolicy`，按当前 actor、订单所有者、状态和游玩日期计算按钮可用性；服务层资格校验继续保留 | `OrderActionPolicyTest` 覆盖本人待支付、本人可/不可退款、他人订单、已取消和已完成订单 |
@@ -47,7 +47,7 @@
 | ID | 状态 | 问题 | 说明 |
 | --- | --- | --- | --- |
 | BUG-P3-001 | VERIFIED | 启动脚本硬编码本机绝对 JDK/Maven 路径 | 已删除机器路径，支持标准 `JAVA_HOME`/`MAVEN_HOME`/PATH、Maven Wrapper及 `SCENIC_*` 显式覆盖；`--check` 两种配置实跑通过，自动测试禁止回退 |
-| BUG-P3-002 | IN PROGRESS | `AppFrame` 过大 | M9 已完整抽出 `HomePanel`、`ProfilePanel`、`ScenicBrowsePanel`、`OrderPanel`、`AuditPanel`，并抽出任务、表格、策略和解析组件；`AppFrame` 已降至 2308 行，其它后台页面继续拆分 |
+| BUG-P3-002 | IN PROGRESS | `AppFrame` 过大 | M9 已完整抽出 `HomePanel`、`ProfilePanel`、`ScenicBrowsePanel`、`OrderPanel`、`AuditPanel`、`ReportPanel`，并清除旧报表/审计/通用文档文本渲染器；`AppFrame` 已降至 1809 行，其它后台页面继续拆分 |
 | BUG-P3-003 | VERIFIED | 文档数据库版本写成 MySQL 8.0.45 / MongoDB 8.3.2 | README 与需求规格已改为 MySQL 8.0+ / MongoDB 5.0+；快捷启动文档明确精确版本仅为本机验证记录，自动测试固定主要求文档 |
 | BUG-P3-004 | VERIFIED | 错误提示过度归一为“检查数据库连接” | `UiFormatters.chineseError` 已区分数据库、权限和通用失败，并保留业务校验消息；`UiFormattersTest` 覆盖分类文案 |
 

@@ -1031,125 +1031,33 @@ public class AppFrame extends JFrame {
     }
 
     private JPanel createReportPanel() {
-        JPanel panel = pagePanel(new BorderLayout(12, 12));
-        JTextField yearField = new JTextField(String.valueOf(LocalDate.now().getYear()), 6);
-        JTextField monthField = new JTextField(String.valueOf(LocalDate.now().getMonthValue()), 4);
-        JTextField userIdField = new JTextField(10);
-        DefaultTableModel monthlyModel = tableModel("日期", "订单数", "销售金额");
-        DefaultTableModel hotModel = tableModel("排名", "景点名称", "景点ID", "状态", "总操作", "浏览", "下单", "平均停留(秒)");
-        DefaultTableModel userModel = tableModel("指标", "数据");
-        DefaultTableModel dashboardModel = tableModel("模块", "指标", "数据");
-        JTable monthlyTable = createTable(monthlyModel);
-        JTable hotTable = createTable(hotModel);
-        JTable userTable = createTable(userModel);
-        JTable dashboardTable = createTable(dashboardModel);
-        monthlyTable.setAutoResizeMode(JTable.AUTO_RESIZE_ALL_COLUMNS);
-        hotTable.setAutoResizeMode(JTable.AUTO_RESIZE_ALL_COLUMNS);
-        userTable.setAutoResizeMode(JTable.AUTO_RESIZE_ALL_COLUMNS);
-        dashboardTable.setAutoResizeMode(JTable.AUTO_RESIZE_ALL_COLUMNS);
-        JTabbedPane resultTabs = new JTabbedPane(JTabbedPane.TOP);
-        resultTabs.addTab("月度订单", new JScrollPane(monthlyTable));
-        resultTabs.addTab("热门排行", new JScrollPane(hotTable));
-        resultTabs.addTab(isCurrentAdmin() ? "用户报告" : "我的报告", new JScrollPane(userTable));
-        if (isCurrentAdmin()) {
-            resultTabs.addTab("综合汇总", new JScrollPane(dashboardTable));
-        }
-
-        JPanel reportFilters = toolbar();
-        JPanel reportActions = toolbar();
-        JPanel reportToolbar = new JPanel(new GridLayout(2, 1, 0, 4));
-        reportToolbar.setOpaque(false);
-        JButton monthlyButton = primaryButton("月度订单");
-        JButton hotButton = secondaryButton("热门排行");
-        JButton userButton = secondaryButton(isCurrentAdmin() ? "用户报告" : "我的报告");
-        JButton dashboardButton = secondaryButton("综合汇总");
-        JButton refreshButton = secondaryButton("刷新当前报表");
-        reportFilters.add(new JLabel("年份"));
-        reportFilters.add(yearField);
-        reportFilters.add(new JLabel("月份"));
-        reportFilters.add(monthField);
-        if (isCurrentAdmin()) {
-            reportFilters.add(new JLabel("用户ID"));
-            reportFilters.add(userIdField);
-        }
-        reportActions.add(monthlyButton);
-        reportActions.add(hotButton);
-        reportActions.add(userButton);
-        if (isCurrentAdmin()) {
-            reportActions.add(dashboardButton);
-        }
-        reportActions.add(refreshButton);
-        reportToolbar.add(reportFilters);
-        reportToolbar.add(reportActions);
-
-        Runnable loadMonthly = () -> runTask("月度订单报表", () -> statisticsService.getMonthlyOrderReport(
-                parseRequiredInt(yearField.getText(), "年份"),
-                parseRequiredInt(monthField.getText(), "月份")
-        ), reports -> {
-            monthlyModel.setRowCount(0);
-            for (MonthlyOrderReportDTO report : reports) {
-                monthlyModel.addRow(new Object[]{report.getOrderDate(), report.getOrderCount(),
-                        UiFormatters.money(report.getTotalAmount())});
+        long actorUserId = requireCurrentUserId();
+        return new ReportPanel(actorUserId, isCurrentAdmin(), taskRunner, new ReportPanel.Actions() {
+            @Override
+            public List<MonthlyOrderReportDTO> monthly(int year, int month) {
+                return statisticsService.getMonthlyOrderReport(year, month);
             }
-            resultTabs.setSelectedIndex(0);
-            setStatus("月度订单报表已更新");
-        });
-        monthlyButton.addActionListener(event -> loadMonthly.run());
 
-        Runnable loadHot = () -> runTask("热门排行", () -> statisticsService.getHotItemRanking(null, null, 10), documents -> {
-            hotModel.setRowCount(0);
-            int rank = 1;
-            for (HotItemRankingDTO ranking : documents) {
-                hotModel.addRow(new Object[]{rank, ranking.getItemTitle(), ranking.getItemId(),
-                        ranking.isItemFound() ? formatItemStatus(ranking.getItemStatus()) : "-",
-                        ranking.getTotalActions(), ranking.getViewCount(), ranking.getOrderCount(),
-                        decimalText(ranking.getAvgDuration())});
-                rank += 1;
+            @Override
+            public List<HotItemRankingDTO> hot() {
+                return statisticsService.getHotItemRanking(null, null, 10);
             }
-            resultTabs.setSelectedIndex(1);
-            setStatus("热门排行已更新");
-        });
-        hotButton.addActionListener(event -> loadHot.run());
 
-        Runnable loadUserReport = () -> runTask("用户报告", () -> statisticsService.getUserReport(
-                requireCurrentUserId(),
-                isCurrentAdmin() && !userIdField.getText().isBlank()
-                        ? parseRequiredLong(userIdField.getText(), "用户ID")
-                        : requireCurrentUserId(),
-                null,
-                null
-        ), document -> {
-            fillUserReportTable(userModel, document);
-            resultTabs.setSelectedIndex(2);
-            setStatus("用户报告已更新");
-        });
-        userButton.addActionListener(event -> loadUserReport.run());
+            @Override
+            public Document userReport(long targetUserId) {
+                return statisticsService.getUserReport(actorUserId, targetUserId, null, null);
+            }
 
-        Runnable loadDashboard = () -> runTask("综合汇总", () -> statisticsService.buildDashboardReport(
-                requireCurrentUserId(), null, null, parseRequiredInt(yearField.getText(), "年份"),
-                parseRequiredInt(monthField.getText(), "月份")
-        ), dto -> {
-            fillDashboardTable(dashboardModel, dto);
-            resultTabs.setSelectedIndex(3);
-            setStatus("综合汇总已更新");
-        });
-        dashboardButton.addActionListener(event -> loadDashboard.run());
-        refreshButton.addActionListener(event -> {
-            int index = resultTabs.getSelectedIndex();
-            if (index == 0) {
-                loadMonthly.run();
-            } else if (index == 1) {
-                loadHot.run();
-            } else if (index == 2) {
-                loadUserReport.run();
-            } else if (isCurrentAdmin()) {
-                loadDashboard.run();
+            @Override
+            public StatisticsReportDTO dashboard(int year, int month) {
+                return statisticsService.buildDashboardReport(actorUserId, null, null, year, month);
+            }
+
+            @Override
+            public void setStatus(String message) {
+                AppFrame.this.setStatus(message);
             }
         });
-
-        panel.add(wrapWithTitle("报表条件", reportToolbar), BorderLayout.NORTH);
-        panel.add(wrapWithTitle("报表数据", resultTabs), BorderLayout.CENTER);
-        return panel;
     }
 
     private JPanel createAuditPanel() {
@@ -1569,53 +1477,6 @@ public class AppFrame extends JFrame {
         };
     }
 
-    private void fillUserReportTable(DefaultTableModel model, Document document) {
-        model.setRowCount(0);
-        if (document == null || document.isEmpty()) {
-            return;
-        }
-        addMetricRow(model, "用户ID", valueText(document.get("user_id")));
-        addMetricRow(model, "总操作次数", numberText(document.get("action_count")));
-        addMetricRow(model, "访问景点数", numberText(document.get("visited_item_count")));
-        addMetricRow(model, "浏览次数", numberText(document.get("view_count")));
-        addMetricRow(model, "搜索次数", numberText(document.get("search_count")));
-        addMetricRow(model, "评论次数", numberText(document.get("comment_count")));
-        addMetricRow(model, "下单次数", numberText(document.get("order_count")));
-        addMetricRow(model, "总停留时长", numberText(document.get("total_duration")) + " 秒");
-        addMetricRow(model, "平均停留时长", decimalText(document.get("avg_duration")) + " 秒");
-        addMetricRow(model, "首次操作", formatDate(document.get("first_action_time")));
-        addMetricRow(model, "最近操作", formatDate(document.get("latest_action_time")));
-    }
-
-    private void addMetricRow(DefaultTableModel model, String name, Object value) {
-        model.addRow(new Object[]{name, value});
-    }
-
-    private void fillDashboardTable(DefaultTableModel model, StatisticsReportDTO dto) {
-        model.setRowCount(0);
-        for (HotItemRankingDTO ranking : dto.getHotItems()) {
-            model.addRow(new Object[]{"热门景点", ranking.getItemTitle() + " / ID " + ranking.getItemId(),
-                    "总操作 " + ranking.getTotalActions() + "，浏览 "
-                            + ranking.getViewCount() + "，下单 " + ranking.getOrderCount()});
-        }
-        for (Document document : dto.getActionTypeSummary()) {
-            model.addRow(new Object[]{"用户行为", actionTypeName(document.getString("action_type")),
-                    numberText(document.get("action_count")) + " 次"});
-        }
-        for (Document document : dto.getHotTags()) {
-            model.addRow(new Object[]{"热门标签", valueText(document.get("_id")),
-                    numberText(document.get("tag_count")) + " 次"});
-        }
-        for (Document document : dto.getSystemAuditSummary()) {
-            model.addRow(new Object[]{"系统审计", logTypeName(document.getString("log_type")) + " / "
-                    + logLevelName(document.getString("log_level")), numberText(document.get("operation_count")) + " 次"});
-        }
-        for (MonthlyOrderReportDTO report : dto.getMonthlyOrderReport()) {
-            model.addRow(new Object[]{"月度订单", report.getOrderDate(),
-                    report.getOrderCount() + " 单，" + UiFormatters.money(report.getTotalAmount())});
-        }
-    }
-
     private DefaultTableModel tableModel(String... columns) {
         return new DefaultTableModel(columns, 0) {
             @Override
@@ -1845,25 +1706,6 @@ public class AppFrame extends JFrame {
         return builder.toString();
     }
 
-    private String formatMonthlyReports(List<MonthlyOrderReportDTO> reports) {
-        StringBuilder builder = new StringBuilder();
-        for (MonthlyOrderReportDTO report : reports) {
-            builder.append(report.getOrderDate())
-                    .append(" 订单数：").append(report.getOrderCount())
-                    .append(" 金额：").append(report.getTotalAmount())
-                    .append(System.lineSeparator());
-        }
-        return builder.isEmpty() ? "暂无报表数据" : builder.toString();
-    }
-
-    private String formatDocuments(List<Document> documents) {
-        StringBuilder builder = new StringBuilder();
-        for (Document document : documents) {
-            builder.append(documentToText(document)).append(System.lineSeparator());
-        }
-        return builder.isEmpty() ? "暂无数据" : builder.toString();
-    }
-
     private String formatItemDetailDocument(Document detail) {
         if (detail == null || detail.isEmpty()) {
             return "管理员暂未填写景点简介";
@@ -1898,209 +1740,6 @@ public class AppFrame extends JFrame {
         return builder.toString();
     }
 
-    private String formatBehaviorSummary(List<Document> documents) {
-        if (documents == null || documents.isEmpty()) {
-            return "暂无行为记录";
-        }
-        StringBuilder builder = new StringBuilder();
-        for (Document document : documents) {
-            builder.append("行为：").append(actionTypeName(String.valueOf(document.get("_id"))))
-                    .append("  次数：").append(numberText(document.get("action_count")))
-                    .append("  总停留：").append(numberText(document.get("total_duration"))).append(" 秒")
-                    .append("  平均停留：").append(decimalText(document.get("avg_duration"))).append(" 秒")
-                    .append("  最近时间：").append(formatDate(document.get("latest_action_time")))
-                    .append(System.lineSeparator());
-        }
-        return builder.toString();
-    }
-
-    private String formatHotItems(List<HotItemRankingDTO> rankings) {
-        if (rankings == null || rankings.isEmpty()) {
-            return "暂无热门景点数据";
-        }
-        StringBuilder builder = new StringBuilder();
-        int index = 1;
-        for (HotItemRankingDTO ranking : rankings) {
-            builder.append(index).append(". 景点：").append(ranking.getItemTitle())
-                    .append("  ID：").append(ranking.getItemId())
-                    .append("  总操作：").append(ranking.getTotalActions())
-                    .append("  浏览：").append(ranking.getViewCount())
-                    .append("  下单：").append(ranking.getOrderCount())
-                    .append("  平均停留：").append(decimalText(ranking.getAvgDuration())).append(" 秒")
-                    .append(System.lineSeparator());
-            index += 1;
-        }
-        return builder.toString();
-    }
-
-    private String formatActionTypeSummary(List<Document> documents) {
-        if (documents == null || documents.isEmpty()) {
-            return "暂无行为类型数据";
-        }
-        StringBuilder builder = new StringBuilder();
-        for (Document document : documents) {
-            builder.append("行为：").append(actionTypeName(document.getString("action_type")))
-                    .append("  次数：").append(numberText(document.get("action_count")))
-                    .append("  用户数：").append(numberText(document.get("user_count")))
-                    .append("  最近时间：").append(formatDate(document.get("latest_action_time")))
-                    .append(System.lineSeparator());
-        }
-        return builder.toString();
-    }
-
-    private String formatHotTags(List<Document> documents) {
-        if (documents == null || documents.isEmpty()) {
-            return "暂无热门标签数据";
-        }
-        StringBuilder builder = new StringBuilder();
-        int index = 1;
-        for (Document document : documents) {
-            builder.append(index).append(". 标签：").append(valueText(document.get("_id")))
-                    .append("  出现次数：").append(numberText(document.get("tag_count")))
-                    .append(System.lineSeparator());
-            index += 1;
-        }
-        return builder.toString();
-    }
-
-    private String formatUserReport(Document document) {
-        if (document == null || document.isEmpty()) {
-            return "暂无用户报告";
-        }
-        StringBuilder builder = new StringBuilder();
-        builder.append("用户报告").append(System.lineSeparator()).append(System.lineSeparator())
-                .append("用户ID：").append(valueText(document.get("user_id"))).append(System.lineSeparator())
-                .append("总操作次数：").append(numberText(document.get("action_count"))).append(System.lineSeparator())
-                .append("访问景点数：").append(numberText(document.get("visited_item_count"))).append(System.lineSeparator())
-                .append("浏览次数：").append(numberText(document.get("view_count"))).append(System.lineSeparator())
-                .append("搜索次数：").append(numberText(document.get("search_count"))).append(System.lineSeparator())
-                .append("评论次数：").append(numberText(document.get("comment_count"))).append(System.lineSeparator())
-                .append("下单次数：").append(numberText(document.get("order_count"))).append(System.lineSeparator())
-                .append("总停留时长：").append(numberText(document.get("total_duration"))).append(" 秒").append(System.lineSeparator())
-                .append("平均停留时长：").append(decimalText(document.get("avg_duration"))).append(" 秒").append(System.lineSeparator())
-                .append("首次操作：").append(formatDate(document.get("first_action_time"))).append(System.lineSeparator())
-                .append("最近操作：").append(formatDate(document.get("latest_action_time"))).append(System.lineSeparator())
-                .append(System.lineSeparator())
-                .append("行为摘要：").append(System.lineSeparator())
-                .append(formatBehaviorSummary(readDocumentList(document.get("behavior_summary"))))
-                .append(System.lineSeparator())
-                .append("最近评论：").append(System.lineSeparator())
-                .append(formatComments(readDocumentList(document.get("recent_comments"))))
-                .append(System.lineSeparator())
-                .append("最近操作：").append(System.lineSeparator())
-                .append(formatRecentActions(readDocumentList(document.get("recent_actions"))));
-        return builder.toString();
-    }
-
-    private String formatRecentActions(List<Document> documents) {
-        if (documents == null || documents.isEmpty()) {
-            return "暂无最近操作";
-        }
-        StringBuilder builder = new StringBuilder();
-        int index = 1;
-        for (Document document : documents) {
-            Document clientInfo = document.get("client_info", Document.class);
-            builder.append(index).append(". 时间：").append(formatDate(document.get("created_at")))
-                    .append("  行为：").append(actionTypeName(document.getString("action_type")))
-                    .append("  景点ID：").append(valueText(document.get("item_id")))
-                    .append("  停留：").append(numberText(document.get("duration_seconds"))).append(" 秒");
-            if (clientInfo != null) {
-                builder.append("  IP：").append(valueText(clientInfo.get("ip")));
-            }
-            builder.append(System.lineSeparator());
-            index += 1;
-        }
-        return builder.toString();
-    }
-
-    private String formatAuditLogs(List<Document> documents) {
-        if (documents == null || documents.isEmpty()) {
-            return "暂无审计日志";
-        }
-        StringBuilder builder = new StringBuilder();
-        int index = 1;
-        for (Document document : documents) {
-            Document detail = document.get("action_detail", Document.class);
-            builder.append(index).append(". ")
-                    .append(formatDate(document.get("timestamp")))
-                    .append("  用户ID：").append(valueText(document.get("user_id")))
-                    .append("  类型：").append(logTypeName(document.getString("log_type")))
-                    .append("  级别：").append(logLevelName(document.getString("log_level")))
-                    .append(System.lineSeparator())
-                    .append("   内容：").append(valueText(document.get("message")))
-                    .append(System.lineSeparator());
-            if (detail != null && !detail.isEmpty()) {
-                builder.append("   操作：").append(valueText(detail.get("operation")))
-                        .append("  IP：").append(valueText(detail.get("ip")))
-                        .append(System.lineSeparator());
-            }
-            builder.append(System.lineSeparator());
-            index += 1;
-        }
-        return builder.toString();
-    }
-
-    private String formatAuditSummary(List<Document> documents) {
-        if (documents == null || documents.isEmpty()) {
-            return "暂无审计汇总数据";
-        }
-        StringBuilder builder = new StringBuilder("审计汇总").append(System.lineSeparator()).append(System.lineSeparator());
-        for (Document document : documents) {
-            builder.append("类型：").append(logTypeName(document.getString("log_type")))
-                    .append("  级别：").append(logLevelName(document.getString("log_level")))
-                    .append("  操作次数：").append(numberText(document.get("operation_count")))
-                    .append("  涉及用户：").append(numberText(document.get("user_count")))
-                    .append("  最近时间：").append(formatDate(document.get("latest_timestamp")))
-                    .append(System.lineSeparator());
-        }
-        return builder.toString();
-    }
-
-    private String formatAuditTrend(List<Document> documents) {
-        if (documents == null || documents.isEmpty()) {
-            return "暂无审计趋势数据";
-        }
-        StringBuilder builder = new StringBuilder("审计趋势").append(System.lineSeparator()).append(System.lineSeparator());
-        for (Document document : documents) {
-            builder.append("日期：").append(valueText(document.get("date")))
-                    .append("  类型：").append(logTypeName(document.getString("log_type")))
-                    .append("  级别：").append(logLevelName(document.getString("log_level")))
-                    .append("  次数：").append(numberText(document.get("operation_count")))
-                    .append(System.lineSeparator());
-        }
-        return builder.toString();
-    }
-
-    private String formatUserOperationSummary(List<Document> documents) {
-        if (documents == null || documents.isEmpty()) {
-            return "暂无用户操作汇总数据";
-        }
-        StringBuilder builder = new StringBuilder("用户操作汇总").append(System.lineSeparator()).append(System.lineSeparator());
-        for (Document document : documents) {
-            builder.append("用户ID：").append(valueText(document.get("user_id")))
-                    .append("  操作次数：").append(numberText(document.get("operation_count")))
-                    .append("  警告：").append(numberText(document.get("warn_count")))
-                    .append("  错误：").append(numberText(document.get("error_count")))
-                    .append("  最近时间：").append(formatDate(document.get("latest_timestamp")))
-                    .append(System.lineSeparator())
-                    .append("   操作类型：").append(logTypeListText(document.get("log_types")))
-                    .append(System.lineSeparator())
-                    .append(System.lineSeparator());
-        }
-        return builder.toString();
-    }
-
-    private String documentToText(Document document) {
-        if (document == null || document.isEmpty()) {
-            return "暂无数据";
-        }
-        StringBuilder builder = new StringBuilder();
-        for (String key : document.keySet()) {
-            builder.append(fieldName(key)).append("：").append(genericValueText(document.get(key))).append(System.lineSeparator());
-        }
-        return builder.toString().trim();
-    }
-
     private String formatDate(Object value) {
         return UiFormatters.date(value);
     }
@@ -2122,144 +1761,6 @@ public class AppFrame extends JFrame {
             return String.format("%.2f", number.doubleValue());
         }
         return valueText(value);
-    }
-
-    private String listText(Object value) {
-        if (value instanceof List<?> values && !values.isEmpty()) {
-            return values.stream()
-                    .map(String::valueOf)
-                    .reduce((left, right) -> left + "、" + right)
-                    .orElse("-");
-        }
-        return "-";
-    }
-
-    private List<Document> readDocumentList(Object value) {
-        if (!(value instanceof List<?> values)) {
-            return List.of();
-        }
-        List<Document> documents = new ArrayList<>();
-        for (Object item : values) {
-            if (item instanceof Document document) {
-                documents.add(document);
-            }
-        }
-        return documents;
-    }
-
-    private String genericValueText(Object value) {
-        if (value instanceof Document document) {
-            return documentToText(document).replace(System.lineSeparator(), "；");
-        }
-        if (value instanceof List<?> values) {
-            if (values.isEmpty()) {
-                return "-";
-            }
-            return values.stream()
-                    .map(this::genericValueText)
-                    .reduce((left, right) -> left + "、" + right)
-                    .orElse("-");
-        }
-        if (value instanceof java.util.Date) {
-            return formatDate(value);
-        }
-        if (value instanceof Number number && !(value instanceof Integer) && !(value instanceof Long)) {
-            return decimalText(number);
-        }
-        return valueText(value);
-    }
-
-    private String logTypeListText(Object value) {
-        if (value instanceof List<?> values) {
-            return values.stream()
-                    .map(item -> logTypeName(String.valueOf(item)))
-                    .distinct()
-                    .reduce((left, right) -> left + "、" + right)
-                    .orElse("-");
-        }
-        return valueText(value);
-    }
-
-    private String logTypeName(String logType) {
-        if (logType == null || logType.isBlank()) {
-            return "-";
-        }
-        return switch (logType) {
-            case "LOGIN" -> "登录";
-            case "LOGOUT" -> "退出";
-            case "REGISTER" -> "注册";
-            case "ORDER_CREATE", "ORDER" -> "创建订单";
-            case "ITEM_UPDATE" -> "景点更新";
-            case "REPORT_VIEW" -> "查看报表";
-            default -> logType;
-        };
-    }
-
-    private String actionTypeName(String actionType) {
-        if (actionType == null || actionType.isBlank()) {
-            return "-";
-        }
-        return switch (actionType) {
-            case "VIEW" -> "浏览景点";
-            case "SEARCH" -> "搜索";
-            case "ORDER" -> "下单";
-            case "COMMENT" -> "评论";
-            default -> actionType;
-        };
-    }
-
-    private String fieldName(String key) {
-        return switch (key) {
-            case "_id" -> "编号";
-            case "item_id" -> "景点ID";
-            case "user_id" -> "用户ID";
-            case "action_type" -> "行为类型";
-            case "action_count" -> "操作次数";
-            case "total_actions" -> "总操作次数";
-            case "view_count" -> "浏览次数";
-            case "search_count" -> "搜索次数";
-            case "comment_count" -> "评论次数";
-            case "order_count" -> "下单次数";
-            case "duration_seconds" -> "停留时长";
-            case "total_duration" -> "总停留时长";
-            case "avg_duration" -> "平均停留时长";
-            case "latest_action_time" -> "最近操作时间";
-            case "first_action_time" -> "首次操作时间";
-            case "created_at" -> "创建时间";
-            case "updated_at" -> "更新时间";
-            case "content" -> "内容";
-            case "rating" -> "评分";
-            case "tags" -> "标签";
-            case "description" -> "详情";
-            case "images" -> "图片";
-            case "metadata" -> "扩展信息";
-            case "avg_rating" -> "平均评分";
-            case "max_rating" -> "最高评分";
-            case "min_rating" -> "最低评分";
-            case "visited_item_count" -> "访问景点数";
-            case "behavior_summary" -> "行为摘要";
-            case "recent_comments" -> "最近评论";
-            case "recent_actions" -> "最近操作";
-            case "client_info" -> "客户端信息";
-            case "client_type" -> "客户端类型";
-            case "ip" -> "IP地址";
-            case "open_time" -> "开放时间";
-            case "address" -> "地址";
-            case "language" -> "语言";
-            default -> key;
-        };
-    }
-
-    private String logLevelName(String logLevel) {
-        if (logLevel == null || logLevel.isBlank()) {
-            return "-";
-        }
-        return switch (logLevel) {
-            case "INFO" -> "正常";
-            case "WARN" -> "警告";
-            case "ERROR" -> "错误";
-            default -> logLevel;
-        };
     }
 
     private String formatItemStatus(Integer status) {
