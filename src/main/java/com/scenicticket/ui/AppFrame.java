@@ -5,6 +5,7 @@ import com.scenicticket.dto.AuditLogQuery;
 import com.scenicticket.dto.HotItemRankingDTO;
 import com.scenicticket.dto.LoginResult;
 import com.scenicticket.dto.MonthlyOrderReportDTO;
+import com.scenicticket.dto.OrderActionResult;
 import com.scenicticket.dto.OrderViewDTO;
 import com.scenicticket.dto.RecommendationDTO;
 import com.scenicticket.dto.StatisticsReportDTO;
@@ -425,124 +426,40 @@ public class AppFrame extends JFrame {
     }
 
     private JPanel createOrderPanel() {
-        JPanel panel = pagePanel(new BorderLayout(12, 12));
-        JTextField userIdField = new JTextField(10);
-        JTextField queryOrderIdField = new JTextField(10);
-        JComboBox<String> queryStatusBox = new JComboBox<>(new String[]{"全部状态", "0-待支付", "1-已支付", "2-已取消", "3-已完成"});
-        boolean adminOrderView = isCurrentAdmin();
-        DefaultTableModel model = OrderTableModels.create(adminOrderView);
-        JTable table = createTable(model);
-        table.setAutoResizeMode(JTable.AUTO_RESIZE_ALL_COLUMNS);
-        setColumnWidths(table, OrderTableModels.columnWidths(adminOrderView));
-        Long[] selectedOrderId = new Long[1];
-        List<OrderViewDTO> visibleOrderViews = new ArrayList<>();
+        long actorUserId = requireCurrentUserId();
+        return new OrderPanel(actorUserId, isCurrentAdmin(), taskRunner, new OrderPanel.Actions() {
+            @Override
+            public List<OrderViewDTO> search(Long queryUserId, Long orderId, Integer status) {
+                orderLifecycleService.expireDueOrders(100);
+                return businessService.searchOrderViews(actorUserId, queryUserId, orderId, status, 50, 0);
+            }
 
-        JPanel queryToolbar = toolbar();
-        JButton listButton = primaryButton("查询订单");
-        JButton refreshButton = secondaryButton("刷新");
-        JButton resetButton = secondaryButton("重置");
-        JButton payButton = primaryButton("确认支付");
-        JButton cancelButton = secondaryButton("取消待支付订单");
-        JButton refundButton = secondaryButton("申请模拟退款");
-        payButton.setEnabled(false);
-        cancelButton.setEnabled(false);
-        refundButton.setEnabled(false);
-        if (isCurrentAdmin()) {
-            queryToolbar.add(new JLabel("用户ID"));
-            queryToolbar.add(userIdField);
-        }
-        queryToolbar.add(new JLabel("订单号"));
-        queryToolbar.add(queryOrderIdField);
-        queryToolbar.add(new JLabel("状态"));
-        queryToolbar.add(queryStatusBox);
-        queryToolbar.add(listButton);
-        queryToolbar.add(refreshButton);
-        queryToolbar.add(resetButton);
+            @Override
+            public OrderActionResult pay(long orderId) {
+                return orderLifecycleService.pay(actorUserId, orderId, "127.0.0.1");
+            }
 
-        JPanel controls = new JPanel(new GridLayout(2, 1, 0, 8));
-        controls.setOpaque(false);
-        controls.add(wrapWithTitle("订单查询", queryToolbar));
-        JPanel actionToolbar = toolbar();
-        JLabel selectedOrderLabel = new JLabel("请先从表格选择订单");
-        actionToolbar.add(selectedOrderLabel);
-        actionToolbar.add(payButton);
-        actionToolbar.add(cancelButton);
-        actionToolbar.add(refundButton);
-        controls.add(wrapWithTitle("订单生命周期操作", actionToolbar));
-        table.getSelectionModel().addListSelectionListener(event -> {
-            int row = table.getSelectedRow();
-            if (!event.getValueIsAdjusting() && row >= 0) {
-                int modelRow = table.convertRowIndexToModel(row);
-                Order selectedOrder = visibleOrderViews.get(modelRow).getOrder();
-                selectedOrderId[0] = selectedOrder.getOrderId();
-                selectedOrderLabel.setText("已选择订单：" + selectedOrderId[0]);
-                OrderActionPolicy.Availability availability = OrderActionPolicy.evaluate(
-                        requireCurrentUserId(), selectedOrder, LocalDate.now());
-                payButton.setEnabled(availability.canPay());
-                cancelButton.setEnabled(availability.canCancel());
-                refundButton.setEnabled(availability.canRefund());
+            @Override
+            public OrderActionResult cancelPending(long orderId) {
+                return orderLifecycleService.cancelPending(actorUserId, orderId, "127.0.0.1");
+            }
+
+            @Override
+            public OrderActionResult refund(long orderId, String reason) {
+                return orderLifecycleService.refund(actorUserId, orderId, reason, "127.0.0.1");
+            }
+
+            @Override
+            public String requestRefundReason() {
+                return JOptionPane.showInputDialog(AppFrame.this, "请输入退款原因", "申请模拟退款",
+                        JOptionPane.PLAIN_MESSAGE);
+            }
+
+            @Override
+            public void setStatus(String message) {
+                AppFrame.this.setStatus(message);
             }
         });
-
-        Runnable refreshOrders = () -> runTask("订单查询", () -> {
-            orderLifecycleService.expireDueOrders(100);
-            Long queryUserId = isCurrentAdmin()
-                    ? parseOptionalLong(userIdField.getText())
-                    : Long.valueOf(requireCurrentUserId());
-            return businessService.searchOrderViews(
-                    requireCurrentUserId(),
-                    queryUserId,
-                    parseOptionalLong(queryOrderIdField.getText()),
-                    selectedOrderStatus(queryStatusBox),
-                    50,
-                    0
-            );
-        }, orderViews -> {
-            visibleOrderViews.clear();
-            visibleOrderViews.addAll(orderViews);
-            OrderTableModels.fill(model, orderViews, adminOrderView);
-            selectedOrderId[0] = null;
-            payButton.setEnabled(false);
-            cancelButton.setEnabled(false);
-            refundButton.setEnabled(false);
-            selectedOrderLabel.setText("请先从表格选择订单");
-            setStatus("查询到 " + orderViews.size() + " 条订单");
-        });
-        listButton.addActionListener(event -> refreshOrders.run());
-        refreshButton.addActionListener(event -> refreshOrders.run());
-        resetButton.addActionListener(event -> {
-            userIdField.setText("");
-            queryOrderIdField.setText("");
-            queryStatusBox.setSelectedIndex(0);
-            refreshOrders.run();
-        });
-        queryOrderIdField.addActionListener(event -> refreshOrders.run());
-
-        payButton.addActionListener(event -> runTask("确认支付", () -> orderLifecycleService.pay(
-                requireCurrentUserId(), requireSelectedOrderId(selectedOrderId), "127.0.0.1"), action -> {
-            setStatus(action.message());
-            refreshOrders.run();
-        }));
-        cancelButton.addActionListener(event -> runTask("取消待支付订单", () -> orderLifecycleService.cancelPending(
-                requireCurrentUserId(), requireSelectedOrderId(selectedOrderId), "127.0.0.1"), action -> {
-            setStatus(action.message());
-            refreshOrders.run();
-        }));
-        refundButton.addActionListener(event -> {
-            String reason = JOptionPane.showInputDialog(this, "请输入退款原因", "申请模拟退款", JOptionPane.PLAIN_MESSAGE);
-            if (reason == null) {
-                return;
-            }
-            runTask("模拟退款", () -> orderLifecycleService.refund(requireCurrentUserId(),
-                    requireSelectedOrderId(selectedOrderId), reason, "127.0.0.1"), action -> {
-                setStatus(action.message());
-                refreshOrders.run();
-            });
-        });
-
-        panel.add(controls, BorderLayout.NORTH);
-        panel.add(new JScrollPane(table), BorderLayout.CENTER);
-        return panel;
     }
 
     private JPanel createManagePanel() {
@@ -1615,13 +1532,6 @@ public class AppFrame extends JFrame {
         return selectedUser[0];
     }
 
-    private long requireSelectedOrderId(Long[] selectedOrderId) {
-        if (selectedOrderId == null || selectedOrderId.length == 0 || selectedOrderId[0] == null) {
-            throw new IllegalArgumentException("请先从表格中选择一个订单");
-        }
-        return selectedOrderId[0];
-    }
-
     private void resetItemSelection(JTable table, Item[] selectedItem, JButton... actionButtons) {
         table.clearSelection();
         selectedItem[0] = null;
@@ -1768,11 +1678,6 @@ public class AppFrame extends JFrame {
 
     private String discountText(BigDecimal discountRate) {
         return UiFormatters.discount(discountRate);
-    }
-
-    private Integer selectedOrderStatus(JComboBox<String> statusBox) {
-        int selectedIndex = statusBox.getSelectedIndex();
-        return selectedIndex <= 0 ? null : selectedIndex - 1;
     }
 
     private String selectedLogType(JComboBox<String> logTypeBox) {

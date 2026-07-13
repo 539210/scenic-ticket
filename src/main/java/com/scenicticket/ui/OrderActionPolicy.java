@@ -25,6 +25,6 @@ public final class OrderActionPolicy {
     }
 
     public record Availability(boolean canPay, boolean canCancel, boolean canRefund) {
-        private static final Availability NONE = new Availability(false, false, false);
+        static final Availability NONE = new Availability(false, false, false);
     }
 }

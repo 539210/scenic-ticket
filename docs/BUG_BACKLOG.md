@@ -39,13 +39,15 @@
 | BUG-P2-010 | VERIFIED | 第二个存储过程和两个视图未在系统/测试中证明实际用途 | `ReportDAO` 现在实际调用 `sp_update_inactive_items`，并查询 `v_user_profile`、`v_item_order_summary` | `ReportDatabaseObjectsIntegrationTest` 在 `scenic_ticket_test` 事务内验证两个视图和第二存储过程，测试后回滚 |
 | BUG-P2-011 | VERIFIED | 同一会话连续刷新可能由较慢旧请求覆盖较快新请求 | `SwingTaskRunner` 现按任务名获取 `LatestTaskGuard` 代次，成功/失败/中断回调均只接受最新代次 | `LatestTaskGuardTest` 验证同名新请求使旧请求失效，且不同任务名互不干扰；真实 Swing 连续刷新仍待 M10/M11 |
 | BUG-P2-012 | VERIFIED | 订单表格选择任意订单都会同时启用支付、取消和退款按钮 | 新增 `OrderActionPolicy`，按当前 actor、订单所有者、状态和游玩日期计算按钮可用性；服务层资格校验继续保留 | `OrderActionPolicyTest` 覆盖本人待支付、本人可/不可退款、他人订单、已取消和已完成订单 |
+| BUG-P2-013 | VERIFIED | 管理员订单查询留空用户 ID 时发生 `null` 隐式拆箱并抛出 NPE | 独立 `OrderPanel` 使用显式管理员/普通用户分支，管理员空用户 ID 保持为无筛选，普通用户始终绑定当前会话 ID | `OrderPanelTest` 覆盖管理员空筛选、普通用户强制本人及生命周期按钮联动 |
+| BUG-P2-014 | VERIFIED | 点击订单生命周期操作后、后台任务执行前切换选择可能使操作读取到另一订单 ID | 支付、取消和退款均在点击事件中冻结订单 ID，后台任务只使用请求快照 | 延迟执行测试在点击支付后切换至另一行，确认服务仍收到点击时订单 ID |
 
 ## P3
 
 | ID | 状态 | 问题 | 说明 |
 | --- | --- | --- | --- |
 | BUG-P3-001 | OPEN | 启动脚本硬编码本机绝对 JDK/Maven 路径 | 应优先通用 PATH/环境变量并将本机路径仅作为兼容 fallback |
-| BUG-P3-002 | IN PROGRESS | `AppFrame` 过大 | M9 已完整抽出 `HomePanel`、`ProfilePanel`、`ScenicBrowsePanel`，并抽出 `SwingTaskRunner`、`OrderTableModels`、`OrderActionPolicy` 和 `UiInputParsers`；其它页面级拆分仍需继续推进 |
+| BUG-P3-002 | IN PROGRESS | `AppFrame` 过大 | M9 已完整抽出 `HomePanel`、`ProfilePanel`、`ScenicBrowsePanel`、`OrderPanel`，并抽出 `SwingTaskRunner`、`OrderTableModels`、`OrderActionPolicy` 和 `UiInputParsers`；其它页面级拆分仍需继续推进 |
 | BUG-P3-003 | OPEN | 文档数据库版本写成 MySQL 8.0.45 / MongoDB 8.3.2 | 目标要求兼容 MySQL 8.0+ / MongoDB 5.0+，文档不应暗示仅支持本机版本 |
 | BUG-P3-004 | VERIFIED | 错误提示过度归一为“检查数据库连接” | `UiFormatters.chineseError` 已区分数据库、权限和通用失败，并保留业务校验消息；`UiFormattersTest` 覆盖分类文案 |
 
