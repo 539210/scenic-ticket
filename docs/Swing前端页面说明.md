@@ -75,10 +75,12 @@ src/main/java/com/scenicticket/ui/AppFrame.java
 手动 Maven 启动方式：
 
 ```powershell
-$env:JAVA_HOME='D:\zulu21.44.17-ca-jdk21.0.8-win_x64\zulu21.44.17-ca-jdk21.0.8-win_x64'
+$env:JAVA_HOME='<JDK_21_HOME>'
 $env:Path="$env:JAVA_HOME\bin;$env:Path"
-& "D:\idea\IntelliJ IDEA Community Edition 2025.2.2\plugins\maven\lib\maven3\bin\mvn.cmd" exec:java
+mvn exec:java
 ```
+
+若 Maven 未加入 PATH，可设置 `MAVEN_HOME`，或用 `SCENIC_MAVEN_CMD` 指向本机的 `mvn.cmd` 后运行 `start-app.cmd`。
 
 也可以在 IntelliJ IDEA 中直接运行 `com.scenicticket.Main`。
 
