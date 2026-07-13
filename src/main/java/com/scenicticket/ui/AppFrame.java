@@ -464,266 +464,69 @@ public class AppFrame extends JFrame {
     }
 
     private JPanel createManagePanel() {
-        JPanel panel = pagePanel(new BorderLayout(12, 12));
-        JTabbedPane manageTabs = new JTabbedPane(JTabbedPane.TOP);
-
-        JPanel itemPage = new JPanel(new BorderLayout(12, 12));
-        itemPage.setOpaque(false);
-        JTextField itemKeywordField = new JTextField(16);
-        JComboBox<CategoryOption> itemCategoryBox = new JComboBox<>();
-        itemCategoryBox.addItem(new CategoryOption("全部类型", null));
-        DefaultTableModel itemModel = tableModel("ID", "景点名称", "类型", "原价", "优惠", "折后价", "状态", "更新时间");
-        JTable itemTable = createTable(itemModel);
-        itemTable.setAutoResizeMode(JTable.AUTO_RESIZE_ALL_COLUMNS);
-        setColumnWidths(itemTable, 55, 210, 115, 85, 90, 90, 70, 160);
-        List<Item> adminItems = new ArrayList<>();
-        Item[] selectedItem = new Item[1];
-
-        JButton queryItemsButton = primaryButton("查询");
-        JButton refreshItemsButton = secondaryButton("刷新");
-        JButton resetItemsButton = secondaryButton("重置");
-        JButton createItemButton = primaryButton("新增景点");
-        JPanel itemQueryToolbar = toolbar();
-        itemQueryToolbar.add(new JLabel("关键词"));
-        itemQueryToolbar.add(itemKeywordField);
-        itemQueryToolbar.add(new JLabel("景点类型"));
-        itemQueryToolbar.add(itemCategoryBox);
-        itemQueryToolbar.add(queryItemsButton);
-        itemQueryToolbar.add(refreshItemsButton);
-        itemQueryToolbar.add(resetItemsButton);
-        itemQueryToolbar.add(createItemButton);
-
-        JLabel selectedItemLabel = new JLabel("请先从表格选择景点");
-        JTextField itemTitleField = new JTextField(14);
-        JComboBox<CategoryOption> itemEditCategoryBox = new JComboBox<>();
-        JTextField itemPriceField = new JTextField(8);
-        JTextField itemDiscountField = new JTextField(6);
-        JComboBox<String> itemStatusBox = new JComboBox<>(new String[]{"下架", "上架"});
-        JButton basicItemButton = primaryButton("更新名称和分类");
-        JButton pricingButton = primaryButton("更新票价和优惠");
-        JButton itemStatusButton = secondaryButton("更新上下架");
-        JTextArea itemIntroArea = new JTextArea(4, 48);
-        itemIntroArea.setLineWrap(true);
-        itemIntroArea.setWrapStyleWord(true);
-        JTextArea itemImagesArea = new JTextArea(3, 48);
-        JTextArea itemMetadataArea = new JTextArea(3, 48);
-        itemImagesArea.setLineWrap(true);
-        itemImagesArea.setWrapStyleWord(true);
-        itemMetadataArea.setLineWrap(true);
-        itemMetadataArea.setWrapStyleWord(true);
-        JButton updateIntroButton = primaryButton("更新完整详情");
-        basicItemButton.setEnabled(false);
-        pricingButton.setEnabled(false);
-        itemStatusButton.setEnabled(false);
-        updateIntroButton.setEnabled(false);
-        JPanel itemEditToolbar = toolbar();
-        itemEditToolbar.add(selectedItemLabel);
-        itemEditToolbar.add(new JLabel("名称"));
-        itemEditToolbar.add(itemTitleField);
-        itemEditToolbar.add(new JLabel("分类"));
-        itemEditToolbar.add(itemEditCategoryBox);
-        itemEditToolbar.add(basicItemButton);
-        itemEditToolbar.add(new JLabel("门票原价"));
-        itemEditToolbar.add(itemPriceField);
-        JLabel discountLabel = new JLabel("优惠减免%");
-        discountLabel.setToolTipText("例如填写20表示减免20%，即按原价的80%售票");
-        itemEditToolbar.add(discountLabel);
-        itemEditToolbar.add(itemDiscountField);
-        itemEditToolbar.add(pricingButton);
-        itemEditToolbar.add(new JLabel("状态"));
-        itemEditToolbar.add(itemStatusBox);
-        itemEditToolbar.add(itemStatusButton);
-
-        JTabbedPane detailEditorTabs = new JTabbedPane();
-        detailEditorTabs.addTab("景点简介", new JScrollPane(itemIntroArea));
-        detailEditorTabs.addTab("图片地址（每行一个）", new JScrollPane(itemImagesArea));
-        detailEditorTabs.addTab("扩展属性（JSON）", new JScrollPane(itemMetadataArea));
-        JPanel introEditPanel = new JPanel(new BorderLayout(10, 0));
-        introEditPanel.setOpaque(false);
-        introEditPanel.add(detailEditorTabs, BorderLayout.CENTER);
-        introEditPanel.add(updateIntroButton, BorderLayout.EAST);
-
-        Runnable refreshItems = () -> runAdminTask("刷新景点", () -> businessService.searchAllItemsForAdmin(
-                requireCurrentUserId(),
-                itemKeywordField.getText(), selectedCategoryId(itemCategoryBox), 100, 0
-        ), items -> {
-            itemModel.setRowCount(0);
-            adminItems.clear();
-            adminItems.addAll(items);
-            for (Item item : items) {
-                itemModel.addRow(new Object[]{item.getItemId(), item.getTitle(), categoryName(item.getCategoryId()),
-                        UiFormatters.money(item.getPrice()), discountText(item.getDiscountRate()),
-                        UiFormatters.money(UiFormatters.discountedUnitPrice(item.getPrice(), item.getDiscountRate())),
-                        formatItemStatus(item.getStatus()), formatDate(item.getUpdatedAt())});
+        long actorUserId = requireCurrentUserId();
+        return new ManagementPanel(taskRunner, new ManagementPanel.Actions() {
+            @Override
+            public List<Category> listCategories() {
+                return businessService.listCategories();
             }
-            selectedItem[0] = null;
-            selectedItemLabel.setText("请先从表格选择景点");
-            basicItemButton.setEnabled(false);
-            pricingButton.setEnabled(false);
-            itemStatusButton.setEnabled(false);
-            updateIntroButton.setEnabled(false);
-            itemIntroArea.setText("");
-            itemImagesArea.setText("");
-            itemMetadataArea.setText("");
-            setStatus("已加载 " + items.size() + " 个景点");
-        });
 
-        itemTable.getSelectionModel().addListSelectionListener(event -> {
-            int row = itemTable.getSelectedRow();
-            if (!event.getValueIsAdjusting() && row >= 0) {
-                selectedItem[0] = adminItems.get(itemTable.convertRowIndexToModel(row));
-                Item item = selectedItem[0];
-                selectedItemLabel.setText("已选择：" + item.getTitle());
-                itemTitleField.setText(item.getTitle());
-                selectCategory(itemEditCategoryBox, item.getCategoryId());
-                itemPriceField.setText(item.getPrice() == null ? "0.00" : item.getPrice().toPlainString());
-                itemDiscountField.setText(item.getDiscountRate() == null ? "0" : item.getDiscountRate().stripTrailingZeros().toPlainString());
-                itemStatusBox.setSelectedIndex(item.getStatus() != null && item.getStatus() == 1 ? 1 : 0);
-                pricingButton.setEnabled(true);
-                basicItemButton.setEnabled(true);
-                itemStatusButton.setEnabled(true);
-                updateIntroButton.setEnabled(true);
-                long requestedItemId = item.getItemId();
-                runAdminTask("加载景点详情", () -> businessService.getItemDetailForAdmin(
-                        requireCurrentUserId(), requestedItemId), detail -> {
-                    if (isSelectedItem(selectedItem, requestedItemId)) {
-                        itemIntroArea.setText(UiFormatters.readableText(detail.get("description"), ""));
-                        itemImagesArea.setText(formatImagesForEdit(detail));
-                        Document metadata = detail.get("metadata", Document.class);
-                        itemMetadataArea.setText(metadata == null || metadata.isEmpty() ? "{}" : metadata.toJson());
-                    }
-                });
+            @Override
+            public void categoriesLoaded(List<Category> categories) {
+                updateCategoryCache(categories);
             }
-        });
 
-        queryItemsButton.addActionListener(event -> refreshItems.run());
-        refreshItemsButton.addActionListener(event -> refreshItems.run());
-        itemKeywordField.addActionListener(event -> refreshItems.run());
-        resetItemsButton.addActionListener(event -> {
-            itemKeywordField.setText("");
-            itemCategoryBox.setSelectedIndex(0);
-            refreshItems.run();
-        });
-        createItemButton.addActionListener(event -> showCreateItemDialog(refreshItems));
-        basicItemButton.addActionListener(event -> runAdminTask("更新景点名称和分类", () -> businessService.updateItem(
-                requireCurrentUserId(), requireSelectedItem(selectedItem).getItemId(), itemTitleField.getText(),
-                requireCategoryId(itemEditCategoryBox)
-        ), updated -> {
-            setStatus(updated ? "景点名称和分类已更新" : "景点基本信息没有变化");
-            refreshItems.run();
-        }));
-        pricingButton.addActionListener(event -> runAdminTask("更新票价和优惠", () -> businessService.updateItemPricing(
-                requireCurrentUserId(),
-                requireSelectedItem(selectedItem).getItemId(), parseRequiredAmount(itemPriceField.getText(), "票价"),
-                parseRequiredAmount(itemDiscountField.getText(), "优惠减免比例")
-        ), updated -> {
-            setStatus(updated ? "景点票价和优惠已保存" : "票价和优惠没有变化");
-            refreshItems.run();
-        }));
-        itemStatusButton.addActionListener(event -> runAdminTask("更新上下架状态", () -> businessService.updateItemStatus(
-                requireCurrentUserId(),
-                requireSelectedItem(selectedItem).getItemId(), itemStatusBox.getSelectedIndex()
-        ), updated -> {
-            setStatus(updated ? "景点上下架状态已更新" : "景点状态没有变化");
-            refreshItems.run();
-        }));
-        updateIntroButton.addActionListener(event -> runAdminTask("更新景点详情", () -> businessService.updateItemDetail(
-                requireCurrentUserId(),
-                requireSelectedItem(selectedItem).getItemId(), itemIntroArea.getText(),
-                parseImageLines(itemImagesArea.getText()), parseMetadataJson(itemMetadataArea.getText())
-        ), updated -> setStatus(updated ? "景点简介、图片和扩展属性已更新" : "景点详情没有变化")));
-
-        JPanel itemTop = new JPanel(new GridLayout(3, 1, 0, 8));
-        itemTop.setOpaque(false);
-        itemTop.add(wrapWithTitle("筛选景点", itemQueryToolbar));
-        itemTop.add(wrapWithTitle("编辑所选景点", itemEditToolbar));
-        itemTop.add(wrapWithTitle("编辑景点简介", introEditPanel));
-        itemPage.add(itemTop, BorderLayout.NORTH);
-        itemPage.add(wrapWithTitle("景点列表", new JScrollPane(itemTable)), BorderLayout.CENTER);
-
-        JPanel categoryPage = new JPanel(new BorderLayout(12, 12));
-        categoryPage.setOpaque(false);
-        DefaultTableModel categoryModel = tableModel("分类ID", "分类名称", "上级分类", "层级路径");
-        JTable categoryTable = createTable(categoryModel);
-        categoryTable.setAutoResizeMode(JTable.AUTO_RESIZE_ALL_COLUMNS);
-        List<Category> visibleCategories = new ArrayList<>();
-        Category[] selectedCategory = new Category[1];
-        JTextField categoryNameField = new JTextField(16);
-        JComboBox<CategoryOption> parentCategoryBox = new JComboBox<>();
-        parentCategoryBox.addItem(new CategoryOption("无上级分类", null));
-        JButton createCategoryButton = primaryButton("新增分类");
-        JButton updateCategoryButton = secondaryButton("更新所选分类");
-        JButton refreshCategoryButton = secondaryButton("刷新");
-        updateCategoryButton.setEnabled(false);
-        JPanel categoryToolbar = toolbar();
-        categoryToolbar.add(new JLabel("分类名称"));
-        categoryToolbar.add(categoryNameField);
-        categoryToolbar.add(new JLabel("上级分类"));
-        categoryToolbar.add(parentCategoryBox);
-        categoryToolbar.add(createCategoryButton);
-        categoryToolbar.add(updateCategoryButton);
-        categoryToolbar.add(refreshCategoryButton);
-
-        Runnable refreshCategories = () -> runAdminTask("刷新分类", businessService::listCategories, categories -> {
-            updateCategoryCache(categories);
-            fillCategoryCombo(itemCategoryBox, categories, true, "全部类型");
-            fillCategoryCombo(itemEditCategoryBox, categories, false, "");
-            fillCategoryCombo(parentCategoryBox, categories, true, "无上级分类");
-            categoryModel.setRowCount(0);
-            visibleCategories.clear();
-            visibleCategories.addAll(categories);
-            Map<Long, String> categoryPaths = CategoryTreeFormatter.paths(categories);
-            for (Category category : categories) {
-                categoryModel.addRow(new Object[]{category.getCategoryId(), category.getName(),
-                        category.getParentId() == null ? "-" : categoryName(category.getParentId()),
-                        categoryPaths.get(category.getCategoryId())});
+            @Override
+            public List<Item> searchItems(String keyword, Long categoryId) {
+                return businessService.searchAllItemsForAdmin(actorUserId, keyword, categoryId, 100, 0);
             }
-            selectedCategory[0] = null;
-            updateCategoryButton.setEnabled(false);
-            setStatus("已加载 " + categories.size() + " 个分类");
-            refreshItems.run();
-        });
-        categoryTable.getSelectionModel().addListSelectionListener(event -> {
-            int row = categoryTable.getSelectedRow();
-            if (!event.getValueIsAdjusting() && row >= 0) {
-                Category category = visibleCategories.get(categoryTable.convertRowIndexToModel(row));
-                selectedCategory[0] = category;
-                categoryNameField.setText(category.getName());
-                selectCategory(parentCategoryBox, category.getParentId());
-                updateCategoryButton.setEnabled(true);
-            }
-        });
-        refreshCategoryButton.addActionListener(event -> refreshCategories.run());
-        createCategoryButton.addActionListener(event -> runAdminTask("新增分类", () -> businessService.createCategory(
-                requireCurrentUserId(),
-                categoryNameField.getText(), selectedCategoryId(parentCategoryBox)
-        ), id -> {
-            categoryNameField.setText("");
-            setStatus("分类创建成功，编号：" + id);
-            refreshCategories.run();
-        }));
-        updateCategoryButton.addActionListener(event -> runAdminTask("更新分类", () -> {
-            if (selectedCategory[0] == null) {
-                throw new IllegalArgumentException("请先从表格中选择分类");
-            }
-            return businessService.updateCategory(requireCurrentUserId(), selectedCategory[0].getCategoryId(),
-                    categoryNameField.getText(), selectedCategoryId(parentCategoryBox));
-        }, updated -> {
-            setStatus(updated ? "分类名称和层级已更新" : "分类没有变化");
-            refreshCategories.run();
-        }));
-        categoryNameField.addActionListener(event -> createCategoryButton.doClick());
-        categoryPage.add(wrapWithTitle("新增或编辑分类", categoryToolbar), BorderLayout.NORTH);
-        categoryPage.add(wrapWithTitle("分类列表", new JScrollPane(categoryTable)), BorderLayout.CENTER);
 
-        manageTabs.addTab("景点管理", itemPage);
-        manageTabs.addTab("分类管理", categoryPage);
-        manageTabs.addTab("用户管理", createUserManagementPanel());
-        manageTabs.addTab("票种与库存", createTicketInventoryManagementPanel());
-        manageTabs.addTab("门票核销", createAdmissionManagementPanel());
-        panel.add(manageTabs, BorderLayout.CENTER);
-        refreshCategories.run();
-        return panel;
+            @Override
+            public Document itemDetail(long itemId) {
+                return businessService.getItemDetailForAdmin(actorUserId, itemId);
+            }
+
+            @Override
+            public void showCreateItemDialog(Runnable refreshItems) {
+                AppFrame.this.showCreateItemDialog(refreshItems);
+            }
+
+            @Override
+            public boolean updateItem(long itemId, String title, long categoryId) {
+                return businessService.updateItem(actorUserId, itemId, title, categoryId);
+            }
+
+            @Override
+            public boolean updateItemPricing(long itemId, BigDecimal price, BigDecimal discount) {
+                return businessService.updateItemPricing(actorUserId, itemId, price, discount);
+            }
+
+            @Override
+            public boolean updateItemStatus(long itemId, int status) {
+                return businessService.updateItemStatus(actorUserId, itemId, status);
+            }
+
+            @Override
+            public boolean updateItemDetail(long itemId, String description, String images, String metadata) {
+                return businessService.updateItemDetail(actorUserId, itemId, description,
+                        parseImageLines(images), parseMetadataJson(metadata));
+            }
+
+            @Override
+            public long createCategory(String name, Long parentId) {
+                return businessService.createCategory(actorUserId, name, parentId);
+            }
+
+            @Override
+            public boolean updateCategory(long categoryId, String name, Long parentId) {
+                return businessService.updateCategory(actorUserId, categoryId, name, parentId);
+            }
+
+            @Override
+            public void setStatus(String message) {
+                AppFrame.this.setStatus(message);
+            }
+        }, createUserManagementPanel(), createTicketInventoryManagementPanel(), createAdmissionManagementPanel());
     }
 
     private JPanel createUserManagementPanel() {
@@ -898,23 +701,11 @@ public class AppFrame extends JFrame {
         }
     }
 
-    private void loadCategoryChoices(JComboBox<CategoryOption> comboBox, boolean includeAll) {
-        runTask("加载景点类型", businessService::listCategories, categories -> {
-            updateCategoryCache(categories);
-            fillCategoryCombo(comboBox, categories, includeAll, includeAll ? "全部类型" : "请选择类型");
-        });
-    }
-
     private void updateCategoryCache(List<Category> categories) {
         categoryNames.clear();
         for (Category category : categories) {
             categoryNames.put(category.getCategoryId(), category.getName());
         }
-    }
-
-    private void fillCategoryCombo(JComboBox<CategoryOption> comboBox, List<Category> categories,
-                                   boolean includeEmpty, String emptyLabel) {
-        UiCategoryOptions.fill(comboBox, categories, includeEmpty, emptyLabel);
     }
 
     private void showCreateItemDialog(Runnable refreshItems) {
@@ -1077,26 +868,6 @@ public class AppFrame extends JFrame {
         });
     }
 
-    private Item requireSelectedItem(Item[] selectedItem) {
-        if (selectedItem == null || selectedItem.length == 0 || selectedItem[0] == null) {
-            throw new IllegalArgumentException("请先从表格中选择一个景点");
-        }
-        return selectedItem[0];
-    }
-
-    private boolean isSelectedItem(Item[] selectedItem, long itemId) {
-        return selectedItem != null && selectedItem.length > 0 && selectedItem[0] != null
-                && selectedItem[0].getItemId() != null && selectedItem[0].getItemId() == itemId;
-    }
-
-    private void resetItemSelection(JTable table, Item[] selectedItem, JButton... actionButtons) {
-        table.clearSelection();
-        selectedItem[0] = null;
-        for (JButton button : actionButtons) {
-            button.setEnabled(false);
-        }
-    }
-
     private JPanel pagePanel(java.awt.LayoutManager layout) {
         JPanel panel = new JPanel(layout);
         panel.setBorder(BorderFactory.createEmptyBorder(14, 14, 14, 14));
@@ -1167,17 +938,6 @@ public class AppFrame extends JFrame {
         return choice == null ? null : choice.categoryId();
     }
 
-    private void selectCategory(JComboBox<CategoryOption> categoryBox, Long categoryId) {
-        for (int index = 0; index < categoryBox.getItemCount(); index += 1) {
-            CategoryOption option = categoryBox.getItemAt(index);
-            if (java.util.Objects.equals(option.categoryId(), categoryId)) {
-                categoryBox.setSelectedIndex(index);
-                return;
-            }
-        }
-        categoryBox.setSelectedIndex(categoryBox.getItemCount() == 0 ? -1 : 0);
-    }
-
     private List<String> parseImageLines(String text) {
         if (text == null || text.isBlank()) {
             return List.of();
@@ -1205,17 +965,6 @@ public class AppFrame extends JFrame {
         } catch (RuntimeException exception) {
             throw new IllegalArgumentException("扩展属性必须是合法 JSON 对象", exception);
         }
-    }
-
-    private String formatImagesForEdit(Document detail) {
-        if (detail == null) {
-            return "";
-        }
-        List<?> images = detail.getList("images", Object.class);
-        if (images == null || images.isEmpty()) {
-            return "";
-        }
-        return images.stream().map(String::valueOf).collect(java.util.stream.Collectors.joining(System.lineSeparator()));
     }
 
     private long requireCategoryId(JComboBox<CategoryOption> categoryBox) {
