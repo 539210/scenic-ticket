@@ -50,7 +50,7 @@
 
 | ID | 状态 | 问题 | 说明 |
 | --- | --- | --- | --- |
-| BUG-P3-001 | VERIFIED | 启动脚本硬编码本机绝对 JDK/Maven 路径 | 已删除机器路径，支持标准 `JAVA_HOME`/`MAVEN_HOME`/PATH、Maven Wrapper及 `SCENIC_*` 显式覆盖；`--check` 两种配置实跑通过，自动测试禁止回退 |
+| BUG-P3-001 | CLOSED | 启动脚本曾硬编码本机路径；删除后又无法发现未进 PATH 的 IntelliJ 内置 Maven | 支持标准 `JAVA_HOME`/`MAVEN_HOME`/PATH、Maven Wrapper和 `SCENIC_*` 覆盖，并通过独立 PowerShell 帮助器从 Windows 卸载注册表/标准安装目录动态发现 IntelliJ Maven；不写死版本或盘符。原环境直接执行 `start-app.cmd --check` 与 `start-system.cmd --check` 均通过，158 项默认回归通过 |
 | BUG-P3-002 | VERIFIED | `AppFrame` 过大 | M9 已抽出完整后台、登录/注册、全部业务弹窗、九个业务页面组件和 `ItemDisplayFormatter`；`AppFrame` 从页面巨石降至 788 行，仅保留窗口、权限、服务装配和对话框编排 |
 | BUG-P3-003 | VERIFIED | 文档数据库版本写成 MySQL 8.0.45 / MongoDB 8.3.2 | README 与需求规格已改为 MySQL 8.0+ / MongoDB 5.0+；快捷启动文档明确精确版本仅为本机验证记录，自动测试固定主要求文档 |
 | BUG-P3-004 | VERIFIED | 错误提示过度归一为“检查数据库连接” | `UiFormatters.chineseError` 已区分数据库、权限和通用失败，并保留业务校验消息；`UiFormattersTest` 覆盖分类文案 |

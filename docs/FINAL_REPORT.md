@@ -75,7 +75,7 @@ MongoDB 保留 `action_logs`、`comments`、`item_details`、`system_logs`，增
 
 1. 复制 `src/main/resources/db.properties.example` 为未提交的 `db.properties` 并填写本机凭据。
 2. 按 README 顺序安装 MySQL/MongoDB 脚本。
-3. 执行 `.\start-app.cmd --check`，再执行 `.\start-system.cmd` 或 `.\start-app.cmd`。
+3. 执行 `.\start-app.cmd --check`，再执行 `.\start-system.cmd` 或 `.\start-app.cmd`；Windows 脚本可自动发现注册表登记的 IntelliJ 内置 Maven。
 4. 初始化管理员：用户名 `kongsc`，密码 `ksc123456`。
 
 ## 10. 五分钟演示

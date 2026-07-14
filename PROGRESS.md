@@ -250,3 +250,4 @@ BUILD SUCCESS
 - 审计发现四个 Mongo JS 脚本硬编码 `use("scenic_ticket")`，从测试 URI 执行仍可能切到业务库；已删除内部切库，统一校验连接 URI 当前数据库并登记关闭 `BUG-P1-008`。
 - 官方 `mongosh 2.9.2` 已在空 `scenic_ticket_test` 顺序实跑初始化、Day07 优化及两个 Day09 脚本：4 集合、290 条样例、索引数 7/6/3/7，评论重复组 0，唯一索引成功。
 - 当前只剩由可见桌面执行者完成 Swing 布局、滚动、快速连点、断库和完整重登手工清单；在补证前 M11 与 Goal 保持进行中。
+- 用户复现根目录启动脚本不可用：`JAVA_HOME` 指向 Java 17 JRE 但 PATH 中已有 JDK 21，脚本可自动纠正；真正失败点是 IntelliJ 内置 Maven 未加入 PATH。新增 `scripts/find-maven.ps1`，从 Windows 注册表和标准安装目录动态发现 IntelliJ Maven，不写死版本/盘符；`start-system.cmd` 同步透传 `--check`。原环境无任何临时变量时 `start-app.cmd --check`、`start-system.cmd --check` 均通过，随后实际打开“景点售票系统”窗口；专项测试及 158 项默认套件均通过。

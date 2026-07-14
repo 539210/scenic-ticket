@@ -13,4 +13,4 @@ if errorlevel 1 (
   exit /b 1
 )
 
-call "%SCRIPT_DIR%start-app.cmd"
+call "%SCRIPT_DIR%start-app.cmd" %*

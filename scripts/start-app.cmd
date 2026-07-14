@@ -58,8 +58,14 @@ if not defined MAVEN_CMD (
   if not errorlevel 1 set "MAVEN_CMD=mvn"
 )
 
+if not defined MAVEN_CMD if exist "%SCRIPT_DIR%find-maven.ps1" (
+  for /f "delims=" %%I in ('powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%SCRIPT_DIR%find-maven.ps1" 2^>nul') do if not defined MAVEN_CMD (
+    if exist "%%~fI" set "MAVEN_CMD=%%~fI"
+  )
+)
+
 if not defined MAVEN_CMD (
-  echo Maven was not found. Set MAVEN_HOME or SCENIC_MAVEN_CMD, add mvn to PATH, or add Maven Wrapper.
+  echo Maven was not found. Set MAVEN_HOME or SCENIC_MAVEN_CMD, add mvn to PATH, install IntelliJ IDEA, or add Maven Wrapper.
   exit /b 1
 )
 

@@ -23,8 +23,15 @@ class StartupPortabilityTest {
         assertTrue(lower.contains("maven_home"));
         assertTrue(lower.contains("mvnw.cmd"));
         assertTrue(lower.contains("where mvn.cmd"));
+        assertTrue(lower.contains("find-maven.ps1"));
         assertTrue(lower.contains("--check"));
         assertFalse(lower.matches("(?s).*set \\\"[^\\\"]*(?:java|maven)[^\\\"]*=[a-z]:\\\\.*"));
+
+        String finder = read("scripts/find-maven.ps1").toLowerCase(Locale.ROOT);
+        assertTrue(finder.contains("windows\\currentversion\\uninstall"));
+        assertTrue(finder.contains("intellij idea"));
+        assertTrue(finder.contains("plugins\\maven\\lib\\maven3\\bin\\mvn.cmd"));
+        assertFalse(finder.matches("(?s).*[a-z]:\\\\(?:idea|users|program files).*"));
     }
 
     @Test

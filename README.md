@@ -127,7 +127,7 @@ mvn test
 .\start-system.cmd
 ```
 
-启动脚本优先使用标准 `JAVA_HOME`、`MAVEN_HOME` 和 PATH。需要显式指定时可设置
+启动脚本优先使用标准 `JAVA_HOME`、`MAVEN_HOME` 和 PATH；Windows 上也会从注册表自动发现 IntelliJ IDEA 自带的 Maven。需要显式指定时可设置
 `SCENIC_JAVA_HOME`（JDK 21 根目录）与 `SCENIC_MAVEN_CMD`（`mvn.cmd` 完整路径）；仓库不依赖开发机器的绝对安装路径。
 迁移到新机器后可先运行 `.\start-app.cmd --check`，只检查 JDK 21 和 Maven，不启动图形界面。
 
