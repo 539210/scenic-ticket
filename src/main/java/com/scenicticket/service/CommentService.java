@@ -2,6 +2,7 @@ package com.scenicticket.service;
 
 import com.scenicticket.dao.mongo.CommentDAO;
 import com.scenicticket.dao.mongo.LogDAO;
+import com.scenicticket.dao.mongo.SystemLogDAO;
 import com.scenicticket.dao.mysql.ItemDAO;
 import com.scenicticket.dao.mysql.OrderDAO;
 import com.scenicticket.dao.mysql.UserDAO;
@@ -23,19 +24,23 @@ public class CommentService {
     private static final Logger LOGGER = LoggerFactory.getLogger(CommentService.class);
     private final CommentDAO commentDAO;
     private final LogDAO logDAO;
+    private final SystemLogDAO systemLogDAO;
     private final OrderDAO orderDAO;
     private final ItemDAO itemDAO;
     private final UserDAO userDAO;
     private final AuthorizationService authorizationService;
 
     public CommentService() {
-        this(new CommentDAO(), new LogDAO(), new OrderDAO(), new ItemDAO(), new UserDAO(), new AuthorizationService());
+        this(new CommentDAO(), new LogDAO(), new SystemLogDAO(), new OrderDAO(), new ItemDAO(), new UserDAO(),
+                new AuthorizationService());
     }
 
-    public CommentService(CommentDAO commentDAO, LogDAO logDAO, OrderDAO orderDAO, ItemDAO itemDAO,
+    public CommentService(CommentDAO commentDAO, LogDAO logDAO, SystemLogDAO systemLogDAO,
+                          OrderDAO orderDAO, ItemDAO itemDAO,
                           UserDAO userDAO, AuthorizationService authorizationService) {
         this.commentDAO = commentDAO;
         this.logDAO = logDAO;
+        this.systemLogDAO = systemLogDAO;
         this.orderDAO = orderDAO;
         this.itemDAO = itemDAO;
         this.userDAO = userDAO;
@@ -55,10 +60,10 @@ public class CommentService {
         List<String> safeTags = normalizeTags(tags);
         boolean updated = commentDAO.findByUserAndItem(actorUserId, itemId) != null;
         commentDAO.upsertComment(actorUserId, itemId, safeContent, rating, safeTags);
-        boolean audited = safeAudit(actorUserId, itemId, ip);
+        boolean audited = safeAudit(actorUserId, itemId, updated, rating, safeTags, safeContent.length(), ip);
         String message = updated ? "评论已更新" : "评论已发布";
         return new CommentSubmissionResult(updated, audited,
-                audited ? message : message + "；但行为日志写入失败");
+                audited ? message : message + "；但审计日志写入失败");
     }
 
     public CommentListDTO listForItem(long actorUserId, long itemId, int limit) {
@@ -87,14 +92,33 @@ public class CommentService {
         return List.copyOf(result);
     }
 
-    private boolean safeAudit(long userId, long itemId, String ip) {
+    private boolean safeAudit(long userId, long itemId, boolean updated, int rating,
+                              List<String> tags, int contentLength, String ip) {
+        String safeIp = SecurityUtil.normalizeIp(ip);
+        boolean behaviorRecorded = true;
         try {
-            logDAO.recordAction(userId, itemId, "COMMENT", 0, "SWING", SecurityUtil.normalizeIp(ip));
-            return true;
+            logDAO.recordAction(userId, itemId, "COMMENT", 0, "SWING", safeIp);
         } catch (RuntimeException exception) {
+            behaviorRecorded = false;
             LOGGER.warn("Comment saved but behavior audit failed for user {} item {}", userId, itemId, exception);
-            return false;
         }
+        boolean systemAuditRecorded = true;
+        String action = updated ? "COMMENT_UPDATE" : "COMMENT_CREATE";
+        Document detail = new Document("actor_user_id", userId)
+                .append("item_id", itemId)
+                .append("rating", rating)
+                .append("tags", tags)
+                .append("content_length", contentLength)
+                .append("operation", updated ? "更新评论" : "发表评论")
+                .append("ip", safeIp)
+                .append("business_key", "item:" + itemId);
+        try {
+            systemLogDAO.record(userId, action, "INFO", updated ? "用户更新评论" : "用户发表评论", detail);
+        } catch (RuntimeException exception) {
+            systemAuditRecorded = false;
+            LOGGER.warn("Comment saved but system audit failed for user {} item {}", userId, itemId, exception);
+        }
+        return behaviorRecorded && systemAuditRecorded;
     }
 
     private long numericId(Object value) {

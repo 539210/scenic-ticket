@@ -81,7 +81,13 @@ public class SystemLogDAO extends MongoBaseDAO {
             filter.append("$or", List.of(
                     regexFilter("message", escapedKeyword),
                     regexFilter("action_detail.operation", escapedKeyword),
-                    regexFilter("action_detail.ip", escapedKeyword)
+                    regexFilter("action_detail.ip", escapedKeyword),
+                    regexFilter("action_detail.business_key", escapedKeyword),
+                    regexFilter("action_detail.ticket_type_name", escapedKeyword),
+                    regexFilter("action_detail.visit_date", escapedKeyword),
+                    regexFilter("action_detail.payment_method", escapedKeyword),
+                    regexFilter("action_detail.reason", escapedKeyword),
+                    regexFilter("action_detail.tags", escapedKeyword)
             ));
         }
         return getCollection("system_logs")

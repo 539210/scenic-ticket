@@ -1,6 +1,7 @@
 package com.scenicticket.service;
 
 import com.scenicticket.dao.mongo.LogDAO;
+import com.scenicticket.dao.mongo.SystemLogDAO;
 import com.scenicticket.dao.mysql.ItemDAO;
 import com.scenicticket.dao.mysql.OrderDAO;
 import com.scenicticket.dao.mysql.RefundDAO;
@@ -18,6 +19,7 @@ import com.scenicticket.model.User;
 import com.scenicticket.util.ConnectionProvider;
 import com.scenicticket.util.MySQLDBUtil;
 import com.scenicticket.util.SecurityUtil;
+import org.bson.Document;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -42,17 +44,19 @@ public class OrderLifecycleService {
     private final ItemDAO itemDAO;
     private final RefundDAO refundDAO;
     private final LogDAO logDAO;
+    private final SystemLogDAO systemLogDAO;
     private final AuthorizationService authorizationService;
     private final ConnectionProvider connectionProvider;
     private final Clock clock;
 
     public OrderLifecycleService() {
         this(new OrderDAO(), new TicketTypeDAO(), new TicketInventoryDAO(), new ItemDAO(), new RefundDAO(),
-                new LogDAO(), new AuthorizationService(), MySQLDBUtil::getConnection, Clock.systemDefaultZone());
+                new LogDAO(), new SystemLogDAO(), new AuthorizationService(), MySQLDBUtil::getConnection,
+                Clock.systemDefaultZone());
     }
 
     public OrderLifecycleService(OrderDAO orderDAO, TicketTypeDAO ticketTypeDAO, TicketInventoryDAO inventoryDAO,
-                                 ItemDAO itemDAO, RefundDAO refundDAO, LogDAO logDAO,
+                                 ItemDAO itemDAO, RefundDAO refundDAO, LogDAO logDAO, SystemLogDAO systemLogDAO,
                                  AuthorizationService authorizationService, ConnectionProvider connectionProvider,
                                  Clock clock) {
         this.orderDAO = orderDAO;
@@ -61,6 +65,7 @@ public class OrderLifecycleService {
         this.itemDAO = itemDAO;
         this.refundDAO = refundDAO;
         this.logDAO = logDAO;
+        this.systemLogDAO = systemLogDAO;
         this.authorizationService = authorizationService;
         this.connectionProvider = connectionProvider;
         this.clock = clock;
@@ -124,7 +129,14 @@ public class OrderLifecycleService {
         } catch (SQLException exception) {
             throw new DBException("创建待支付订单事务失败", exception);
         }
-        boolean audited = safeAudit(userId, itemId, "ORDER_CREATE", ip);
+        Document detail = new Document("order_id", orderId)
+                .append("ticket_type_id", ticketTypeId)
+                .append("ticket_type_name", ticketTypeName)
+                .append("visit_date", visitDate.toString())
+                .append("quantity", quantity)
+                .append("amount", totalAmount.toPlainString())
+                .append("payment_method", safePaymentMethod);
+        boolean audited = safeAudit(userId, userId, itemId, "ORDER_CREATE", "预定订单已创建", ip, detail);
         String message = "待支付订单已创建，请在 15 分钟内确认支付";
         return new PendingOrderResult(orderId, totalAmount, ticketTypeName, visitDate, quantity, audited,
                 audited ? message : message + "；但审计日志写入失败，请联系管理员");
@@ -169,7 +181,8 @@ public class OrderLifecycleService {
             throw new DBException("确认支付事务失败", exception);
         }
         String action = expired ? "ORDER_EXPIRE" : "ORDER_PAY";
-        boolean audited = safeAudit(actorUserId, order.getItemId(), action, ip);
+        boolean audited = safeAudit(actorUserId, order.getUserId(), order.getItemId(), action,
+                expired ? "待支付订单已过期" : "订单支付成功", ip, orderAuditDetail(order));
         return result(orderId, true, audited, expired ? "订单已过期并释放库存，不能继续支付" : "模拟支付成功");
     }
 
@@ -197,7 +210,8 @@ public class OrderLifecycleService {
         } catch (SQLException exception) {
             throw new DBException("取消订单事务失败", exception);
         }
-        boolean audited = safeAudit(actorUserId, order.getItemId(), "ORDER_CANCEL", ip);
+        boolean audited = safeAudit(actorUserId, order.getUserId(), order.getItemId(), "ORDER_CANCEL",
+                "待支付订单已取消", ip, orderAuditDetail(order));
         return result(orderId, true, audited, "订单已取消，预留库存已释放");
     }
 
@@ -242,7 +256,9 @@ public class OrderLifecycleService {
         } catch (SQLException exception) {
             throw new DBException("模拟退款事务失败", exception);
         }
-        boolean audited = safeAudit(actorUserId, order.getItemId(), "ORDER_REFUND", ip);
+        Document detail = orderAuditDetail(order).append("reason", safeReason);
+        boolean audited = safeAudit(actorUserId, order.getUserId(), order.getItemId(), "ORDER_REFUND",
+                "订单退款成功", ip, detail);
         return result(orderId, true, audited, "模拟退款成功，库存已恢复");
     }
 
@@ -275,7 +291,8 @@ public class OrderLifecycleService {
                 }
                 orderDAO.markCancelled(connection, orderId, STATUS_PENDING, false);
                 connection.commit();
-                safeAudit(order.getUserId(), order.getItemId(), "ORDER_EXPIRE", "127.0.0.1");
+                safeAudit(order.getUserId(), order.getUserId(), order.getItemId(), "ORDER_EXPIRE",
+                        "待支付订单自动过期", "127.0.0.1", orderAuditDetail(order));
                 return true;
             } catch (RuntimeException | SQLException exception) {
                 rollback(connection, exception);
@@ -331,14 +348,65 @@ public class OrderLifecycleService {
                 .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
     }
 
-    private boolean safeAudit(long userId, long itemId, String action, String ip) {
-        try {
-            logDAO.recordAction(userId, itemId, action, 0, "SWING", SecurityUtil.normalizeIp(ip));
-            return true;
-        } catch (RuntimeException exception) {
-            LOGGER.warn("MySQL order operation committed but MongoDB audit failed: order action {}", action, exception);
-            return false;
+    private Document orderAuditDetail(Order order) {
+        Document detail = new Document("order_id", order.getOrderId())
+                .append("ticket_type_id", order.getTicketTypeId())
+                .append("ticket_type_name", order.getTicketTypeNameSnapshot())
+                .append("quantity", order.getQuantity())
+                .append("payment_method", order.getPaymentMethod());
+        if (order.getVisitDate() != null) {
+            detail.append("visit_date", order.getVisitDate().toString());
         }
+        if (order.getAmount() != null) {
+            detail.append("amount", order.getAmount().toPlainString());
+        }
+        return detail;
+    }
+
+    private boolean safeAudit(long actorUserId, long ownerUserId, long itemId, String action,
+                              String message, String ip, Document detail) {
+        String safeIp = SecurityUtil.normalizeIp(ip);
+        boolean behaviorRecorded = true;
+        try {
+            logDAO.recordAction(actorUserId, itemId, action, 0, "SWING", safeIp);
+        } catch (RuntimeException exception) {
+            behaviorRecorded = false;
+            LOGGER.warn("MySQL order operation committed but behavior log failed: order action {}", action, exception);
+        }
+        boolean systemAuditRecorded = true;
+        Document auditDetail = detail == null ? new Document() : new Document(detail);
+        auditDetail.append("actor_user_id", actorUserId)
+                .append("owner_user_id", ownerUserId)
+                .append("item_id", itemId)
+                .append("operation", operationName(action))
+                .append("ip", safeIp)
+                .append("business_key", businessKey(auditDetail.get("order_id"), itemId));
+        try {
+            systemLogDAO.record(actorUserId, action, "INFO", message, auditDetail);
+        } catch (RuntimeException exception) {
+            systemAuditRecorded = false;
+            LOGGER.warn("MySQL order operation committed but system audit failed: order action {}", action, exception);
+        }
+        return behaviorRecorded && systemAuditRecorded;
+    }
+
+    private String operationName(String action) {
+        return switch (action) {
+            case "ORDER_CREATE" -> "预定下单";
+            case "ORDER_PAY" -> "支付购票";
+            case "ORDER_CANCEL" -> "取消预定";
+            case "ORDER_EXPIRE" -> "预定过期";
+            case "ORDER_REFUND" -> "退款";
+            default -> action;
+        };
+    }
+
+    private String businessKey(Object orderId, long itemId) {
+        return "order:" + valueOrDash(orderId) + " item:" + itemId;
+    }
+
+    private String valueOrDash(Object value) {
+        return value == null ? "-" : String.valueOf(value);
     }
 
     private OrderActionResult result(long orderId, boolean updated, boolean audited, String message) {

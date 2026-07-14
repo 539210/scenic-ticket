@@ -26,28 +26,34 @@ class AuditPanelTest {
         FakeActions actions = new FakeActions();
         actions.logs = List.of(new Document("timestamp", dateAtStart("2026-07-13"))
                 .append("user_id", 8L)
-                .append("log_type", "LOGIN")
+                .append("log_type", "ORDER_PAY")
                 .append("log_level", "WARN")
-                .append("message", "连续登录失败")
-                .append("action_detail", new Document("operation", "登录").append("ip", "127.0.0.1")));
+                .append("message", "订单支付成功")
+                .append("action_detail", new Document("operation", "支付购票").append("order_id", 88L)
+                        .append("item_id", 7L).append("ticket_type_name", "学生票")
+                        .append("visit_date", "2026-07-20").append("quantity", 2)
+                        .append("amount", "160.00").append("payment_method", "微信")
+                        .append("ip", "127.0.0.1")));
         AuditPanel panel = new AuditPanel(new ImmediateTaskExecutor(), actions);
-        panel.setFilters("8", 1, 2, "2026-07-01", "2026-07-13", "登录失败", "120");
+        panel.setFilters("8", 5, 2, "2026-07-01", "2026-07-13", "订单88", "120");
 
         click(panel, "查询日志");
 
         AuditLogQuery query = actions.lastQuery;
         assertNotNull(query);
         assertEquals(8L, query.getUserId());
-        assertEquals("LOGIN", query.getLogType());
+        assertEquals("ORDER_PAY", query.getLogType());
         assertEquals("WARN", query.getLogLevel());
-        assertEquals("登录失败", query.getKeyword());
+        assertEquals("订单88", query.getKeyword());
         assertEquals(120, query.getLimit());
         assertEquals(dateAtStart("2026-07-01"), query.getStartTime());
         assertEquals(dateAtEnd("2026-07-13"), query.getEndTime());
         assertEquals(1, panel.rowCount(0));
-        assertEquals("登录", panel.tableValueAt(0, 0, 2));
+        assertEquals("支付购票", panel.tableValueAt(0, 0, 2));
         assertEquals("警告", panel.tableValueAt(0, 0, 3));
-        assertEquals("127.0.0.1", panel.tableValueAt(0, 0, 6));
+        assertEquals("订单 #88 / 景点 #7", panel.tableValueAt(0, 0, 5));
+        assertTrue(String.valueOf(panel.tableValueAt(0, 0, 6)).contains("票种=学生票"));
+        assertEquals("127.0.0.1", panel.tableValueAt(0, 0, 7));
         assertTrue(actions.statuses.contains("查询到 1 条审计日志"));
     }
 
@@ -84,7 +90,7 @@ class AuditPanelTest {
         assertEquals(2, actions.summaryCalls);
         assertEquals(1, panel.selectedTab());
         assertEquals(1, panel.rowCount(1));
-        assertEquals("创建订单", panel.tableValueAt(1, 0, 0));
+        assertEquals("预定下单", panel.tableValueAt(1, 0, 0));
         assertEquals("正常", panel.tableValueAt(1, 0, 1));
     }
 

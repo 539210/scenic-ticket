@@ -1,6 +1,7 @@
 package com.scenicticket.service;
 
 import com.scenicticket.dao.mongo.LogDAO;
+import com.scenicticket.dao.mongo.SystemLogDAO;
 import com.scenicticket.dao.mysql.ItemDAO;
 import com.scenicticket.dao.mysql.OrderDAO;
 import com.scenicticket.dao.mysql.RefundDAO;
@@ -13,6 +14,7 @@ import com.scenicticket.model.Refund;
 import com.scenicticket.model.TicketInventory;
 import com.scenicticket.model.TicketType;
 import com.scenicticket.model.User;
+import org.bson.Document;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Proxy;
@@ -55,6 +57,9 @@ class OrderLifecycleServiceTest {
         assertEquals(LocalDateTime.of(2026, 7, 11, 12, 15), order.getExpiresAt());
         assertEquals(2, fixture.inventory.reservedQuantity);
         assertTrue(fixture.connection.committed);
+        assertEquals("ORDER_CREATE", fixture.systemLogs.logType);
+        assertEquals(55L, fixture.systemLogs.detail.getLong("order_id"));
+        assertEquals("160.00", fixture.systemLogs.detail.getString("amount"));
     }
 
     @Test
@@ -68,6 +73,8 @@ class OrderLifecycleServiceTest {
         assertEquals(2, fixture.inventory.confirmedQuantity);
         assertTrue(fixture.orders.paid);
         assertTrue(fixture.connection.committed);
+        assertEquals("ORDER_PAY", fixture.systemLogs.logType);
+        assertEquals("支付购票", fixture.systemLogs.detail.getString("operation"));
     }
 
     @Test
@@ -125,6 +132,19 @@ class OrderLifecycleServiceTest {
     }
 
     @Test
+    void systemAuditFailureDoesNotUndoCommittedMysqlPayment() {
+        Fixture fixture = new Fixture();
+        fixture.systemLogs.fail = true;
+        fixture.orders.locked = order(0, LocalDateTime.of(2026, 7, 11, 12, 15), LocalDate.of(2026, 7, 20));
+
+        var result = fixture.service.pay(2L, 44L, "127.0.0.1");
+
+        assertFalse(result.auditRecorded());
+        assertTrue(fixture.orders.paid);
+        assertTrue(fixture.connection.committed);
+    }
+
+    @Test
     void refundRejectsExpiredCompletedAndAdmittedOrdersWithoutRestoringStock() {
         Fixture expired = new Fixture();
         expired.orders.locked = order(1, null, LocalDate.of(2026, 7, 11));
@@ -165,9 +185,11 @@ class OrderLifecycleServiceTest {
         private final FakeInventoryDAO inventory = new FakeInventoryDAO();
         private final FakeRefundDAO refunds = new FakeRefundDAO();
         private final FakeLogDAO logs = new FakeLogDAO();
+        private final FakeSystemLogDAO systemLogs = new FakeSystemLogDAO();
         private final TrackingConnection connection = TrackingConnection.create();
         private final OrderLifecycleService service = new OrderLifecycleService(orders, new FakeTicketTypeDAO(),
-                inventory, new FakeItemDAO(), refunds, logs, authorization(), () -> connection.connection, CLOCK);
+                inventory, new FakeItemDAO(), refunds, logs, systemLogs, authorization(),
+                () -> connection.connection, CLOCK);
     }
 
     private static AuthorizationService authorization() {
@@ -286,6 +308,18 @@ class OrderLifecycleServiceTest {
         public void recordAction(long userId, long itemId, String actionType, int durationSeconds,
                                  String clientType, String ip) {
             if (fail) throw new IllegalStateException("Mongo unavailable");
+        }
+    }
+
+    private static class FakeSystemLogDAO extends SystemLogDAO {
+        private boolean fail;
+        private String logType;
+        private Document detail;
+        @Override
+        public void record(long userId, String logType, String logLevel, String message, Document actionDetail) {
+            if (fail) throw new IllegalStateException("System audit unavailable");
+            this.logType = logType;
+            this.detail = actionDetail;
         }
     }
 

@@ -2,6 +2,7 @@ package com.scenicticket.service;
 
 import com.scenicticket.dao.mongo.CommentDAO;
 import com.scenicticket.dao.mongo.LogDAO;
+import com.scenicticket.dao.mongo.SystemLogDAO;
 import com.scenicticket.dao.mysql.ItemDAO;
 import com.scenicticket.dao.mysql.OrderDAO;
 import com.scenicticket.dao.mysql.UserDAO;
@@ -47,6 +48,8 @@ class CommentServiceTest {
         assertEquals(4, fixture.comments.saved.getInteger("rating"));
         assertEquals(List.of("适合家庭"), fixture.comments.saved.getList("tags", String.class));
         assertEquals(1, fixture.comments.documentCount);
+        assertEquals(List.of("COMMENT_CREATE", "COMMENT_UPDATE"), fixture.systemLogs.types);
+        assertEquals("更新评论", fixture.systemLogs.details.get(1).getString("operation"));
     }
 
     @Test
@@ -79,16 +82,28 @@ class CommentServiceTest {
         var result = fixture.service.submit(2L, 7L, "日志故障仍保存", 5, List.of(), "127.0.0.1");
 
         assertFalse(result.auditRecorded());
-        assertTrue(result.message().contains("行为日志写入失败"));
+        assertTrue(result.message().contains("审计日志写入失败"));
         assertEquals("日志故障仍保存", fixture.comments.saved.getString("content"));
+    }
+
+    @Test
+    void systemAuditFailureDoesNotUndoSavedComment() {
+        Fixture fixture = new Fixture();
+        fixture.systemLogs.fail = true;
+
+        var result = fixture.service.submit(2L, 7L, "系统审计故障仍保存", 5, List.of(), "127.0.0.1");
+
+        assertFalse(result.auditRecorded());
+        assertEquals("系统审计故障仍保存", fixture.comments.saved.getString("content"));
     }
 
     private static class Fixture {
         private final FakeCommentDAO comments = new FakeCommentDAO();
         private final FakeLogDAO logs = new FakeLogDAO();
+        private final FakeSystemLogDAO systemLogs = new FakeSystemLogDAO();
         private final FakeOrderDAO orders = new FakeOrderDAO();
-        private final CommentService service = new CommentService(comments, logs, orders, new FakeItemDAO(),
-                new FakeUserDAO(), authorization());
+        private final CommentService service = new CommentService(comments, logs, systemLogs, orders,
+                new FakeItemDAO(), new FakeUserDAO(), authorization());
     }
 
     private static AuthorizationService authorization() {
@@ -149,6 +164,18 @@ class CommentServiceTest {
         public void recordAction(long userId, long itemId, String actionType, int durationSeconds,
                                  String clientType, String ip) {
             if (fail) throw new IllegalStateException("Mongo unavailable");
+        }
+    }
+
+    private static class FakeSystemLogDAO extends SystemLogDAO {
+        private boolean fail;
+        private final List<String> types = new java.util.ArrayList<>();
+        private final List<Document> details = new java.util.ArrayList<>();
+        @Override
+        public void record(long userId, String logType, String logLevel, String message, Document actionDetail) {
+            if (fail) throw new IllegalStateException("System audit unavailable");
+            types.add(logType);
+            details.add(actionDetail);
         }
     }
 }

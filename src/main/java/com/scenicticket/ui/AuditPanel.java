@@ -26,10 +26,11 @@ public final class AuditPanel extends JPanel {
     private final JTextField keywordField = new JTextField(12);
     private final JTextField limitField = new JTextField("80", 5);
     private final JComboBox<String> logTypeBox = new JComboBox<>(
-            new String[]{"全部类型", "登录", "退出", "注册", "创建订单", "景点更新", "查看报表"});
+            new String[]{"全部类型", "登录", "退出", "注册", "预定下单", "支付购票", "取消预定", "预定过期",
+                    "退款", "发表评论", "更新评论", "门票核销", "景点更新", "查看报表"});
     private final JComboBox<String> levelBox = new JComboBox<>(
             new String[]{"全部级别", "正常", "警告", "错误"});
-    private final DefaultTableModel logModel = tableModel("时间", "用户ID", "类型", "级别", "内容", "操作", "IP地址");
+    private final DefaultTableModel logModel = tableModel("时间", "用户ID", "类型", "级别", "内容", "业务对象", "业务详情", "IP地址");
     private final DefaultTableModel summaryModel = tableModel("类型", "级别", "操作次数", "涉及用户", "最近时间");
     private final DefaultTableModel trendModel = tableModel("日期", "类型", "级别", "次数");
     private final DefaultTableModel userSummaryModel = tableModel("用户ID", "操作次数", "警告", "错误", "最近时间", "操作类型");
@@ -111,7 +112,7 @@ public final class AuditPanel extends JPanel {
                 Document detail = document.get("action_detail", Document.class);
                 logModel.addRow(new Object[]{UiFormatters.date(document.get("timestamp")), valueText(document.get("user_id")),
                         logTypeName(document.getString("log_type")), logLevelName(document.getString("log_level")),
-                        valueText(document.get("message")), detail == null ? "-" : valueText(detail.get("operation")),
+                        valueText(document.get("message")), businessObject(detail), businessDetail(detail),
                         detail == null ? "-" : valueText(detail.get("ip"))});
             }
             auditTabs.setSelectedIndex(0);
@@ -209,8 +210,15 @@ public final class AuditPanel extends JPanel {
             case 2 -> "LOGOUT";
             case 3 -> "REGISTER";
             case 4 -> "ORDER_CREATE";
-            case 5 -> "ITEM_UPDATE";
-            case 6 -> "REPORT_VIEW";
+            case 5 -> "ORDER_PAY";
+            case 6 -> "ORDER_CANCEL";
+            case 7 -> "ORDER_EXPIRE";
+            case 8 -> "ORDER_REFUND";
+            case 9 -> "COMMENT_CREATE";
+            case 10 -> "COMMENT_UPDATE";
+            case 11 -> "ADMISSION";
+            case 12 -> "ITEM_UPDATE";
+            case 13 -> "REPORT_VIEW";
             default -> null;
         };
     }
@@ -232,7 +240,14 @@ public final class AuditPanel extends JPanel {
             case "LOGIN" -> "登录";
             case "LOGOUT" -> "退出";
             case "REGISTER" -> "注册";
-            case "ORDER_CREATE", "ORDER" -> "创建订单";
+            case "ORDER_CREATE", "ORDER" -> "预定下单";
+            case "ORDER_PAY" -> "支付购票";
+            case "ORDER_CANCEL" -> "取消预定";
+            case "ORDER_EXPIRE" -> "预定过期";
+            case "ORDER_REFUND" -> "退款";
+            case "COMMENT", "COMMENT_CREATE" -> "发表评论";
+            case "COMMENT_UPDATE" -> "更新评论";
+            case "ADMISSION" -> "门票核销";
             case "ITEM_UPDATE" -> "景点更新";
             case "REPORT_VIEW" -> "查看报表";
             default -> logType;
@@ -249,6 +264,39 @@ public final class AuditPanel extends JPanel {
             case "ERROR" -> "错误";
             default -> level;
         };
+    }
+
+    private static String businessObject(Document detail) {
+        if (detail == null) return "-";
+        Object orderId = detail.get("order_id");
+        Object itemId = detail.get("item_id");
+        if (orderId != null && itemId != null) return "订单 #" + orderId + " / 景点 #" + itemId;
+        if (orderId != null) return "订单 #" + orderId;
+        if (itemId != null) return "景点 #" + itemId;
+        return "-";
+    }
+
+    private static String businessDetail(Document detail) {
+        if (detail == null) return "-";
+        List<String> parts = new java.util.ArrayList<>();
+        addDetail(parts, "操作", detail.get("operation"));
+        addDetail(parts, "票种", detail.get("ticket_type_name"));
+        addDetail(parts, "游玩日期", detail.get("visit_date"));
+        addDetail(parts, "数量", detail.get("quantity"));
+        addDetail(parts, "金额", detail.get("amount"));
+        addDetail(parts, "付款方式", detail.get("payment_method"));
+        addDetail(parts, "评分", detail.get("rating"));
+        Object tags = detail.get("tags");
+        if (tags instanceof List<?> values && !values.isEmpty()) {
+            parts.add("标签=" + values.stream().map(String::valueOf).reduce((left, right) -> left + "、" + right).orElse("-"));
+        }
+        addDetail(parts, "原因", detail.get("reason"));
+        addDetail(parts, "核销数量", detail.get("admitted_quantity"));
+        return parts.isEmpty() ? "-" : String.join("；", parts);
+    }
+
+    private static void addDetail(List<String> parts, String label, Object value) {
+        if (value != null && !String.valueOf(value).isBlank()) parts.add(label + "=" + value);
     }
 
     private static String logTypeListText(Object value) {
