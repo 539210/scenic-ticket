@@ -34,7 +34,8 @@ class ItemDisplayFormatterTest {
         assertTrue(text.contains("折后单价：¥80.00"));
         assertTrue(text.contains("状态：上架"));
         assertTrue(text.contains("简介：苏州园林中文简介"));
-        assertTrue(text.contains("图片地址：https://img/a.jpg、https://img/b.jpg"));
+        assertTrue(!text.contains("图片地址"));
+        assertTrue(!text.contains("https://img/a.jpg"));
         assertTrue(text.contains("\"source\": \"MongoDB\""));
     }
 

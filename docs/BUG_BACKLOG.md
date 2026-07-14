@@ -59,6 +59,7 @@
 | BUG-P3-006 | VERIFIED | 票种新增/更新和库存保存后的自动刷新覆盖业务结果消息 | `TicketInventoryPanel` 使用点击时参数快照刷新同一景点/票种日期范围，并在刷新后保留创建编号、更新或库存可售结果 | 页面测试覆盖票种 CRUD、库存保存、刷新参数及最终状态消息 |
 | BUG-P3-007 | VERIFIED | 用户管理允许当前管理员点击自禁用/自降权，且变更结果会被列表刷新消息覆盖 | `UserManagementPanel` 对当前会话本人禁用两个变更按钮；其他目标冻结 ID，并在刷新后保留服务结果 | 页面测试覆盖本人保护、其他用户状态/角色目标及最终消息；最后管理员规则仍由服务事务校验 |
 | BUG-P3-008 | VERIFIED | 分类编辑允许把当前分类直接选为自己的上级，只能等待服务报错 | `ManagementPanel` 更新前拒绝 `parentId == categoryId`，服务层仍负责跨多级循环检测 | 页面测试覆盖分类选择/父级 CRUD，服务测试覆盖直接与间接循环 |
+| BUG-P3-009 | VERIFIED | 景点简介把图片 URL 当普通文字展示，用户无法直接查看图片 | 简介文本不再输出图片地址；`ScenicBrowsePanel` 在后台加载第一张有效 HTTP/HTTPS 图片，限制超时和 10 MB 响应并按 360×220 区域等比缩放；空地址、失败和非图片响应隐藏整个图片区 | `ScenicBrowsePanelTest` 覆盖直显和失败隐藏，`ScenicImageLoaderTest` 覆盖缩放、空地址及不支持协议，`ItemDisplayFormatterTest` 断言文本不含 URL |
 
 ## 已知四问题复现纪律
 

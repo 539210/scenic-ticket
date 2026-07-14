@@ -8,6 +8,7 @@ import com.scenicticket.model.Item;
 
 import javax.swing.JButton;
 import javax.swing.JComboBox;
+import javax.swing.ImageIcon;
 import javax.swing.JLabel;
 import javax.swing.JMenuItem;
 import javax.swing.JPanel;
@@ -20,11 +21,15 @@ import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.table.DefaultTableModel;
 import java.awt.BorderLayout;
+import java.awt.Color;
+import java.awt.Dimension;
 import java.awt.GridLayout;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.function.Function;
 
 public final class ScenicBrowsePanel extends JPanel {
     private static final String ALL_OPTION = "全部";
@@ -34,12 +39,15 @@ public final class ScenicBrowsePanel extends JPanel {
 
     private final UiTaskExecutor taskExecutor;
     private final Actions actions;
+    private final Function<List<?>, Optional<ImageIcon>> imageLoader;
     private final JComboBox<String> keywordBox = new JComboBox<>(KEYWORD_OPTIONS);
     private final JTextField keywordField = new JTextField(14);
     private final JComboBox<CategoryOption> categoryBox = new JComboBox<>();
     private final JTextArea overviewArea = UiComponents.readOnlyTextArea(18, 34);
     private final JTextArea introductionArea = UiComponents.readOnlyTextArea(18, 34);
     private final JTextArea commentsArea = UiComponents.readOnlyTextArea(18, 34);
+    private final JLabel introductionImage = new JLabel();
+    private final JPanel introductionImagePanel = new JPanel(new BorderLayout());
     private final DefaultTableModel tableModel = readOnlyTableModel();
     private final JTable table = UiComponents.table(tableModel);
     private final JTabbedPane scenicInfoTabs = new JTabbedPane();
@@ -54,9 +62,15 @@ public final class ScenicBrowsePanel extends JPanel {
     private Item selectedItem;
 
     public ScenicBrowsePanel(UiTaskExecutor taskExecutor, Actions actions) {
+        this(taskExecutor, actions, new ScenicImageLoader(360, 220)::loadFirst);
+    }
+
+    ScenicBrowsePanel(UiTaskExecutor taskExecutor, Actions actions,
+                      Function<List<?>, Optional<ImageIcon>> imageLoader) {
         super(new BorderLayout(12, 12));
         this.taskExecutor = taskExecutor;
         this.actions = actions;
+        this.imageLoader = imageLoader;
         setBackground(UiTheme.BACKGROUND);
         setBorder(javax.swing.BorderFactory.createEmptyBorder(16, 16, 16, 16));
         configureTable();
@@ -134,7 +148,18 @@ public final class ScenicBrowsePanel extends JPanel {
         introductionArea.setText("请选择景点后点击“景点简介”。");
         commentsArea.setText("请选择景点后点击“游客评论”。");
         scenicInfoTabs.addTab("景点概览", UiComponents.scroll(overviewArea));
-        scenicInfoTabs.addTab("景点简介", UiComponents.scroll(introductionArea));
+        JPanel introductionPanel = new JPanel(new BorderLayout(0, 10));
+        introductionPanel.setBackground(Color.WHITE);
+        introductionPanel.add(UiComponents.scroll(introductionArea), BorderLayout.CENTER);
+        introductionImage.setHorizontalAlignment(JLabel.CENTER);
+        introductionImage.setVerticalAlignment(JLabel.CENTER);
+        introductionImage.getAccessibleContext().setAccessibleName("景点图片");
+        introductionImagePanel.setBackground(Color.WHITE);
+        introductionImagePanel.setPreferredSize(new Dimension(380, 230));
+        introductionImagePanel.add(introductionImage, BorderLayout.CENTER);
+        introductionImagePanel.setVisible(false);
+        introductionPanel.add(introductionImagePanel, BorderLayout.SOUTH);
+        scenicInfoTabs.addTab("景点简介", introductionPanel);
         scenicInfoTabs.addTab("游客评论", UiComponents.scroll(commentsArea));
 
         setSelectionActionsEnabled(false, false);
@@ -238,6 +263,7 @@ public final class ScenicBrowsePanel extends JPanel {
                 + System.lineSeparator() + System.lineSeparator()
                 + "点击“景点简介”查看景区介绍，点击“游客评论”查看评价。");
         introductionArea.setText("尚未加载“" + item.getTitle() + "”的景点简介。");
+        hideIntroductionImage();
         commentsArea.setText("尚未加载“" + item.getTitle() + "”的游客评论。");
         scenicInfoTabs.setSelectedIndex(0);
         boolean available = item.getStatus() != null && item.getStatus() == 1;
@@ -249,6 +275,8 @@ public final class ScenicBrowsePanel extends JPanel {
         taskExecutor.run("景点详情", () -> actions.loadItemDetail(itemId), dto -> {
             if (isSelectedItem(itemId)) {
                 introductionArea.setText(actions.formatItemIntroduction(dto));
+                introductionArea.setCaretPosition(0);
+                loadIntroductionImage(itemId, dto);
                 scenicInfoTabs.setSelectedIndex(1);
             }
         });
@@ -270,6 +298,7 @@ public final class ScenicBrowsePanel extends JPanel {
         selectedItem = null;
         setSelectionActionsEnabled(false, false);
         introductionArea.setText("请选择景点后点击“景点简介”。");
+        hideIntroductionImage();
         commentsArea.setText("请选择景点后点击“游客评论”。");
     }
 
@@ -290,6 +319,48 @@ public final class ScenicBrowsePanel extends JPanel {
 
     private boolean isSelectedItem(long itemId) {
         return selectedItem != null && selectedItem.getItemId() != null && selectedItem.getItemId() == itemId;
+    }
+
+    private void loadIntroductionImage(long itemId, CrossDatabaseItemDTO dto) {
+        hideIntroductionImage();
+        List<?> imageSources = imageSources(dto);
+        if (imageSources.isEmpty()) {
+            return;
+        }
+        taskExecutor.run("景点图片", () -> imageLoader.apply(imageSources), image -> {
+            if (!isSelectedItem(itemId)) {
+                return;
+            }
+            if (image != null && image.isPresent()) {
+                introductionImage.setIcon(image.get());
+                introductionImagePanel.setVisible(true);
+                introductionImagePanel.revalidate();
+                introductionImagePanel.repaint();
+            } else {
+                hideIntroductionImage();
+            }
+        });
+    }
+
+    private List<?> imageSources(CrossDatabaseItemDTO dto) {
+        if (dto == null || dto.getDetail() == null) {
+            return List.of();
+        }
+        Object value = dto.getDetail().get("images");
+        if (value instanceof List<?> images) {
+            return images;
+        }
+        if (value == null || String.valueOf(value).isBlank()) {
+            return List.of();
+        }
+        return List.of(value);
+    }
+
+    private void hideIntroductionImage() {
+        introductionImage.setIcon(null);
+        introductionImagePanel.setVisible(false);
+        introductionImagePanel.revalidate();
+        introductionImagePanel.repaint();
     }
 
     private Long selectedCategoryId() {
@@ -337,6 +408,10 @@ public final class ScenicBrowsePanel extends JPanel {
 
     boolean purchaseEnabled() {
         return orderButton.isEnabled();
+    }
+
+    boolean introductionImageVisible() {
+        return introductionImagePanel.isVisible() && introductionImage.getIcon() != null;
     }
 
     public interface Actions {

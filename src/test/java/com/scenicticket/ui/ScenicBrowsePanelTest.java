@@ -5,15 +5,20 @@ import com.scenicticket.dto.CrossDatabaseItemDTO;
 import com.scenicticket.dto.RecommendationDTO;
 import com.scenicticket.model.Category;
 import com.scenicticket.model.Item;
+import org.bson.Document;
 import org.junit.jupiter.api.Test;
 
+import javax.swing.ImageIcon;
 import javax.swing.JButton;
 import javax.swing.JTextArea;
 import java.awt.Component;
 import java.awt.Container;
+import java.awt.image.BufferedImage;
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.Callable;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -57,6 +62,48 @@ class ScenicBrowsePanelTest {
 
         assertEquals("100.0", panel.tableValueAt(0, 5));
         assertTrue(panel.overviewText().contains("推荐理由：近期高分且适合亲子游"));
+    }
+
+    @Test
+    void introductionDisplaysLoadedImageInsteadOfItsAddress() {
+        Item item = item(11L, "南山风景区", 3L, "120", "20", 1);
+        CrossDatabaseItemDTO detail = detail(item, List.of("https://img.example/scenic.jpg"));
+        FakeActions actions = new FakeActions(List.of(item), detail);
+        AtomicReference<List<?>> requestedSources = new AtomicReference<>();
+        ScenicBrowsePanel panel = new ScenicBrowsePanel(new ImmediateTaskExecutor(), actions, sources -> {
+            requestedSources.set(sources);
+            return Optional.of(new ImageIcon(new BufferedImage(320, 180, BufferedImage.TYPE_INT_RGB)));
+        });
+
+        click(panel, "查询");
+        panel.selectRow(0);
+        click(panel, "景点简介");
+
+        assertEquals(List.of("https://img.example/scenic.jpg"), requestedSources.get());
+        assertTrue(panel.introductionImageVisible());
+    }
+
+    @Test
+    void missingOrFailedImagesKeepTheWholeImageAreaHidden() {
+        Item item = item(11L, "南山风景区", 3L, "120", "20", 1);
+        FakeActions actions = new FakeActions(List.of(item), detail(item, List.of("https://invalid/image.jpg")));
+        ScenicBrowsePanel panel = new ScenicBrowsePanel(
+                new ImmediateTaskExecutor(), actions, ignored -> Optional.empty());
+
+        click(panel, "查询");
+        panel.selectRow(0);
+        click(panel, "景点简介");
+
+        assertFalse(panel.introductionImageVisible());
+    }
+
+    private static CrossDatabaseItemDTO detail(Item item, List<String> images) {
+        CrossDatabaseItemDTO dto = new CrossDatabaseItemDTO();
+        dto.setItem(item);
+        dto.setDetail(new Document("description", "直接展示图片的景点简介")
+                .append("images", images)
+                .append("metadata", new Document()));
+        return dto;
     }
 
     private static Item item(long id, String title, long categoryId,
@@ -105,9 +152,15 @@ class ScenicBrowsePanelTest {
 
     private static final class FakeActions implements ScenicBrowsePanel.Actions {
         private final List<Item> items;
+        private final CrossDatabaseItemDTO detail;
 
         private FakeActions(List<Item> items) {
+            this(items, null);
+        }
+
+        private FakeActions(List<Item> items, CrossDatabaseItemDTO detail) {
             this.items = items;
+            this.detail = detail;
         }
 
         @Override
@@ -144,7 +197,7 @@ class ScenicBrowsePanelTest {
 
         @Override
         public CrossDatabaseItemDTO loadItemDetail(long itemId) {
-            return null;
+            return detail;
         }
 
         @Override

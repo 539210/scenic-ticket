@@ -36,11 +36,9 @@ public final class ItemDisplayFormatter {
 
         Document detail = dto.getDetail();
         Object description = detail == null ? null : detail.get("description");
-        Object images = detail == null ? null : detail.get("images");
         Object metadata = detail == null ? null : detail.get("metadata");
         builder.append("简介：").append(UiFormatters.readableText(description, "管理员暂未填写景点简介"))
                 .append(System.lineSeparator()).append(System.lineSeparator())
-                .append("图片地址：").append(formatImages(images)).append(System.lineSeparator())
                 .append("扩展属性：").append(formatMetadata(metadata));
         return builder.toString();
     }
@@ -80,18 +78,6 @@ public final class ItemDisplayFormatter {
                 + "，平均分：" + decimal(summary.get("avg_rating"))
                 + "，最高分：" + integer(summary.get("max_rating"))
                 + "，最低分：" + integer(summary.get("min_rating"));
-    }
-
-    private String formatImages(Object value) {
-        if (!(value instanceof List<?> images) || images.isEmpty()) {
-            return "暂无";
-        }
-        List<String> values = images.stream()
-                .filter(Objects::nonNull)
-                .map(String::valueOf)
-                .filter(image -> !image.isBlank())
-                .toList();
-        return values.isEmpty() ? "暂无" : String.join("、", values);
     }
 
     private String formatTags(List<String> tags) {
