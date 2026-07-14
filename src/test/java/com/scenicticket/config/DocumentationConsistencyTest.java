@@ -92,6 +92,7 @@ class DocumentationConsistencyTest {
         String optimization = read("src/main/resources/sql/mongodb_day07_optimization.js");
         String compatibility = read("src/main/resources/sql/mongodb_day09_id_compatibility.js");
         String indexes = read("src/main/resources/sql/mongodb_day09_indexes.js");
+        String encodingRepair = read("src/main/resources/sql/mongodb_day11_repair_seed_encoding.js");
         String design = read("docs/MongoDB集合设计文档.md");
 
         for (String collection : List.of("action_logs", "comments", "item_details", "system_logs")) {
@@ -104,11 +105,14 @@ class DocumentationConsistencyTest {
         assertTrue(design.contains("user_id, action_type, created_at"));
         assertTrue(design.contains("数值 ID"));
         assertTrue(design.contains("Java Driver"));
-        for (String script : List.of(init, optimization, compatibility, indexes)) {
+        for (String script : List.of(init, optimization, compatibility, indexes, encodingRepair)) {
             assertFalse(script.contains("use(\"scenic_ticket\")"));
             assertTrue(script.contains("db.getName()"));
             assertTrue(script.contains("scenic_ticket_test"));
         }
+        assertTrue(encodingRepair.contains("DATA_REPAIR_BACKUP"));
+        assertTrue(encodingRepair.contains("matchesLegacySeedFormula"));
+        assertTrue(encodingRepair.contains("remaining_corrupted_details"));
         for (String indexName : List.of("idx_action_logs_user_time", "idx_action_logs_item_type",
                 "idx_comments_item_time", "uq_comments_user_item", "uq_item_details_item_id")) {
             assertTrue(init.contains(indexName));

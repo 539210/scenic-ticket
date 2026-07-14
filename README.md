@@ -88,9 +88,10 @@ mongosh "mongodb://localhost:27017/scenic_ticket" --file src/main/resources/sql/
 mongosh "mongodb://localhost:27017/scenic_ticket" --file src/main/resources/sql/mongodb_day07_optimization.js
 mongosh "mongodb://localhost:27017/scenic_ticket" --file src/main/resources/sql/mongodb_day09_id_compatibility.js
 mongosh "mongodb://localhost:27017/scenic_ticket" --file src/main/resources/sql/mongodb_day09_indexes.js
+mongosh "mongodb://localhost:27017/scenic_ticket" --file src/main/resources/sql/mongodb_day11_repair_seed_encoding.js
 ```
 
-脚本以连接 URI 中的数据库为目标，只允许 `scenic_ticket` 或 `scenic_ticket_test`，不再在脚本内部切换数据库。`mongodb_init.js` 只用于空数据库；检测到受管集合已经存在时会拒绝执行。已有数据库必须使用 Day09 迁移脚本，不能通过重新运行初始化脚本清空数据。
+脚本以连接 URI 中的数据库为目标，只允许 `scenic_ticket` 或 `scenic_ticket_test`，不再在脚本内部切换数据库。`mongodb_init.js` 只用于空数据库；检测到受管集合已经存在时会拒绝执行。已有数据库必须使用 Day09 迁移脚本，不能通过重新运行初始化脚本清空数据。Day11 编码修复脚本只恢复能同时匹配旧初始化序号、用户、景点和评分公式的损坏样例；执行前把原 BSON 文档写入 `DATA_REPAIR_BACKUP` 审计记录，不改写无法证明来源的真实评论。
 
 MySQL 全新安装和 Day08 升级可在隔离测试库验证（只允许操作 `scenic_ticket_test`）：
 

@@ -63,7 +63,7 @@ public final class ItemDisplayFormatter {
                     .append("   正文：").append(UiFormatters.readableText(
                             comment.content(), "该评论没有文字内容"))
                     .append(System.lineSeparator())
-                    .append("   标签：").append(tags.isEmpty() ? "无" : String.join("、", tags))
+                    .append("   标签：").append(formatTags(tags))
                     .append(System.lineSeparator())
                     .append("   创建：").append(UiFormatters.date(comment.createdAt()))
                     .append("  更新：").append(UiFormatters.date(comment.updatedAt()))
@@ -92,6 +92,19 @@ public final class ItemDisplayFormatter {
                 .filter(image -> !image.isBlank())
                 .toList();
         return values.isEmpty() ? "暂无" : String.join("、", values);
+    }
+
+    private String formatTags(List<String> tags) {
+        if (tags == null || tags.isEmpty()) {
+            return "无";
+        }
+        List<String> readableTags = tags.stream()
+                .filter(Objects::nonNull)
+                .map(tag -> UiFormatters.readableText(tag, ""))
+                .filter(tag -> !tag.isBlank())
+                .distinct()
+                .toList();
+        return readableTags.isEmpty() ? "无" : String.join("、", readableTags);
     }
 
     private String formatMetadata(Object value) {

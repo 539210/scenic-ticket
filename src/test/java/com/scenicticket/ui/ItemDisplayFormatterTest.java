@@ -82,6 +82,19 @@ class ItemDisplayFormatterTest {
         assertTrue(text.contains("标签：无"));
     }
 
+    @Test
+    void corruptedCommentTagsUseTheSameReadableFallbackAsBodies() {
+        CommentListDTO corrupted = new CommentListDTO(new Document(), List.of(
+                new CommentViewDTO(9L, "李***", 3, "正文正常",
+                        List.of("????", "????"), null, null)));
+
+        String text = formatter.formatComments("狮子林", corrupted);
+
+        assertTrue(text.contains("正文：正文正常"));
+        assertTrue(text.contains("标签：历史数据编码异常，暂无法显示"));
+        assertTrue(!text.contains("标签：????"));
+    }
+
     private CrossDatabaseItemDTO dto(Object description, Object images, Object metadata) {
         Item item = new Item();
         item.setItemId(7L);
