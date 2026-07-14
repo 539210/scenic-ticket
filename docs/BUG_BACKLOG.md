@@ -24,6 +24,7 @@
 | BUG-P1-007 | CLOSED | Mongo 初始化脚本无保护地 drop 四个集合 | 全新安装脚本检测已有集合并拒绝；升级使用非破坏 Day09 脚本 | Java Driver 与 M11 官方 `mongosh` 空测试库初始化均通过，既有集合拒绝策略保留 |
 | BUG-P1-008 | CLOSED | Mongo JS 脚本硬编码 `use("scenic_ticket")`，从测试 URI 执行仍会切到业务库 | 四个脚本删除内部数据库切换，改为校验连接 URI 当前数据库，只允许 `scenic_ticket`/`scenic_ticket_test`；README 命令显式指定 URI | 官方 `mongosh 2.9.2` 仅在空 `scenic_ticket_test` 顺序执行初始化、Day07 优化和两个 Day09 迁移；4 集合、290 条样例与 7/6/3/7 个索引验证通过 |
 | BUG-P1-009 | CLOSED | Mongo 脚本默认索引名与 Java 初始化显式索引名冲突，脚本安装后评论真实集成失败 | 初始化与 Day09 脚本统一使用 `uq_comments_user_item`、`uq_item_details_item_id`、`idx_comments_item_time` 等稳定名称，重复建索引保持幂等 | 失败由 `CommentIntegrationTest` 真实复现为错误码 85；空库重跑四脚本后同一 172 项真实套件通过 |
+| BUG-P1-010 | CLOSED | 业务库仍为 Day08 结构，普通用户查询订单时报数据库操作失败 | 只读诊断确认 `scenic_ticket.orders` 缺少 11 个 Day09 字段且 5 张配套表未部署；先完整备份，再顺序执行 6 个非破坏性迁移脚本；界面现在会把 MySQL 1054/1146 明确提示为“数据库结构未升级” | 迁移前后均为 28 笔订单、总金额 17519.90、13 个用户和 20 个景点；新版字段无缺失，`kscksc` 的应用完整订单查询返回 3 行 |
 
 ## P2
 

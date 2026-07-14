@@ -50,6 +50,7 @@
 
 ## 已验证项（2026-07-14）
 
+- 本机业务库 `scenic_ticket` 从 Day08 原位升级：迁移前先用 `mysqldump --single-transaction --routines --triggers --events` 完整备份；依次执行 6 个 MySQL 迁移/对象脚本后，订单仍为 28 笔、总金额仍为 17519.90，用户仍为 13 个、景点仍为 20 个；11 个订单扩展字段、5 张配套表和 3 条迁移记录均已验证，普通用户完整订单查询返回成功。
 - 全新 MySQL `scenic_ticket_test`：10 表、12 外键、2 视图、2 存储过程、2 触发器、60 票种、420 库存行、4 迁移记录；库存不变量违规 0。
 - Day08 旧结构夹具升级：原 users/profiles/orders 记录保留，订单成功回填成人票和 100.00/90.00 价格快照；升级后 10 表、2 视图、2 过程、2 触发器。
 - MongoDB `scenic_ticket_test`：四集合、索引、中文文本、数值 ID 和至少四类真实聚合通过 Java Driver 集成测试。

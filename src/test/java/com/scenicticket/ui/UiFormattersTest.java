@@ -5,6 +5,7 @@ import com.scenicticket.exception.DBException;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.sql.SQLException;
 import java.time.LocalDateTime;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -42,5 +43,16 @@ class UiFormattersTest {
         assertEquals("历史数据编码异常，暂无法显示",
                 UiFormatters.readableText("????????", "暂无内容"));
         assertEquals("暂无内容", UiFormatters.readableText(" ", "暂无内容"));
+    }
+
+    @Test
+    void explainsWhenTheBusinessDatabaseSchemaWasNotUpgraded() {
+        SQLException missingColumn = new SQLException("Unknown column 'ticket_type_id'", "42S22", 1054);
+        assertEquals("数据库结构未升级，请联系管理员执行数据库迁移",
+                UiFormatters.chineseError(new DBException("Failed to search orders.", missingColumn)));
+
+        SQLException missingTable = new SQLException("Table 'ticket_types' doesn't exist", "42S02", 1146);
+        assertEquals("数据库结构未升级，请联系管理员执行数据库迁移",
+                UiFormatters.chineseError(new DBException("Failed to load ticket types.", missingTable)));
     }
 }

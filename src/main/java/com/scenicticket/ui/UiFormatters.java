@@ -89,6 +89,9 @@ public final class UiFormatters {
             }
             current = current.getCause();
         }
+        if (containsSchemaMismatch(throwable)) {
+            return "数据库结构未升级，请联系管理员执行数据库迁移";
+        }
         if (containsCause(throwable, DBException.class) || containsCause(throwable, SQLException.class)
                 || containsClassName(throwable, "Mongo")) {
             return "数据库操作失败，请检查数据库服务或稍后重试";
@@ -127,6 +130,22 @@ public final class UiFormatters {
         while (current != null) {
             if (current.getClass().getName().contains(text)) {
                 return true;
+            }
+            current = current.getCause();
+        }
+        return false;
+    }
+
+    private static boolean containsSchemaMismatch(Throwable throwable) {
+        Throwable current = throwable;
+        while (current != null) {
+            if (current instanceof SQLException sqlException) {
+                String sqlState = sqlException.getSQLState();
+                int errorCode = sqlException.getErrorCode();
+                if (sqlState != null && sqlState.startsWith("42")
+                        && (errorCode == 1054 || errorCode == 1146)) {
+                    return true;
+                }
             }
             current = current.getCause();
         }
