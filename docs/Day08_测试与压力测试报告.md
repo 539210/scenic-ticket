@@ -71,9 +71,9 @@ src/test/java/com/scenicticket/service/BatchLogServiceStressTest.java
 ## 默认测试命令
 
 ```powershell
-$env:JAVA_HOME='D:\zulu21.44.17-ca-jdk21.0.8-win_x64\zulu21.44.17-ca-jdk21.0.8-win_x64'
+$env:JAVA_HOME='<JDK_21_HOME>'
 $env:Path="$env:JAVA_HOME\bin;$env:Path"
-& "D:\idea\IntelliJ IDEA Community Edition 2025.2.2\plugins\maven\lib\maven3\bin\mvn.cmd" test
+mvn test
 ```
 
 结果：
@@ -91,9 +91,9 @@ BUILD SUCCESS
 ## 压力测试命令
 
 ```powershell
-$env:JAVA_HOME='D:\zulu21.44.17-ca-jdk21.0.8-win_x64\zulu21.44.17-ca-jdk21.0.8-win_x64'
+$env:JAVA_HOME='<JDK_21_HOME>'
 $env:Path="$env:JAVA_HOME\bin;$env:Path"
-& "D:\idea\IntelliJ IDEA Community Edition 2025.2.2\plugins\maven\lib\maven3\bin\mvn.cmd" test -DstressTests=true
+mvn test -DstressTests=true
 ```
 
 结果：

@@ -238,3 +238,15 @@ BUILD SUCCESS
 - P0/P1 在最终真实套件复核后由 VERIFIED 转为 CLOSED；普通用户和管理员完整流程停止条件已具备真实自动化证据。
 - `mongosh` 不在当前环境，Mongo JS 脚本仍只声明 Java Driver 空库等效验证；真实 Swing 快速连点、断库恢复、滚动布局和完整点击重登继续保留到 M11，未伪报手工通过。
 - M10 退出条件满足；详细证据见 `docs/M10_REAL_DATABASE_ACCEPTANCE.md`。下一步进入 M11 文档一致性、手工桌面冒烟、五分钟演示、答辩问答和最终报告。
+
+## M11 答辩稳定版收尾（2026-07-14）
+
+- README、需求规格、业务规则、数据库迁移、MySQL E-R、MongoDB 集合、Swing 页面和用户手册均按当前实现校准；新增 `DocumentationConsistencyTest` 固定启动入口、隔离测试库命令、页面按钮策略、实际表/字段/对象、四集合/索引以及真实迁移脚本名。
+- 新增 `M11_SWING_MANUAL_ACCEPTANCE.md`、`FIVE_MINUTE_DEMO.md`、`DEFENSE_QA.md` 与 `FINAL_REPORT.md`；未把自动化证据伪报为真实桌面点击结果。
+- Java 21 最终默认 `mvn clean test`：158 tests，0 failures，0 errors，2 skipped，`BUILD SUCCESS`。
+- 隔离 MySQL 空库安装再次通过：10 表、12 外键、2 视图、2 存储过程、2 触发器、60 票种、420 库存、4 迁移记录、非法库存 0。
+- Day08 旧结构升级再次通过：历史用户、档案、订单保留，升级后 10 表、3 票种、21 库存及全部数据库对象完整；随后再次重建空测试库作为最终回归基线。
+- Java 21 最终真实 MySQL/MongoDB/跨库/并发与双角色完整套件：172 tests，0 failures，0 errors，1 skipped，`BUILD SUCCESS`；唯一跳过项为需显式开启的 Fake DAO 压力测试。
+- 审计发现四个 Mongo JS 脚本硬编码 `use("scenic_ticket")`，从测试 URI 执行仍可能切到业务库；已删除内部切库，统一校验连接 URI 当前数据库并登记关闭 `BUG-P1-008`。
+- 官方 `mongosh 2.9.2` 已在空 `scenic_ticket_test` 顺序实跑初始化、Day07 优化及两个 Day09 脚本：4 集合、290 条样例、索引数 7/6/3/7，评论重复组 0，唯一索引成功。
+- 当前只剩由可见桌面执行者完成 Swing 布局、滚动、快速连点、断库和完整重登手工清单；在补证前 M11 与 Goal 保持进行中。

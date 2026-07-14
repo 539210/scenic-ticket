@@ -15,9 +15,9 @@
 ## Maven 验证命令
 
 ```powershell
-$env:JAVA_HOME='D:\zulu21.44.17-ca-jdk21.0.8-win_x64\zulu21.44.17-ca-jdk21.0.8-win_x64'
+$env:JAVA_HOME='<JDK_21_HOME>'
 $env:Path="$env:JAVA_HOME\bin;$env:Path"
-& "D:\idea\IntelliJ IDEA Community Edition 2025.2.2\plugins\maven\lib\maven3\bin\mvn.cmd" test
+mvn test
 ```
 
 ## Maven 验证结果
@@ -30,7 +30,7 @@ Tests run: 1, Failures: 0, Errors: 0, Skipped: 1
 说明：`UserDAOTest` 默认跳过数据库集成测试，避免普通 `mvn test` 强依赖本地 MySQL 数据状态。初始化数据库后，可执行：
 
 ```powershell
-& "D:\idea\IntelliJ IDEA Community Edition 2025.2.2\plugins\maven\lib\maven3\bin\mvn.cmd" test -DintegrationTests=true
+mvn test -DintegrationTests=true
 ```
 
 ## 修正记录

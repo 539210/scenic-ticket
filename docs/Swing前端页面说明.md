@@ -2,7 +2,7 @@
 
 ## 完成范围
 
-在 Day 01 到 Day 07 后端模块基础上，补齐可演示的 Java Swing 前端页面。前端入口仍为：
+在 Day 01 到 Day 09 后端模块基础上，完成可演示并可测试的 Java Swing 前端页面。前端入口仍为：
 
 ```text
 src/main/java/com/scenicticket/Main.java
@@ -13,6 +13,8 @@ src/main/java/com/scenicticket/Main.java
 ```text
 src/main/java/com/scenicticket/ui/AppFrame.java
 ```
+
+`AppFrame` 仅保留窗口、权限、服务装配和业务对话框编排；登录/注册、首页、档案、景点、订单、后台、报表、审计及各业务弹窗均位于独立组件中。数据库按钮路径统一通过 `SwingTaskRunner` 后台执行，并使用会话代次、同名最新请求和忙碌遮罩防止旧回调或重复提交。
 
 ## 页面清单
 
@@ -98,11 +100,13 @@ mvn exec:java
 ## 验证记录
 
 ```text
-Compiling 49 source files with javac [debug release 21]
-Tests run: 45, Failures: 0, Errors: 0, Skipped: 2
+Compiling 102 source files with javac [debug release 21]
+Compiling 58 test source files with javac [debug release 21]
+Default: Tests run: 158, Failures: 0, Errors: 0, Skipped: 2
+Real DB: Tests run: 172, Failures: 0, Errors: 0, Skipped: 1
 BUILD SUCCESS
 ```
 
 ## 说明
 
-本次验证为编译级验证。完整页面操作需要本地 MySQL 和 MongoDB 已启动，并执行初始化脚本后再运行 Swing 应用。
+M11 已在隔离 MySQL/MongoDB 中复跑普通用户和管理员完整服务/数据库流程，并对所有独立 Swing 组件及文档一致性执行自动测试。真实窗口布局、滚动、快速连点、断库恢复和完整鼠标点击流程仍按 `docs/M11_SWING_MANUAL_ACCEPTANCE.md` 手工冒烟，不把自动测试伪报为视觉通过。

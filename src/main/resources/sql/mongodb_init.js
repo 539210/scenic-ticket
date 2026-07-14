@@ -1,4 +1,8 @@
-use("scenic_ticket");
+const allowedDatabases = ["scenic_ticket", "scenic_ticket_test"];
+if (!allowedDatabases.includes(db.getName())) {
+  throw new Error(`Refusing initialization for unexpected database: ${db.getName()}`);
+}
+print(`Initializing MongoDB database: ${db.getName()}`);
 
 const managedCollections = ["action_logs", "comments", "item_details", "system_logs"];
 const existingManagedCollections = db.getCollectionNames().filter(name => managedCollections.includes(name));
@@ -19,18 +23,18 @@ db.createCollection("comments");
 db.createCollection("item_details");
 db.createCollection("system_logs");
 
-db.action_logs.createIndex({ user_id: 1, created_at: -1 });
-db.action_logs.createIndex({ item_id: 1, action_type: 1 });
+db.action_logs.createIndex({ user_id: 1, created_at: -1 }, { name: "idx_action_logs_user_time" });
+db.action_logs.createIndex({ item_id: 1, action_type: 1 }, { name: "idx_action_logs_item_type" });
 db.action_logs.createIndex({ created_at: -1 });
 db.action_logs.createIndex({ created_at: -1, action_type: 1, item_id: 1 });
 
-db.comments.createIndex({ item_id: 1, created_at: -1 });
+db.comments.createIndex({ item_id: 1, created_at: -1 }, { name: "idx_comments_item_time" });
 db.comments.createIndex({ item_id: 1, rating: 1 });
 db.comments.createIndex({ user_id: 1 });
 db.comments.createIndex({ rating: -1, item_id: 1 });
-db.comments.createIndex({ user_id: 1, item_id: 1 }, { unique: true });
+db.comments.createIndex({ user_id: 1, item_id: 1 }, { name: "uq_comments_user_item", unique: true });
 
-db.item_details.createIndex({ item_id: 1 }, { unique: true });
+db.item_details.createIndex({ item_id: 1 }, { name: "uq_item_details_item_id", unique: true });
 db.item_details.createIndex({ "metadata.language": 1 });
 
 db.system_logs.createIndex({ user_id: 1, timestamp: -1 });

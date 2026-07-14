@@ -12,9 +12,9 @@
 ## 验证命令
 
 ```powershell
-$env:JAVA_HOME='D:\zulu21.44.17-ca-jdk21.0.8-win_x64\zulu21.44.17-ca-jdk21.0.8-win_x64'
+$env:JAVA_HOME='<JDK_21_HOME>'
 $env:Path="$env:JAVA_HOME\bin;$env:Path"
-& "D:\idea\IntelliJ IDEA Community Edition 2025.2.2\plugins\maven\lib\maven3\bin\mvn.cmd" test
+mvn test
 ```
 
 ## Maven 验证结果
@@ -34,5 +34,5 @@ MongoDB 聚合实际数据验证需要本机配置 `mongosh` 或在 Java 集成�
 `UserDAOTest` 默认跳过数据库集成测试，所以普通 `mvn test` 不依赖 MySQL/MongoDB 服务状态。需要完整数据库集成验证时，执行：
 
 ```powershell
-& "D:\idea\IntelliJ IDEA Community Edition 2025.2.2\plugins\maven\lib\maven3\bin\mvn.cmd" test -DintegrationTests=true
+mvn test -DintegrationTests=true
 ```

@@ -1,6 +1,6 @@
 # scenic-ticket
 
-景点售票系统，数据库系统开发集训项目第一版工程骨架。
+景点售票系统，面向数据库课程现场答辩的 Java Swing 桌面项目。当前版本已完成数据库迁移、完整票务生命周期、双数据库联查、权限加固、Swing 页面拆分及真实数据库端到端验收。
 
 ## 环境要求
 
@@ -8,7 +8,7 @@
 - Maven 3.8+
 - MySQL 8.0+
 - MongoDB 5.0+
-- Git + Gitee
+- Git + GitHub/Gitee
 
 ## 技术栈
 
@@ -47,7 +47,7 @@ scenic-ticket/
 src/main/resources/db.properties
 ```
 
-真实数据库账号密码只写入 `db.properties`，该文件已加入 `.gitignore`，不得提交到 Gitee。
+真实数据库账号密码只写入 `db.properties`，该文件已加入 `.gitignore`，不得提交到 GitHub 或 Gitee。
 
 默认数据库名称：
 
@@ -64,6 +64,7 @@ src/main/resources/sql/
 
 Day 02 已补充具体建表、索引、视图、存储过程、触发器、初始化数据和 MongoDB 初始化脚本。
 Day 07 增加了索引优化脚本和 MongoDB 聚合索引补充脚本。
+Day 09 增加版本化迁移、票种/每日库存、待支付订单、退款和核销结构；全新安装与已有 Day08 数据升级使用不同的安全验证入口。
 
 MySQL 建议按以下顺序执行：
 
@@ -83,13 +84,13 @@ mysql -uroot -p < src/main/resources/sql/mysql_day09_order_lifecycle_refunds_adm
 MongoDB 初始化：
 
 ```text
-mongosh src/main/resources/sql/mongodb_init.js
-mongosh src/main/resources/sql/mongodb_day07_optimization.js
-mongosh src/main/resources/sql/mongodb_day09_id_compatibility.js
-mongosh src/main/resources/sql/mongodb_day09_indexes.js
+mongosh "mongodb://localhost:27017/scenic_ticket" --file src/main/resources/sql/mongodb_init.js
+mongosh "mongodb://localhost:27017/scenic_ticket" --file src/main/resources/sql/mongodb_day07_optimization.js
+mongosh "mongodb://localhost:27017/scenic_ticket" --file src/main/resources/sql/mongodb_day09_id_compatibility.js
+mongosh "mongodb://localhost:27017/scenic_ticket" --file src/main/resources/sql/mongodb_day09_indexes.js
 ```
 
-`mongodb_init.js` 只用于空数据库；检测到受管集合已经存在时会拒绝执行。已有数据库必须使用 Day09 迁移脚本，不能通过重新运行初始化脚本清空数据。
+脚本以连接 URI 中的数据库为目标，只允许 `scenic_ticket` 或 `scenic_ticket_test`，不再在脚本内部切换数据库。`mongodb_init.js` 只用于空数据库；检测到受管集合已经存在时会拒绝执行。已有数据库必须使用 Day09 迁移脚本，不能通过重新运行初始化脚本清空数据。
 
 MySQL 全新安装和 Day08 升级可在隔离测试库验证（只允许操作 `scenic_ticket_test`）：
 
@@ -114,7 +115,7 @@ Day 01 初始提交信息：
 
 ## 运行说明
 
-当前已完成项目骨架、数据库脚本、DAO 基础类、用户模块、核心业务模块、订单事务、MongoDB 日志/详情 DAO、推荐与跨库联查、统计报表与系统审计模块、性能优化、Swing 前端页面，以及 Day 08 单元测试、事务回滚测试和压力测试。安装并配置 Maven 后，可使用 Maven 编译和测试：
+当前已完成用户、分类、景点、票种/日期库存、待支付/支付/取消/退款、核销、评论、推荐、统计、审计及管理员后台。Swing 页面、表格、弹窗、输入解析和异步任务均已拆成可测试组件。安装并配置 Maven 后，可使用 Java 21 执行默认测试：
 
 ```text
 mvn test
@@ -134,7 +135,7 @@ Swing 前端采用统一浅色业务风格，包含登录入口、独立注册�
 普通用户登录后只显示用户侧页面；管理员登录后显示完整页面，并额外包含后台管理和系统审计。
 管理员权限同时在服务层校验；退出会写入审计日志并隔离旧异步任务，账号切换后不会回写上一会话的数据。
 后台分类支持修改父级并阻止循环；景点支持名称、分类、价格、状态、简介、图片地址和 JSON 扩展属性维护。用户侧的概览、简介和评论使用独立页签，历史字符串 `item_id` 详情/评论可兼容读取并在编辑时规范化。评论提交由服务层重查已支付未退款订单，同一用户对同一景点再次提交会修改原评论；列表显示脱敏用户、评分、正文、标签和创建/更新时间。
-后台“票种与库存”支持多票种价格/优惠/状态及每日总库存维护；用户可按未来日期范围查看可售票种、折后价和剩余数量。库存写入采用 MySQL 事务和行锁，管理员不能把总库存调到已预留与已售数量之下。
+后台“票种与库存”支持多票种价格/优惠/状态及每日总库存维护；用户可按今天或未来日期范围查看可售票种、折后价和剩余数量。库存写入采用 MySQL 事务和行锁，管理员不能把总库存调到已预留与已售数量之下。
 购票会创建保留 15 分钟库存的待支付订单，不会直接显示已支付；用户在“我的订单”主动确认模拟支付。待支付订单可取消，已支付且未到游玩日期、未完成、未核销的订单可申请模拟退款，退款记录、订单状态和库存恢复在同一 MySQL 事务完成。
 管理员可在“后台管理 → 门票核销”按订单 ID 和数量分批核销游玩日期当天的已支付门票；全部数量核销后订单自动完成。已有任何核销记录的订单均不能退款。
 景点门票原价和优惠减免比例由管理员维护，界面同时展示原价、优惠、折后单价和实付总额；普通用户购买时只填写票数并选择模拟付款方式。
@@ -146,13 +147,7 @@ Swing 前端采用统一浅色业务风格，包含登录入口、独立注册�
 密码：ksc123456
 ```
 
-`UserDAOTest` 默认跳过数据库集成测试；初始化本地 MySQL 数据库后，可显式开启：
-
-```text
-mvn test -DintegrationTests=true
-```
-
-真实集成测试必须显式覆盖为测试数据库；代码中的保护器会拒绝其他数据库名：
+真实集成测试必须同时显式覆盖 MySQL 和 MongoDB 测试库；代码中的保护器会拒绝任何非 `scenic_ticket_test` 目标：
 
 ```powershell
 mvn clean test -DintegrationTests=true `
@@ -166,6 +161,18 @@ Day 08 压力测试默认跳过；需要执行 10000 条日志 + 50 并发测试
 mvn test -DstressTests=true
 ```
 
+2026-07-14 的 M10 验收结果：默认套件 `153 tests, 0 failures, 0 errors, 2 skipped`；真实 MySQL/MongoDB/跨库/并发套件 `167 tests, 0 failures, 0 errors, 1 skipped`。全新安装、Day08 升级和双角色完整流程见 [`docs/M10_REAL_DATABASE_ACCEPTANCE.md`](docs/M10_REAL_DATABASE_ACCEPTANCE.md)。
+
+M11 文档一致性回归加入后，最终复跑结果为：默认套件 `158 tests, 0 failures, 0 errors, 2 skipped`；真实数据库完整套件 `172 tests, 0 failures, 0 errors, 1 skipped`，两轮均为 `BUILD SUCCESS`。
+
+## 答辩与验收资料
+
+- [用户使用手册](docs/用户使用手册.md)
+- [M11 Swing 手工验收清单](docs/M11_SWING_MANUAL_ACCEPTANCE.md)
+- [五分钟演示流程](docs/FIVE_MINUTE_DEMO.md)
+- [常见答辩问题](docs/DEFENSE_QA.md)
+- [稳定化最终报告](docs/FINAL_REPORT.md)
+
 ## 当前进度
 
 - Day 01：项目结构、需求规格说明、MySQL E-R 图、MongoDB 集合设计。
@@ -176,4 +183,5 @@ mvn test -DstressTests=true
 - Day 06：数据统计报表、MySQL 月度订单存储过程调用、MongoDB 系统操作审计聚合。
 - Day 07：索引与 SQL 优化、批量日志写入、输入安全校验、Swing 系统集成入口、性能优化报告和安全检查清单。
 - Day 08：补充 JUnit 单元测试、订单事务回滚测试、批量日志压力测试和测试报告。
-- Swing 前端：补齐可演示页面，覆盖登录入口、独立注册、景点浏览、推荐入口、订单、评论、后台管理、统计和审计。
+- Day 09 / M1–M10：完成安全迁移、权限、票种库存、订单生命周期、退款核销、评论唯一性、推荐/审计修复、Swing 重构和真实数据库完整业务流验收。
+- Day 11 / M11：需求、数据库设计、用户手册、演示流程、答辩问答和最终报告已校准，默认/真实数据库最终全量回归通过；真实视觉冒烟仍按验收清单收尾。

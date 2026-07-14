@@ -1,9 +1,8 @@
-use("scenic_ticket");
-
 const allowedDatabases = ["scenic_ticket", "scenic_ticket_test"];
 if (!allowedDatabases.includes(db.getName())) {
   throw new Error(`Refusing migration for unexpected database: ${db.getName()}`);
 }
+print(`Migrating MongoDB database: ${db.getName()}`);
 
 function convertNumericString(collectionName, fieldName) {
   const collection = db.getCollection(collectionName);

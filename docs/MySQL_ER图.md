@@ -1,5 +1,7 @@
 # MySQL E-R 图
 
+更新时间：2026-07-14（M10 实库校准）
+
 ## 1. 实体说明
 
 MySQL 负责存储强一致的核心业务数据，包括用户、分类、景点、订单、用户档案。MongoDB 文档通过 `user_id` 和 `item_id` 引用 MySQL 中的用户和景点数据。
@@ -20,6 +22,12 @@ erDiagram
     ticket_types ||--o{ orders : selected_as
     orders ||--o| refunds : may_refund
     orders ||--o{ admissions : admits
+
+    schema_migrations {
+        VARCHAR version PK
+        VARCHAR description
+        DATETIME applied_at
+    }
 
     users {
         BIGINT user_id PK
@@ -52,6 +60,8 @@ erDiagram
         BIGINT item_id PK
         VARCHAR title
         BIGINT category_id FK
+        DECIMAL price
+        DECIMAL discount_rate
         TINYINT status
         DATETIME created_at
         DATETIME updated_at
@@ -62,8 +72,10 @@ erDiagram
         BIGINT user_id FK
         BIGINT item_id FK
         DECIMAL amount
-        TINYINT status
-        DATETIME created_at
+        INT quantity
+        DECIMAL unit_price
+        DECIMAL discount_rate
+        VARCHAR payment_method
         BIGINT ticket_type_id FK
         VARCHAR ticket_type_name_snapshot
         DECIMAL original_unit_price
@@ -71,7 +83,12 @@ erDiagram
         DATE visit_date
         DATETIME expires_at
         DATETIME paid_at
+        DATETIME cancelled_at
+        DATETIME completed_at
         DATETIME refunded_at
+        INT status_version
+        TINYINT status
+        DATETIME created_at
     }
 
     ticket_types {
@@ -81,6 +98,8 @@ erDiagram
         DECIMAL original_price
         DECIMAL discount_rate
         TINYINT status
+        DATETIME created_at
+        DATETIME updated_at
     }
 
     ticket_inventory {
@@ -92,15 +111,19 @@ erDiagram
         INT reserved_stock
         INT sold_stock
         INT version
+        DATETIME created_at
+        DATETIME updated_at
     }
 
     refunds {
         BIGINT refund_id PK
         BIGINT order_id FK
         DECIMAL refund_amount
+        VARCHAR reason
         VARCHAR status
         BIGINT operator_user_id FK
         DATETIME refunded_at
+        DATETIME created_at
     }
 
     admissions {
@@ -109,6 +132,7 @@ erDiagram
         INT quantity
         BIGINT operator_user_id FK
         DATETIME admitted_at
+        VARCHAR note
     }
 ```
 
@@ -127,6 +151,8 @@ erDiagram
 | orders - refunds | 1:0..1 | 一个订单最多一条成功模拟退款记录 |
 | orders - admissions | 1:N | 支持分次数量核销，累计不得超过订单数量 |
 
+`schema_migrations` 是独立的版本记录表，不参与业务外键关系。M10 全新安装实库共 10 张表：5 张课程原表、4 张票务扩展表和 1 张迁移记录表。
+
 ## 4. 索引规划
 
 | 表 | 字段 | 类型 | 用途 |
@@ -136,8 +162,10 @@ erDiagram
 | users | role, status | 普通索引 | 后台用户筛选 |
 | categories | parent_id | 普通索引 | 查询子分类 |
 | items | category_id, status | 普通索引 | 景点分类与状态查询 |
+| items | status, updated_at, item_id | 普通索引 | 后台状态与更新时间分页 |
 | orders | user_id, created_at | 普通索引 | 用户订单查询 |
 | orders | item_id, status | 普通索引 | 景点订单统计 |
+| orders | status, created_at | 普通索引 | 过期/状态批量扫描 |
 | ticket_types | item_id, status | 普通索引 | 查询景点可售票种 |
 | ticket_inventory | ticket_type_id, visit_date | 唯一索引 | 锁定单票种单日期库存行 |
 | ticket_inventory | visit_date, available_stock | 普通索引 | 查询日期可售库存 |
@@ -161,3 +189,10 @@ erDiagram
 - `orders.ticket_type_id` 对历史订单保持可空；迁移优先关联同景点“成人票”，并保存名称、原价、折后价、日期与时间快照。
 - 新业务只能通过服务层创建字段完整的订单；兼容空值不等于允许新订单缺字段。
 - `ticket_inventory` 使用 available/reserved/sold 三段库存，三者之和不得超过 total，所有值不得为负。
+
+## 7. M10 真实结构校准
+
+- 全新 `scenic_ticket_test` 安装实测：10 表、12 外键、2 视图、2 存储过程、2 触发器、4 条迁移记录。
+- 初始化后包含 60 个票种与 420 条每日库存，非法库存记录为 0。
+- Day08 历史夹具升级后，原用户、档案、订单及课程字段全部保留，并补齐票种、价格快照和生命周期字段。
+- `orders.status`：`0=待支付`、`1=已支付`、`2=已取消/已退款`、`3=已完成`；`status_version` 用于状态并发控制，退款事实以 `refunds` 记录和 `refunded_at` 辅助区分。
