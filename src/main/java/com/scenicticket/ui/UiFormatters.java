@@ -64,6 +64,13 @@ public final class UiFormatters {
         return String.format("%.1f", Math.max(0.0, Math.min(100.0, score)));
     }
 
+    public static String ratingScore(Double score) {
+        if (score == null || score <= 0) {
+            return "暂无评分";
+        }
+        return String.format("%.1f / 5", Math.max(0.0, Math.min(5.0, score)));
+    }
+
     public static BigDecimal orderAmount(BigDecimal price, BigDecimal discount, int quantity) {
         if (price == null || quantity <= 0) {
             return BigDecimal.ZERO.setScale(2);

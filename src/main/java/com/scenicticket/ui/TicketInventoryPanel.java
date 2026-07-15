@@ -20,7 +20,7 @@ import java.util.List;
 public final class TicketInventoryPanel extends JPanel {
     private final UiTaskExecutor taskExecutor;
     private final Actions actions;
-    private final JTextField itemIdField = new JTextField("1", 7);
+    private final JTextField itemIdField = new JTextField(7);
     private final JTextField typeNameField = new JTextField(12);
     private final JTextField typePriceField = new JTextField("80.00", 8);
     private final JTextField typeDiscountField = new JTextField("0", 6);
@@ -32,9 +32,9 @@ public final class TicketInventoryPanel extends JPanel {
     private TicketType selectedType;
 
     private final JTextField inventoryTypeIdField = new JTextField(8);
-    private final JTextField startDateField = new JTextField(LocalDate.now().toString(), 10);
-    private final JTextField endDateField = new JTextField(LocalDate.now().plusDays(14).toString(), 10);
-    private final JTextField maintainDateField = new JTextField(LocalDate.now().plusDays(1).toString(), 10);
+    private final DatePickerField startDateField = new DatePickerField(LocalDate.now());
+    private final DatePickerField endDateField = new DatePickerField(LocalDate.now().plusDays(14));
+    private final DatePickerField maintainDateField = new DatePickerField(LocalDate.now().plusDays(1));
     private final JTextField totalStockField = new JTextField("100", 8);
     private final DefaultTableModel inventoryModel = inventoryModel();
 
@@ -58,7 +58,7 @@ public final class TicketInventoryPanel extends JPanel {
         JPanel toolbar = UiComponents.toolbar();
         JButton queryButton = UiComponents.primaryButton("查询票种");
         JButton createButton = UiComponents.primaryButton("新增票种");
-        toolbar.add(new JLabel("景点ID"));
+        toolbar.add(new JLabel("景点ID（留空查全部）"));
         toolbar.add(itemIdField);
         toolbar.add(new JLabel("票种名称"));
         toolbar.add(typeNameField);
@@ -101,7 +101,7 @@ public final class TicketInventoryPanel extends JPanel {
         queryButton.addActionListener(event -> loadInventory(inventorySnapshot(), null));
         inventoryTypeIdField.addActionListener(event -> loadInventory(inventorySnapshot(), null));
         saveButton.addActionListener(event -> saveInventory());
-        page.add(UiComponents.card("按日期维护库存（日期格式 yyyy-MM-dd）", toolbar), BorderLayout.NORTH);
+        page.add(UiComponents.card("按日期维护库存（点击日期框选择）", toolbar), BorderLayout.NORTH);
         page.add(UiComponents.card("每日库存列表", UiComponents.scroll(UiComponents.table(inventoryModel))),
                 BorderLayout.CENTER);
         return page;
@@ -129,8 +129,10 @@ public final class TicketInventoryPanel extends JPanel {
 
     private void loadTypes(String itemIdText, String completionMessage) {
         taskExecutor.run("查询票种", () -> {
-            long itemId = UiInputParsers.requiredLong(itemIdText, "景点ID");
-            return new TicketTypeQueryResult(actions.listTypes(itemId));
+            String value = itemIdText == null ? "" : itemIdText.trim();
+            return new TicketTypeQueryResult(value.isEmpty()
+                    ? actions.listAllTypes()
+                    : actions.listTypes(UiInputParsers.requiredLong(value, "景点ID")));
         }, result -> showTypes(result.types(), completionMessage));
     }
 
@@ -180,7 +182,7 @@ public final class TicketInventoryPanel extends JPanel {
     }
 
     private InventoryRangeSnapshot inventorySnapshot() {
-        return new InventoryRangeSnapshot(inventoryTypeIdField.getText(), startDateField.getText(), endDateField.getText());
+        return new InventoryRangeSnapshot(inventoryTypeIdField.getText(), startDateField.getDate(), endDateField.getDate());
     }
 
     private void loadInventory(InventoryRangeSnapshot snapshot, String completionMessage) {
@@ -201,10 +203,10 @@ public final class TicketInventoryPanel extends JPanel {
 
     private void saveInventory() {
         InventoryRangeSnapshot rangeSnapshot = inventorySnapshot();
-        String maintainDateText = maintainDateField.getText();
+        LocalDate maintainDate = maintainDateField.getDate();
         String totalStockText = totalStockField.getText();
         taskExecutor.run("设置每日库存", () -> actions.setTotalStock(rangeSnapshot.ticketTypeId(),
-                UiInputParsers.requiredDate(maintainDateText, "维护日期"),
+                maintainDate,
                 UiInputParsers.requiredInt(totalStockText, "总库存")), inventory ->
                 loadInventory(rangeSnapshot, "库存已保存，可售 " + inventory.getAvailableStock() + " 张"));
     }
@@ -237,9 +239,9 @@ public final class TicketInventoryPanel extends JPanel {
     void setInventoryForm(String ticketTypeId, String startDate, String endDate,
                           String maintainDate, String totalStock) {
         inventoryTypeIdField.setText(ticketTypeId);
-        startDateField.setText(startDate);
-        endDateField.setText(endDate);
-        maintainDateField.setText(maintainDate);
+        startDateField.setDate(UiInputParsers.requiredDate(startDate, "开始日期"));
+        endDateField.setDate(UiInputParsers.requiredDate(endDate, "结束日期"));
+        maintainDateField.setDate(UiInputParsers.requiredDate(maintainDate, "维护日期"));
         totalStockField.setText(totalStock);
     }
 
@@ -274,6 +276,10 @@ public final class TicketInventoryPanel extends JPanel {
     public interface Actions {
         List<TicketType> listTypes(long itemId);
 
+        default List<TicketType> listAllTypes() {
+            return listTypes(1L);
+        }
+
         long createType(long itemId, String name, BigDecimal price, BigDecimal discount);
 
         boolean updateType(long ticketTypeId, String name, BigDecimal price, BigDecimal discount, int status);
@@ -306,17 +312,10 @@ public final class TicketInventoryPanel extends JPanel {
         }
     }
 
-    private record InventoryRangeSnapshot(String ticketTypeIdText, String startDateText, String endDateText) {
+    private record InventoryRangeSnapshot(String ticketTypeIdText, LocalDate startDate, LocalDate endDate) {
         private long ticketTypeId() {
             return UiInputParsers.requiredLong(ticketTypeIdText, "票种ID");
         }
 
-        private LocalDate startDate() {
-            return UiInputParsers.requiredDate(startDateText, "开始日期");
-        }
-
-        private LocalDate endDate() {
-            return UiInputParsers.requiredDate(endDateText, "结束日期");
-        }
     }
 }

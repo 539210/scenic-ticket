@@ -35,40 +35,11 @@ public class RecommendService {
     }
 
     public List<RecommendationDTO> recommendForUser(long userId, int limit) {
-        int safeLimit = normalizeLimit(limit);
-        List<Document> userScores = logDAO.aggregateUserItemScores(userId, 20);
-        List<Long> interactedItemIds = extractItemIds(userScores);
-        List<Item> interactedItems = itemDAO.findByIds(interactedItemIds);
-
-        Set<Long> categoryIds = new LinkedHashSet<>();
-        Set<Long> excludedItemIds = new LinkedHashSet<>(interactedItemIds);
-        for (Item item : interactedItems) {
-            categoryIds.add(item.getCategoryId());
-        }
-
-        List<RecommendationDTO> recommendations = new ArrayList<>();
-        List<Item> sameCategoryItems = itemDAO.findActiveByCategoryIds(categoryIds, excludedItemIds, safeLimit);
-        for (Item item : sameCategoryItems) {
-            recommendations.add(toRecommendation(item, 85.0, "根据你的浏览、评论或下单偏好推荐同类景点"));
-        }
-
-        if (recommendations.size() < safeLimit) {
-            recommendations.addAll(fillWithHotItems(null, null, safeLimit - recommendations.size(), excludedItemIds, "热门景点补充推荐"));
-        }
-        if (recommendations.size() < safeLimit) {
-            for (Item item : itemDAO.findLatestActive(safeLimit - recommendations.size())) {
-                if (!containsItem(recommendations, item.getItemId()) && !excludedItemIds.contains(item.getItemId())) {
-                    recommendations.add(toRecommendation(item, 60.0, "最新上架景点推荐"));
-                }
-            }
-        }
-        return recommendations.stream()
-                .limit(safeLimit)
-                .toList();
+        return recommendTopRatedItems(limit);
     }
 
     public List<RecommendationDTO> recommendHotItems(Date startTime, Date endTime, int limit) {
-        return fillWithHotItems(startTime, endTime, normalizeLimit(limit), Set.of(), "近期热门景点");
+        return recommendTopRatedItems(limit);
     }
 
     public List<RecommendationDTO> recommendTopRatedItems(int limit) {
@@ -78,15 +49,32 @@ public class RecommendService {
         for (Document document : ratedItems) {
             Long itemId = readLong(document.get("_id"));
             if (itemId != null) {
-                scores.put(itemId, toPercentScore(readDouble(document.get("avg_rating")), 5.0));
+                scores.put(itemId, readDouble(document.get("avg_rating")));
             }
         }
         List<Item> items = itemDAO.findByIds(new ArrayList<>(scores.keySet()));
         return items.stream()
-                .map(item -> toRecommendation(item, scores.getOrDefault(item.getItemId(), 0.0), "高评分景点推荐"))
+                .filter(item -> item.getStatus() != null && item.getStatus() == 1)
+                .map(item -> toRecommendation(item, scores.getOrDefault(item.getItemId(), 0.0),
+                        "游客平均评分 " + String.format("%.1f / 5", scores.getOrDefault(item.getItemId(), 0.0))))
                 .sorted(Comparator.comparingDouble(RecommendationDTO::getScore).reversed())
                 .limit(safeLimit)
                 .toList();
+    }
+
+    public Map<Long, Double> ratingScores(List<Long> itemIds) {
+        Map<Long, Double> ratings = new LinkedHashMap<>();
+        if (itemIds == null) {
+            return ratings;
+        }
+        for (Long itemId : itemIds.stream().filter(java.util.Objects::nonNull).distinct().toList()) {
+            Document summary = commentDAO.aggregateRatingByItem(itemId);
+            double average = summary == null ? 0.0 : readDouble(summary.get("avg_rating"));
+            if (average > 0) {
+                ratings.put(itemId, average);
+            }
+        }
+        return ratings;
     }
 
     private List<RecommendationDTO> fillWithHotItems(Date startTime, Date endTime, int limit, Set<Long> excludedItemIds, String reason) {

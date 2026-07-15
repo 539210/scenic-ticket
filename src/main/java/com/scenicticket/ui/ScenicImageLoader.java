@@ -11,6 +11,8 @@ import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URI;
 import java.net.URLConnection;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
@@ -52,10 +54,24 @@ public final class ScenicImageLoader {
     }
 
     private BufferedImage download(String source) throws IOException {
-        URI uri = URI.create(source);
+        if (source.matches("^[A-Za-z]:[\\\\/].*")) {
+            return readLocal(Path.of(source));
+        }
+        URI uri;
+        try {
+            uri = URI.create(source);
+        } catch (IllegalArgumentException malformedUri) {
+            return readLocal(Path.of(source));
+        }
         String scheme = uri.getScheme() == null ? "" : uri.getScheme().toLowerCase(Locale.ROOT);
+        if (scheme.isEmpty()) {
+            return readLocal(Path.of(source));
+        }
+        if ("file".equals(scheme)) {
+            return readLocal(Path.of(uri));
+        }
         if (!"http".equals(scheme) && !"https".equals(scheme)) {
-            throw new IllegalArgumentException("只支持 HTTP/HTTPS 图片地址");
+            throw new IllegalArgumentException("不支持的图片来源");
         }
 
         URLConnection connection = uri.toURL().openConnection();
@@ -82,6 +98,16 @@ public final class ScenicImageLoader {
             if (connection instanceof HttpURLConnection httpConnection) {
                 httpConnection.disconnect();
             }
+        }
+    }
+
+    private BufferedImage readLocal(Path path) throws IOException {
+        Path normalized = path.toAbsolutePath().normalize();
+        if (!Files.isRegularFile(normalized) || Files.size(normalized) > MAX_IMAGE_BYTES) {
+            throw new IOException("本地图片不存在或超过 10 MB");
+        }
+        try (InputStream inputStream = Files.newInputStream(normalized)) {
+            return ImageIO.read(inputStream);
         }
     }
 

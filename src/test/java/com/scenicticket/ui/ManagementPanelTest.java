@@ -56,19 +56,14 @@ class ManagementPanelTest {
         panel.selectItemRow(0);
         panel.setItemBasicForm("新景点名称", 1);
 
-        click(panel, "更新名称和分类");
+        panel.setItemPricingForm("88.50", "12.5");
+        click(panel, "保存景点修改");
         assertEquals(11L, actions.updatedItemId);
         assertEquals("新景点名称", actions.updatedTitle);
         assertEquals(2L, actions.updatedCategoryId);
-        assertEquals("景点名称和分类已更新", last(actions.statuses));
-
-        panel.selectItemRow(0);
-        panel.setItemPricingForm("88.50", "12.5");
-        click(panel, "更新票价和优惠");
-
         assertEquals(new BigDecimal("88.50"), actions.updatedPrice);
         assertEquals(new BigDecimal("12.5"), actions.updatedDiscount);
-        assertEquals("景点票价和优惠已保存", last(actions.statuses));
+        assertEquals("景点全部信息已同步更新", last(actions.statuses));
     }
 
     @Test

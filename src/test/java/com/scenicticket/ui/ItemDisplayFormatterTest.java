@@ -23,7 +23,9 @@ class ItemDisplayFormatterTest {
     void introductionShowsIndependentBusinessFieldsAndStructuredDetail() {
         CrossDatabaseItemDTO dto = dto("苏州园林中文简介",
                 List.of("https://img/a.jpg", "https://img/b.jpg"),
-                new Document("source", "MongoDB"));
+                new Document("open_time", "08:30-17:30")
+                        .append("address", "苏州市园林路 1 号")
+                        .append("notice", "请提前预约"));
 
         String text = formatter.formatIntroduction(dto);
 
@@ -32,11 +34,14 @@ class ItemDisplayFormatterTest {
         assertTrue(text.contains("门票原价：¥100.00"));
         assertTrue(text.contains("优惠：减免20%"));
         assertTrue(text.contains("折后单价：¥80.00"));
-        assertTrue(text.contains("状态：上架"));
+        assertTrue(!text.contains("状态："));
         assertTrue(text.contains("简介：苏州园林中文简介"));
         assertTrue(!text.contains("图片地址"));
         assertTrue(!text.contains("https://img/a.jpg"));
-        assertTrue(text.contains("\"source\": \"MongoDB\""));
+        assertTrue(text.contains("开放时间：08:30-17:30"));
+        assertTrue(text.contains("景点地址：苏州市园林路 1 号"));
+        assertTrue(text.contains("游览提示：请提前预约"));
+        assertTrue(!text.contains("扩展属性"));
     }
 
     @Test
@@ -47,7 +52,8 @@ class ItemDisplayFormatterTest {
         assertTrue(formatter.formatIntroduction(missing).contains("简介：管理员暂未填写景点简介"));
         String corruptedText = formatter.formatIntroduction(corrupted);
         assertTrue(corruptedText.contains("简介：历史数据编码异常，暂无法显示"));
-        assertTrue(corruptedText.contains("\"legacy\": true"));
+        assertTrue(corruptedText.contains("开放时间：暂未填写"));
+        assertTrue(!corruptedText.contains("legacy"));
     }
 
     @Test

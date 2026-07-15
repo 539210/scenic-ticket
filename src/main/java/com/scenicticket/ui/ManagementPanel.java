@@ -15,6 +15,8 @@ import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.table.DefaultTableModel;
 import java.awt.BorderLayout;
+import java.awt.Dimension;
+import java.awt.FlowLayout;
 import java.awt.GridLayout;
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -39,13 +41,13 @@ public final class ManagementPanel extends JPanel {
     private final JTextField itemPriceField = new JTextField(8);
     private final JTextField itemDiscountField = new JTextField(6);
     private final JComboBox<String> itemStatusBox = new JComboBox<>(new String[]{"下架", "上架"});
-    private final JButton basicItemButton = UiComponents.primaryButton("更新名称和分类");
-    private final JButton pricingButton = UiComponents.primaryButton("更新票价和优惠");
-    private final JButton itemStatusButton = UiComponents.secondaryButton("更新上下架");
     private final JTextArea itemIntroArea = textArea(4, 48);
-    private final JTextArea itemImagesArea = textArea(3, 48);
-    private final JTextArea itemMetadataArea = textArea(3, 48);
-    private final JButton updateIntroButton = UiComponents.primaryButton("更新完整详情");
+    private final ScenicImageDropPanel itemImagesPanel = new ScenicImageDropPanel();
+    private final JTextField itemOpenTimeField = new JTextField(16);
+    private final JTextField itemAddressField = new JTextField(24);
+    private final JTextArea itemNoticeArea = textArea(3, 40);
+    private final JButton updateItemButton = UiComponents.primaryButton("保存景点修改");
+    private Document selectedMetadata = new Document();
 
     private final DefaultTableModel categoryModel = categoryModel();
     private final JTable categoryTable = UiComponents.table(categoryModel);
@@ -111,30 +113,28 @@ public final class ManagementPanel extends JPanel {
         editToolbar.add(itemTitleField);
         editToolbar.add(new JLabel("分类"));
         editToolbar.add(itemEditCategoryBox);
-        editToolbar.add(basicItemButton);
         editToolbar.add(new JLabel("门票原价"));
         editToolbar.add(itemPriceField);
         JLabel discountLabel = new JLabel("优惠减免%");
         discountLabel.setToolTipText("例如填写20表示减免20%，即按原价的80%售票");
         editToolbar.add(discountLabel);
         editToolbar.add(itemDiscountField);
-        editToolbar.add(pricingButton);
         editToolbar.add(new JLabel("状态"));
         editToolbar.add(itemStatusBox);
-        editToolbar.add(itemStatusButton);
-        basicItemButton.addActionListener(event -> updateItemBasic());
-        pricingButton.addActionListener(event -> updateItemPricing());
-        itemStatusButton.addActionListener(event -> updateItemStatus());
 
         JTabbedPane detailTabs = new JTabbedPane();
         detailTabs.addTab("景点简介", new JScrollPane(itemIntroArea));
-        detailTabs.addTab("图片地址（每行一个）", new JScrollPane(itemImagesArea));
-        detailTabs.addTab("扩展属性（JSON）", new JScrollPane(itemMetadataArea));
-        JPanel detailEditor = new JPanel(new BorderLayout(10, 0));
+        detailTabs.addTab("景点图片（拖拽导入）", itemImagesPanel);
+        detailTabs.addTab("开放信息", createMetadataEditor());
+        JPanel detailEditor = new JPanel(new BorderLayout(10, 6));
         detailEditor.setOpaque(false);
         detailEditor.add(detailTabs, BorderLayout.CENTER);
-        detailEditor.add(updateIntroButton, BorderLayout.EAST);
-        updateIntroButton.addActionListener(event -> updateItemDetail());
+        updateItemButton.setPreferredSize(new Dimension(138, 36));
+        JPanel saveBar = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
+        saveBar.setOpaque(false);
+        saveBar.add(updateItemButton);
+        detailEditor.add(saveBar, BorderLayout.SOUTH);
+        updateItemButton.addActionListener(event -> updateSelectedItem());
 
         JPanel top = new JPanel(new GridLayout(3, 1, 0, 8));
         top.setOpaque(false);
@@ -144,6 +144,25 @@ public final class ManagementPanel extends JPanel {
         page.add(top, BorderLayout.NORTH);
         page.add(UiComponents.card("景点列表", UiComponents.scroll(itemTable)), BorderLayout.CENTER);
         return page;
+    }
+
+    private JPanel createMetadataEditor() {
+        JPanel fields = new JPanel(new GridLayout(3, 1, 0, 6));
+        fields.setOpaque(false);
+        JPanel openTime = UiComponents.toolbar();
+        openTime.add(new JLabel("开放时间"));
+        openTime.add(itemOpenTimeField);
+        JPanel address = UiComponents.toolbar();
+        address.add(new JLabel("景点地址"));
+        address.add(itemAddressField);
+        JPanel notice = new JPanel(new BorderLayout(6, 0));
+        notice.setOpaque(false);
+        notice.add(new JLabel("游览提示"), BorderLayout.WEST);
+        notice.add(new JScrollPane(itemNoticeArea), BorderLayout.CENTER);
+        fields.add(openTime);
+        fields.add(address);
+        fields.add(notice);
+        return fields;
     }
 
     private JPanel createCategoryPage() {
@@ -258,51 +277,52 @@ public final class ManagementPanel extends JPanel {
         taskExecutor.run("加载景点详情", () -> actions.itemDetail(itemId), detail -> {
             if (isSelectedItem(itemId)) {
                 itemIntroArea.setText(UiFormatters.readableText(detail == null ? null : detail.get("description"), ""));
-                itemImagesArea.setText(formatImages(detail));
+                itemImagesPanel.setImageSources(detail == null ? null : detail.getList("images", Object.class));
                 Document metadata = detail == null ? null : detail.get("metadata", Document.class);
-                itemMetadataArea.setText(metadata == null || metadata.isEmpty() ? "{}" : metadata.toJson());
+                selectedMetadata = metadata == null ? new Document() : new Document(metadata);
+                itemOpenTimeField.setText(UiFormatters.readableText(selectedMetadata.get("open_time"), ""));
+                itemAddressField.setText(UiFormatters.readableText(selectedMetadata.get("address"), ""));
+                itemNoticeArea.setText(UiFormatters.readableText(selectedMetadata.get("notice"), ""));
             }
         });
     }
 
-    private void updateItemBasic() {
+    private void updateSelectedItem() {
         long itemId = requireSelectedItemId();
         String title = itemTitleField.getText();
         Long categoryId = selectedCategoryId(itemEditCategoryBox);
         if (categoryId == null || categoryId <= 0) {
             throw new IllegalArgumentException("请选择景点类型");
         }
-        ItemFilterSnapshot filter = itemFilterSnapshot();
-        taskExecutor.run("更新景点名称和分类", () -> actions.updateItem(itemId, title, categoryId), updated ->
-                loadItems(filter, updated ? "景点名称和分类已更新" : "景点基本信息没有变化"));
-    }
-
-    private void updateItemPricing() {
-        long itemId = requireSelectedItemId();
         String priceText = itemPriceField.getText();
         String discountText = itemDiscountField.getText();
-        ItemFilterSnapshot filter = itemFilterSnapshot();
-        taskExecutor.run("更新票价和优惠", () -> actions.updateItemPricing(itemId,
-                UiInputParsers.requiredAmount(priceText, "票价"),
-                UiInputParsers.requiredAmount(discountText, "优惠减免比例")), updated ->
-                loadItems(filter, updated ? "景点票价和优惠已保存" : "票价和优惠没有变化"));
-    }
-
-    private void updateItemStatus() {
-        long itemId = requireSelectedItemId();
         int status = itemStatusBox.getSelectedIndex();
+        String description = itemIntroArea.getText();
+        List<String> images = itemImagesPanel.getImageSources();
+        Document metadata = metadataSnapshot();
         ItemFilterSnapshot filter = itemFilterSnapshot();
-        taskExecutor.run("更新上下架状态", () -> actions.updateItemStatus(itemId, status), updated ->
-                loadItems(filter, updated ? "景点上下架状态已更新" : "景点状态没有变化"));
+        taskExecutor.run("保存景点修改", () -> actions.updateItemComplete(itemId, title, categoryId,
+                UiInputParsers.requiredAmount(priceText, "票价"),
+                UiInputParsers.requiredAmount(discountText, "优惠减免比例"), status,
+                description, images, metadata), updated ->
+                loadItems(filter, updated ? "景点全部信息已同步更新" : "景点信息没有变化"));
     }
 
-    private void updateItemDetail() {
-        long itemId = requireSelectedItemId();
-        String description = itemIntroArea.getText();
-        String images = itemImagesArea.getText();
-        String metadata = itemMetadataArea.getText();
-        taskExecutor.run("更新景点详情", () -> actions.updateItemDetail(itemId, description, images, metadata),
-                updated -> actions.setStatus(updated ? "景点简介、图片和扩展属性已更新" : "景点详情没有变化"));
+    private Document metadataSnapshot() {
+        Document metadata = new Document(selectedMetadata);
+        putOrRemove(metadata, "open_time", itemOpenTimeField.getText());
+        putOrRemove(metadata, "address", itemAddressField.getText());
+        putOrRemove(metadata, "notice", itemNoticeArea.getText());
+        return metadata;
+    }
+
+    private void putOrRemove(Document metadata, String key, String value) {
+        String normalized = value == null ? "" : value.trim();
+        if (normalized.isEmpty()) {
+            metadata.remove(key);
+        } else {
+            metadata.put(key, normalized);
+        }
     }
 
     private void createCategory() {
@@ -336,15 +356,15 @@ public final class ManagementPanel extends JPanel {
         selectedItemLabel.setText("请先从表格选择景点");
         setItemActionsEnabled(false);
         itemIntroArea.setText("");
-        itemImagesArea.setText("");
-        itemMetadataArea.setText("");
+        itemImagesPanel.setImageSources(List.of());
+        itemOpenTimeField.setText("");
+        itemAddressField.setText("");
+        itemNoticeArea.setText("");
+        selectedMetadata = new Document();
     }
 
     private void setItemActionsEnabled(boolean enabled) {
-        basicItemButton.setEnabled(enabled);
-        pricingButton.setEnabled(enabled);
-        itemStatusButton.setEnabled(enabled);
-        updateIntroButton.setEnabled(enabled);
+        updateItemButton.setEnabled(enabled);
     }
 
     private long requireSelectedItemId() {
@@ -382,15 +402,6 @@ public final class ManagementPanel extends JPanel {
         if (box.getItemCount() > 0) {
             box.setSelectedIndex(0);
         }
-    }
-
-    private static String formatImages(Document detail) {
-        if (detail == null) {
-            return "";
-        }
-        List<?> images = detail.getList("images", Object.class);
-        return images == null ? "" : images.stream().map(String::valueOf)
-                .collect(java.util.stream.Collectors.joining(System.lineSeparator()));
     }
 
     private static JTextArea textArea(int rows, int columns) {
@@ -454,8 +465,7 @@ public final class ManagementPanel extends JPanel {
     }
 
     boolean itemActionsEnabled() {
-        return basicItemButton.isEnabled() && pricingButton.isEnabled()
-                && itemStatusButton.isEnabled() && updateIntroButton.isEnabled();
+        return updateItemButton.isEnabled();
     }
 
     boolean categoryUpdateEnabled() {
@@ -484,6 +494,17 @@ public final class ManagementPanel extends JPanel {
         boolean updateItemStatus(long itemId, int status);
 
         boolean updateItemDetail(long itemId, String description, String images, String metadata);
+
+        default boolean updateItemComplete(long itemId, String title, long categoryId,
+                                           BigDecimal price, BigDecimal discount, int status,
+                                           String description, List<String> images, Document metadata) {
+            boolean updated = updateItem(itemId, title, categoryId);
+            updated |= updateItemPricing(itemId, price, discount);
+            updated |= updateItemStatus(itemId, status);
+            updated |= updateItemDetail(itemId, description, String.join(System.lineSeparator(), images),
+                    metadata == null ? "{}" : metadata.toJson());
+            return updated;
+        }
 
         long createCategory(String name, Long parentId);
 

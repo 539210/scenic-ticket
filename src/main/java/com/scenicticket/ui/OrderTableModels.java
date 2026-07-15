@@ -11,16 +11,14 @@ final class OrderTableModels {
             "\u8ba2\u5355\u53f7", "\u7528\u6237ID", "\u666f\u70b9\u540d\u79f0",
             "\u7968\u79cd", "\u6e38\u73a9\u65e5\u671f", "\u7968\u6570",
             "\u539f\u4ef7", "\u4f18\u60e0", "\u6298\u540e\u5355\u4ef7",
-            "\u603b\u989d", "\u4ed8\u6b3e\u65b9\u5f0f", "\u72b6\u6001",
-            "\u8fc7\u671f\u65f6\u95f4", "\u521b\u5efa\u65f6\u95f4"
+            "\u603b\u989d", "\u4ed8\u6b3e\u65b9\u5f0f", "\u72b6\u6001"
     };
 
     private static final String[] USER_COLUMNS = {
             "\u8ba2\u5355\u53f7", "\u666f\u70b9\u540d\u79f0",
             "\u7968\u79cd", "\u6e38\u73a9\u65e5\u671f", "\u7968\u6570",
             "\u539f\u4ef7", "\u4f18\u60e0", "\u6298\u540e\u5355\u4ef7",
-            "\u603b\u989d", "\u4ed8\u6b3e\u65b9\u5f0f", "\u72b6\u6001",
-            "\u8fc7\u671f\u65f6\u95f4", "\u521b\u5efa\u65f6\u95f4"
+            "\u603b\u989d", "\u4ed8\u6b3e\u65b9\u5f0f", "\u72b6\u6001"
     };
 
     private OrderTableModels() {
@@ -37,8 +35,8 @@ final class OrderTableModels {
 
     static int[] columnWidths(boolean admin) {
         return admin
-                ? new int[]{80, 80, 170, 100, 105, 55, 85, 75, 90, 95, 85, 85, 155, 155}
-                : new int[]{80, 180, 100, 105, 55, 85, 75, 90, 95, 85, 85, 155, 155};
+                ? new int[]{80, 80, 170, 100, 105, 55, 85, 75, 90, 95, 85, 85}
+                : new int[]{80, 180, 100, 105, 55, 85, 75, 90, 95, 85, 85};
     }
 
     static void fill(DefaultTableModel model, List<OrderViewDTO> orderViews, boolean admin) {
@@ -50,15 +48,13 @@ final class OrderTableModels {
                         valueText(order.getTicketTypeNameSnapshot()), valueText(order.getVisitDate()), order.getQuantity(),
                         UiFormatters.money(order.getOriginalUnitPrice()), UiFormatters.discount(order.getDiscountRate()),
                         UiFormatters.money(order.getDiscountedUnitPrice()), UiFormatters.money(order.getAmount()),
-                        order.getPaymentMethod(), UiFormatters.orderStatus(order.getStatus()),
-                        UiFormatters.date(order.getExpiresAt()), UiFormatters.date(order.getCreatedAt())});
+                        order.getPaymentMethod(), UiFormatters.orderStatus(order.getStatus())});
             } else {
                 model.addRow(new Object[]{order.getOrderId(), view.getItemTitle(),
                         valueText(order.getTicketTypeNameSnapshot()), valueText(order.getVisitDate()), order.getQuantity(),
                         UiFormatters.money(order.getOriginalUnitPrice()), UiFormatters.discount(order.getDiscountRate()),
                         UiFormatters.money(order.getDiscountedUnitPrice()), UiFormatters.money(order.getAmount()),
-                        order.getPaymentMethod(), UiFormatters.orderStatus(order.getStatus()),
-                        UiFormatters.date(order.getExpiresAt()), UiFormatters.date(order.getCreatedAt())});
+                        order.getPaymentMethod(), UiFormatters.orderStatus(order.getStatus())});
             }
         }
     }

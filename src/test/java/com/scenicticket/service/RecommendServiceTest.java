@@ -22,23 +22,22 @@ class RecommendServiceTest {
     private final RecommendService service = new RecommendService(itemDAO, logDAO, commentDAO, new StubDetailDAO());
 
     @Test
-    void hotRecommendationsUseUnifiedPercentScore() {
-        logDAO.hotItems = List.of(
-                new Document("_id", 1L).append("total_actions", 20),
-                new Document("_id", 2L).append("total_actions", 10)
+    void formerHotEntryPointAlsoUsesRatingsOnly() {
+        commentDAO.topRatedItems = List.of(
+                new Document("_id", 1L).append("avg_rating", 4.8),
+                new Document("_id", 2L).append("avg_rating", 4.2)
         );
 
         List<RecommendationDTO> recommendations = service.recommendHotItems(null, null, 10);
 
         assertEquals(2, recommendations.size());
         assertEquals(1L, recommendations.get(0).getItem().getItemId());
-        assertEquals(100.0, recommendations.get(0).getScore(), 0.001);
-        assertEquals("近期热门景点", recommendations.get(0).getReason());
-        assertEquals(50.0, recommendations.get(1).getScore(), 0.001);
+        assertEquals(4.8, recommendations.get(0).getScore(), 0.001);
+        assertEquals(4.2, recommendations.get(1).getScore(), 0.001);
     }
 
     @Test
-    void topRatedRecommendationsUseUnifiedPercentScore() {
+    void topRatedRecommendationsKeepFivePointScale() {
         commentDAO.topRatedItems = List.of(
                 new Document("_id", 1L).append("avg_rating", 4.5),
                 new Document("_id", 2L).append("avg_rating", 3.0)
@@ -48,9 +47,9 @@ class RecommendServiceTest {
 
         assertEquals(2, recommendations.size());
         assertEquals(1L, recommendations.get(0).getItem().getItemId());
-        assertEquals(90.0, recommendations.get(0).getScore(), 0.001);
-        assertEquals("高评分景点推荐", recommendations.get(0).getReason());
-        assertEquals(60.0, recommendations.get(1).getScore(), 0.001);
+        assertEquals(4.5, recommendations.get(0).getScore(), 0.001);
+        assertEquals("游客平均评分 4.5 / 5", recommendations.get(0).getReason());
+        assertEquals(3.0, recommendations.get(1).getScore(), 0.001);
     }
 
     private static class StubItemDAO extends ItemDAO {

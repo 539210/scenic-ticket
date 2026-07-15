@@ -9,6 +9,7 @@ import javax.swing.JButton;
 import java.awt.Component;
 import java.awt.Container;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Callable;
@@ -70,6 +71,21 @@ class OrderPanelTest {
 
         assertEquals(53L, actions.refundedOrderId);
         assertEquals("行程变更", actions.capturedRefundReason);
+    }
+
+    @Test
+    void selectedOrderExpandsFullTimeDetailsOnDemand() {
+        FakeActions actions = new FakeActions(List.of(view(54L, 2L, 1, TODAY.plusDays(3))));
+        Order order = actions.views.get(0).getOrder();
+        order.setCreatedAt(LocalDateTime.of(2026, 7, 13, 9, 0));
+        order.setExpiresAt(LocalDateTime.of(2026, 7, 13, 9, 15));
+        OrderPanel panel = new OrderPanel(2L, false, new ImmediateTaskExecutor(), actions, () -> TODAY);
+
+        click(panel, "查询订单");
+        panel.selectRow(0);
+        assertFalse(panel.timeDetailsVisible());
+        panel.toggleTimeDetailsForTest();
+        assertTrue(panel.timeDetailsVisible());
     }
 
     @Test

@@ -10,9 +10,7 @@ import javax.swing.JButton;
 import javax.swing.JComboBox;
 import javax.swing.ImageIcon;
 import javax.swing.JLabel;
-import javax.swing.JMenuItem;
 import javax.swing.JPanel;
-import javax.swing.JPopupMenu;
 import javax.swing.JScrollPane;
 import javax.swing.JSplitPane;
 import javax.swing.JTabbedPane;
@@ -85,13 +83,6 @@ public final class ScenicBrowsePanel extends JPanel {
         JButton searchButton = UiComponents.primaryButton("查询");
         JButton recommendButton = UiComponents.secondaryButton("推荐");
         JButton clearButton = UiComponents.secondaryButton("重置");
-        JPopupMenu recommendMenu = new JPopupMenu();
-        JMenuItem personal = new JMenuItem("为你推荐");
-        JMenuItem hot = new JMenuItem("热门");
-        JMenuItem rated = new JMenuItem("高分");
-        recommendMenu.add(personal);
-        recommendMenu.add(hot);
-        recommendMenu.add(rated);
 
         toolbar.add(new JLabel("关键词"));
         toolbar.add(keywordBox);
@@ -105,14 +96,9 @@ public final class ScenicBrowsePanel extends JPanel {
 
         searchButton.addActionListener(event -> taskExecutor.run("景点查询",
                 () -> actions.searchItems(buildSearchKeyword(), selectedCategoryId()), this::fillItems));
-        recommendButton.addActionListener(event -> recommendMenu.show(
-                recommendButton, 0, recommendButton.getHeight()));
-        personal.addActionListener(event -> taskExecutor.run(
-                "为你推荐", actions::recommendForUser, this::fillRecommendations));
-        hot.addActionListener(event -> taskExecutor.run(
-                "热门推荐", actions::recommendHot, this::fillRecommendations));
-        rated.addActionListener(event -> taskExecutor.run(
-                "高分推荐", actions::recommendTopRated, this::fillRecommendations));
+        recommendButton.setToolTipText("按游客评分从高到低推荐");
+        recommendButton.addActionListener(event -> taskExecutor.run(
+                "评分推荐", actions::recommendTopRated, this::fillRecommendations));
         clearButton.addActionListener(event -> {
             keywordBox.setSelectedItem(ALL_OPTION);
             keywordField.setText("");
@@ -127,7 +113,7 @@ public final class ScenicBrowsePanel extends JPanel {
 
     private void configureTable() {
         table.setAutoResizeMode(JTable.AUTO_RESIZE_ALL_COLUMNS);
-        int[] widths = {210, 110, 85, 90, 90, 80, 75};
+        int[] widths = {220, 120, 90, 90, 95, 100};
         for (int index = 0; index < widths.length; index++) {
             table.getColumnModel().getColumn(index).setPreferredWidth(widths[index]);
         }
@@ -155,7 +141,7 @@ public final class ScenicBrowsePanel extends JPanel {
         introductionImage.setVerticalAlignment(JLabel.CENTER);
         introductionImage.getAccessibleContext().setAccessibleName("景点图片");
         introductionImagePanel.setBackground(Color.WHITE);
-        introductionImagePanel.setPreferredSize(new Dimension(380, 230));
+        introductionImagePanel.setPreferredSize(new Dimension(320, 160));
         introductionImagePanel.add(introductionImage, BorderLayout.CENTER);
         introductionImagePanel.setVisible(false);
         introductionPanel.add(introductionImagePanel, BorderLayout.SOUTH);
@@ -171,23 +157,25 @@ public final class ScenicBrowsePanel extends JPanel {
     }
 
     private JSplitPane createSplitPane() {
-        JPanel detailActions = new JPanel(new GridLayout(3, 2, 10, 10));
+        JPanel detailActions = new JPanel(new GridLayout(2, 3, 8, 8));
         detailActions.setOpaque(false);
         detailActions.add(detailButton);
         detailActions.add(commentsButton);
         detailActions.add(availabilityButton);
         detailActions.add(orderButton);
         detailActions.add(commentButton);
-        detailActions.add(new JLabel(""));
         JPanel detailPanel = new JPanel(new BorderLayout(0, 10));
         detailPanel.setOpaque(false);
         detailPanel.add(scenicInfoTabs, BorderLayout.CENTER);
         detailPanel.add(detailActions, BorderLayout.SOUTH);
-        JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT,
-                UiComponents.card("景点列表", UiComponents.scroll(table)),
-                UiComponents.card("景点信息", detailPanel));
+        JPanel listCard = UiComponents.card("景点列表", UiComponents.scroll(table));
+        JPanel detailCard = UiComponents.card("景点信息", detailPanel);
+        listCard.setMinimumSize(new Dimension(360, 260));
+        detailCard.setMinimumSize(new Dimension(300, 260));
+        JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, listCard, detailCard);
         splitPane.setResizeWeight(0.64);
-        splitPane.setDividerLocation(760);
+        splitPane.setDividerLocation(0.64);
+        splitPane.setContinuousLayout(true);
         return splitPane;
     }
 
@@ -211,13 +199,35 @@ public final class ScenicBrowsePanel extends JPanel {
         recommendationReasons.clear();
         for (Item item : safeItems) {
             visibleItems.add(item);
-            addTableRow(item, "-");
+            addTableRow(item, "暂无评分");
         }
         resetSelection();
         overviewArea.setText(safeItems.isEmpty()
                 ? "没有找到符合条件的景点，请调整查询条件。"
                 : "共找到 " + safeItems.size() + " 个景点，请从左侧列表选择。");
         actions.setStatus("查询到 " + safeItems.size() + " 个景点");
+        loadRatings(safeItems);
+    }
+
+    private void loadRatings(List<Item> items) {
+        List<Long> itemIds = items.stream().map(Item::getItemId).filter(java.util.Objects::nonNull).toList();
+        if (itemIds.isEmpty()) {
+            return;
+        }
+        taskExecutor.run("加载游客评分", () -> actions.loadRatings(itemIds), ratings -> {
+            List<Long> currentItemIds = visibleItems.stream().map(Item::getItemId)
+                    .filter(java.util.Objects::nonNull).toList();
+            if (!itemIds.equals(currentItemIds)) {
+                return;
+            }
+            for (int row = 0; row < visibleItems.size(); row += 1) {
+                Item item = visibleItems.get(row);
+                if (row < tableModel.getRowCount() && item.getItemId() != null) {
+                    tableModel.setValueAt(UiFormatters.ratingScore(
+                            ratings == null ? null : ratings.get(item.getItemId())), row, 5);
+                }
+            }
+        });
     }
 
     void fillRecommendations(List<RecommendationDTO> recommendations) {
@@ -230,7 +240,7 @@ public final class ScenicBrowsePanel extends JPanel {
             if (item != null) {
                 visibleItems.add(item);
                 recommendationReasons.put(item.getItemId(), recommendation.getReason());
-                addTableRow(item, UiFormatters.recommendationScore(recommendation.getScore()));
+                addTableRow(item, UiFormatters.ratingScore(recommendation.getScore()));
             }
         }
         resetSelection();
@@ -240,12 +250,12 @@ public final class ScenicBrowsePanel extends JPanel {
         actions.setStatus("已生成 " + visibleItems.size() + " 个推荐景点");
     }
 
-    private void addTableRow(Item item, String recommendationScore) {
+    private void addTableRow(Item item, String ratingScore) {
         tableModel.addRow(new Object[]{
                 item.getTitle(), categoryName(item.getCategoryId()), UiFormatters.money(item.getPrice()),
                 UiFormatters.discount(item.getDiscountRate()),
                 UiFormatters.money(UiFormatters.discountedUnitPrice(item.getPrice(), item.getDiscountRate())),
-                recommendationScore, UiFormatters.itemStatus(item.getStatus())
+                ratingScore
         });
     }
 
@@ -257,8 +267,7 @@ public final class ScenicBrowsePanel extends JPanel {
                 + "原价：" + UiFormatters.money(item.getPrice()) + "    优惠："
                 + UiFormatters.discount(item.getDiscountRate()) + System.lineSeparator()
                 + "折后价：" + UiFormatters.money(UiFormatters.discountedUnitPrice(
-                item.getPrice(), item.getDiscountRate())) + System.lineSeparator()
-                + "状态：" + UiFormatters.itemStatus(item.getStatus())
+                item.getPrice(), item.getDiscountRate()))
                 + (reason == null ? "" : System.lineSeparator() + "推荐理由：" + reason)
                 + System.lineSeparator() + System.lineSeparator()
                 + "点击“景点简介”查看景区介绍，点击“游客评论”查看评价。");
@@ -382,7 +391,7 @@ public final class ScenicBrowsePanel extends JPanel {
 
     private static DefaultTableModel readOnlyTableModel() {
         return new DefaultTableModel(
-                new Object[]{"景点名称", "类型", "原价", "优惠", "折后价", "推荐分", "状态"}, 0) {
+                new Object[]{"景点名称", "类型", "原价", "优惠", "折后价", "游客评分"}, 0) {
             @Override
             public boolean isCellEditable(int row, int column) {
                 return false;
@@ -426,6 +435,10 @@ public final class ScenicBrowsePanel extends JPanel {
         List<RecommendationDTO> recommendTopRated();
 
         List<RecommendationDTO> recommendHot();
+
+        default Map<Long, Double> loadRatings(List<Long> itemIds) {
+            return Map.of();
+        }
 
         CrossDatabaseItemDTO loadItemDetail(long itemId);
 

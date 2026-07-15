@@ -39,12 +39,13 @@ class ScenicBrowsePanelTest {
         assertEquals(2, panel.itemRowCount());
         assertEquals("自然风光", panel.tableValueAt(0, 1));
         assertEquals("¥96.00", panel.tableValueAt(0, 4));
+        assertEquals("4.6 / 5", panel.tableValueAt(0, 5));
         panel.selectRow(0);
         assertTrue(panel.purchaseEnabled());
         assertTrue(panel.overviewText().contains("南山风景区"));
         panel.selectRow(1);
         assertFalse(panel.purchaseEnabled());
-        assertTrue(panel.overviewText().contains("状态：下架"));
+        assertFalse(panel.overviewText().contains("状态："));
     }
 
     @Test
@@ -52,7 +53,7 @@ class ScenicBrowsePanelTest {
         Item item = item(21L, "星湖", 3L, "80", "10", 1);
         RecommendationDTO recommendation = new RecommendationDTO();
         recommendation.setItem(item);
-        recommendation.setScore(108.5);
+        recommendation.setScore(4.8);
         recommendation.setReason("近期高分且适合亲子游");
         ScenicBrowsePanel panel = new ScenicBrowsePanel(
                 new ImmediateTaskExecutor(), new FakeActions(List.of()));
@@ -60,7 +61,7 @@ class ScenicBrowsePanelTest {
         panel.fillRecommendations(List.of(recommendation));
         panel.selectRow(0);
 
-        assertEquals("100.0", panel.tableValueAt(0, 5));
+        assertEquals("4.8 / 5", panel.tableValueAt(0, 5));
         assertTrue(panel.overviewText().contains("推荐理由：近期高分且适合亲子游"));
     }
 
@@ -193,6 +194,11 @@ class ScenicBrowsePanelTest {
         @Override
         public List<RecommendationDTO> recommendHot() {
             return List.of();
+        }
+
+        @Override
+        public java.util.Map<Long, Double> loadRatings(List<Long> itemIds) {
+            return java.util.Map.of(11L, 4.6);
         }
 
         @Override

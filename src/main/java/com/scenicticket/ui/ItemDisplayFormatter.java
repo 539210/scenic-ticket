@@ -30,16 +30,13 @@ public final class ItemDisplayFormatter {
                 .append("优惠：").append(UiFormatters.discount(item.getDiscountRate())).append(System.lineSeparator())
                 .append("折后单价：").append(UiFormatters.money(UiFormatters.discountedUnitPrice(
                         item.getPrice(), item.getDiscountRate())))
-                .append(System.lineSeparator())
-                .append("状态：").append(UiFormatters.itemStatus(item.getStatus()))
                 .append(System.lineSeparator()).append(System.lineSeparator());
 
         Document detail = dto.getDetail();
         Object description = detail == null ? null : detail.get("description");
-        Object metadata = detail == null ? null : detail.get("metadata");
         builder.append("简介：").append(UiFormatters.readableText(description, "管理员暂未填写景点简介"))
-                .append(System.lineSeparator()).append(System.lineSeparator())
-                .append("扩展属性：").append(formatMetadata(metadata));
+                .append(System.lineSeparator()).append(System.lineSeparator());
+        appendFriendlyMetadata(builder, detail == null ? null : detail.get("metadata"));
         return builder.toString();
     }
 
@@ -93,16 +90,14 @@ public final class ItemDisplayFormatter {
         return readableTags.isEmpty() ? "无" : String.join("、", readableTags);
     }
 
-    private String formatMetadata(Object value) {
-        if (value instanceof Document document) {
-            return document.isEmpty() ? "暂无" : document.toJson();
-        }
-        if (value instanceof Map<?, ?> map && !map.isEmpty()) {
-            Document document = new Document();
-            map.forEach((key, entry) -> document.put(String.valueOf(key), entry));
-            return document.toJson();
-        }
-        return UiFormatters.readableText(value, "暂无");
+    private void appendFriendlyMetadata(StringBuilder builder, Object value) {
+        Map<?, ?> metadata = value instanceof Map<?, ?> map ? map : Map.of();
+        String openTime = UiFormatters.readableText(metadata.get("open_time"), "暂未填写");
+        String address = UiFormatters.readableText(metadata.get("address"), "暂未填写");
+        String notice = UiFormatters.readableText(metadata.get("notice"), "暂无特别提示");
+        builder.append("开放时间：").append(openTime).append(System.lineSeparator())
+                .append("景点地址：").append(address).append(System.lineSeparator())
+                .append("游览提示：").append(notice);
     }
 
     private String integer(Object value) {

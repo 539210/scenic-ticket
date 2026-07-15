@@ -1,9 +1,11 @@
 package com.scenicticket.ui;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import javax.swing.ImageIcon;
 import java.awt.image.BufferedImage;
+import java.nio.file.Path;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -29,5 +31,16 @@ class ScenicImageLoaderTest {
 
         assertTrue(loader.loadFirst(List.of()).isEmpty());
         assertTrue(loader.loadFirst(List.of("file:///tmp/scenic.jpg", "not-a-url")).isEmpty());
+    }
+
+    @Test
+    void loadsAppManagedLocalImageFile(@TempDir Path tempDir) throws Exception {
+        Path image = tempDir.resolve("scenic.png");
+        javax.imageio.ImageIO.write(new BufferedImage(80, 40, BufferedImage.TYPE_INT_RGB), "png", image.toFile());
+
+        ImageIcon icon = new ScenicImageLoader(60, 60).loadFirst(List.of(image.toString())).orElseThrow();
+
+        assertEquals(60, icon.getIconWidth());
+        assertEquals(30, icon.getIconHeight());
     }
 }

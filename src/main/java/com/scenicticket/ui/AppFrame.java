@@ -299,6 +299,11 @@ public class AppFrame extends JFrame {
             }
 
             @Override
+            public Map<Long, Double> loadRatings(List<Long> itemIds) {
+                return recommendService.ratingScores(itemIds);
+            }
+
+            @Override
             public CrossDatabaseItemDTO loadItemDetail(long itemId) {
                 return crossDatabaseQueryService.getItemDetail(itemId, 8);
             }
@@ -427,6 +432,14 @@ public class AppFrame extends JFrame {
             }
 
             @Override
+            public boolean updateItemComplete(long itemId, String title, long categoryId,
+                                              BigDecimal price, BigDecimal discount, int status,
+                                              String description, List<String> images, Document metadata) {
+                return businessService.updateItemComplete(actorUserId, itemId, title, categoryId,
+                        price, discount, status, description, images, metadata);
+            }
+
+            @Override
             public long createCategory(String name, Long parentId) {
                 return businessService.createCategory(actorUserId, name, parentId);
             }
@@ -499,6 +512,11 @@ public class AppFrame extends JFrame {
             @Override
             public List<TicketType> listTypes(long itemId) {
                 return ticketInventoryService.listTicketTypes(actorUserId, itemId, true);
+            }
+
+            @Override
+            public List<TicketType> listAllTypes() {
+                return ticketInventoryService.listAllTicketTypes(actorUserId, true);
             }
 
             @Override
@@ -641,8 +659,22 @@ public class AppFrame extends JFrame {
             showError(exception);
             return;
         }
-        runAdminTask("新增景点", () -> businessService.createItem(actorUserId, request.title(), request.categoryId(),
-                request.description(), request.images(), request.metadata(), request.price(), request.discountRate()), id -> {
+        runAdminTask("新增景点", () -> {
+            long id = businessService.createItem(actorUserId, request.title(), request.categoryId(),
+                    request.description(), request.images(), request.metadata(), request.price(), request.discountRate());
+            try {
+                ticketInventoryService.createDefaultAdultTicketWithInventory(actorUserId, id,
+                        request.price(), request.discountRate(), LocalDate.now(), 31, 100);
+            } catch (RuntimeException provisioningFailure) {
+                try {
+                    businessService.updateItemStatus(actorUserId, id, 0);
+                } catch (RuntimeException compensationFailure) {
+                    provisioningFailure.addSuppressed(compensationFailure);
+                }
+                throw new IllegalStateException("景点已创建但默认成人票库存创建失败，景点已自动下架", provisioningFailure);
+            }
+            return id;
+        }, id -> {
             setStatus("景点创建成功，编号：" + id);
             refreshItems.run();
         });

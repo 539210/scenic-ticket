@@ -79,6 +79,27 @@ class TicketInventoryServiceTest {
         assertEquals(new BigDecimal("72.00"), available.get(0).discountedPrice());
     }
 
+    @Test
+    void defaultAdultTicketCreatesThirtyOneDaysOfOneHundredStockInOneTransaction() {
+        FakeTicketTypeDAO ticketTypes = new FakeTicketTypeDAO();
+        FakeInventoryDAO inventories = new FakeInventoryDAO();
+        TrackingConnection connection = TrackingConnection.create();
+        TicketInventoryService service = service(ticketTypes, inventories, connection);
+        LocalDate today = LocalDate.now();
+
+        long typeId = service.createDefaultAdultTicketWithInventory(1L, 7L,
+                new BigDecimal("88"), new BigDecimal("10"), today, 31, 100);
+
+        assertEquals(88L, typeId);
+        assertEquals("成人票", ticketTypes.created.getName());
+        assertEquals(new BigDecimal("88.00"), ticketTypes.created.getOriginalPrice());
+        assertEquals(31, inventories.insertedDates.size());
+        assertEquals(today, inventories.insertedDates.get(0));
+        assertEquals(today.plusDays(30), inventories.insertedDates.get(30));
+        assertTrue(inventories.insertedStocks.stream().allMatch(stock -> stock == 100));
+        assertTrue(connection.committed);
+    }
+
     private static TicketInventoryService service(FakeTicketTypeDAO ticketTypes, FakeInventoryDAO inventories,
                                                   TrackingConnection connection) {
         return new TicketInventoryService(ticketTypes, inventories, new FakeItemDAO(), allowAuthorization(),
@@ -135,6 +156,11 @@ class TicketInventoryServiceTest {
         }
 
         @Override
+        public long create(Connection connection, TicketType ticketType) {
+            return create(ticketType);
+        }
+
+        @Override
         public Optional<TicketType> findById(long ticketTypeId) {
             return Optional.of(ticketType(ticketTypeId));
         }
@@ -160,6 +186,14 @@ class TicketInventoryServiceTest {
         private TicketInventory current;
         private List<TicketInventory> list = List.of();
         private int updatedTotal;
+        private final List<LocalDate> insertedDates = new ArrayList<>();
+        private final List<Integer> insertedStocks = new ArrayList<>();
+
+        @Override
+        public void insert(Connection connection, long ticketTypeId, LocalDate visitDate, int totalStock) {
+            insertedDates.add(visitDate);
+            insertedStocks.add(totalStock);
+        }
 
         @Override
         public Optional<TicketInventory> findForUpdate(Connection connection, long ticketTypeId,

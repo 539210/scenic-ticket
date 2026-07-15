@@ -27,6 +27,7 @@ class TicketInventoryPanelTest {
         TicketInventoryPanel panel = new TicketInventoryPanel(new ImmediateTaskExecutor(), actions);
 
         click(panel, "查询票种");
+        assertTrue(actions.allTypesQueried);
         assertFalse(panel.updateEnabled());
         panel.selectTypeRow(0);
 
@@ -164,9 +165,16 @@ class TicketInventoryPanelTest {
         private int savedTotalStock;
         private LocalDate listStart;
         private LocalDate listEnd;
+        private boolean allTypesQueried;
 
         @Override
         public List<TicketType> listTypes(long itemId) {
+            return types;
+        }
+
+        @Override
+        public List<TicketType> listAllTypes() {
+            allTypesQueried = true;
             return types;
         }
 

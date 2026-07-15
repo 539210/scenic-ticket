@@ -16,9 +16,16 @@ import java.util.Optional;
 
 public class TicketTypeDAO extends BaseDAO {
     public long create(TicketType ticketType) {
+        try (Connection connection = getConnection()) {
+            return create(connection, ticketType);
+        } catch (SQLException exception) {
+            throw new DBException("创建票种失败", exception);
+        }
+    }
+
+    public long create(Connection connection, TicketType ticketType) throws SQLException {
         String sql = "INSERT INTO ticket_types (item_id, name, original_price, discount_rate, status) VALUES (?, ?, ?, ?, ?)";
-        try (Connection connection = getConnection();
-             PreparedStatement statement = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+        try (PreparedStatement statement = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             statement.setLong(1, ticketType.getItemId());
             statement.setString(2, ticketType.getName());
             statement.setBigDecimal(3, ticketType.getOriginalPrice());
@@ -31,8 +38,6 @@ public class TicketTypeDAO extends BaseDAO {
                 }
             }
             throw new DBException("创建票种后未返回编号");
-        } catch (SQLException exception) {
-            throw new DBException("创建票种失败", exception);
         }
     }
 
@@ -69,6 +74,22 @@ public class TicketTypeDAO extends BaseDAO {
             }
         } catch (SQLException exception) {
             throw new DBException("查询景点票种失败", exception);
+        }
+    }
+
+    public List<TicketType> findAll(boolean activeOnly) {
+        String sql = "SELECT * FROM ticket_types"
+                + (activeOnly ? " WHERE status = 1" : "") + " ORDER BY item_id, ticket_type_id";
+        try (Connection connection = getConnection();
+             PreparedStatement statement = connection.prepareStatement(sql);
+             ResultSet resultSet = statement.executeQuery()) {
+            List<TicketType> results = new ArrayList<>();
+            while (resultSet.next()) {
+                results.add(map(resultSet));
+            }
+            return results;
+        } catch (SQLException exception) {
+            throw new DBException("查询全部票种失败", exception);
         }
     }
 

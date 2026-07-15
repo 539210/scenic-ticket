@@ -218,6 +218,50 @@ public class BusinessService {
         return true;
     }
 
+    public boolean updateItemComplete(long actorUserId, long itemId, String title, long categoryId,
+                                      BigDecimal price, BigDecimal discountRate, int status,
+                                      String description, List<String> images, Document metadata) {
+        authorizationService.requireAdmin(actorUserId);
+        if (itemId <= 0) {
+            throw new BusinessException("景点ID必须大于 0");
+        }
+        if (status != 0 && status != 1) {
+            throw new BusinessException("景点状态只能是上架或下架");
+        }
+        requireCategory(categoryId);
+        try (Connection connection = connectionProvider.getConnection()) {
+            connection.setAutoCommit(false);
+            try {
+                Item item = itemDAO.findById(connection, itemId)
+                        .orElseThrow(() -> new BusinessException("景点不存在"));
+                item.setTitle(SecurityUtil.requireText(title, "景点标题", 200));
+                item.setCategoryId(categoryId);
+                item.setPrice(normalizePrice(price));
+                item.setDiscountRate(normalizeDiscount(discountRate));
+                item.setStatus(status);
+                boolean updated = itemDAO.update(connection, item);
+                connection.commit();
+                detailDAO.upsertDetail(itemId, SecurityUtil.requireText(description, "景点简介", 2000),
+                        normalizeImages(images), normalizeMetadata(metadata));
+                return updated;
+            } catch (RuntimeException | SQLException exception) {
+                try {
+                    connection.rollback();
+                } catch (SQLException rollbackFailure) {
+                    exception.addSuppressed(rollbackFailure);
+                }
+                if (exception instanceof RuntimeException runtimeException) {
+                    throw runtimeException;
+                }
+                throw new DBException("更新景点完整信息失败", exception);
+            } finally {
+                connection.setAutoCommit(true);
+            }
+        } catch (SQLException exception) {
+            throw new DBException("更新景点完整信息事务失败", exception);
+        }
+    }
+
     private void validateCategoryParent(Long categoryId, Long parentId) {
         if (parentId == null) {
             return;

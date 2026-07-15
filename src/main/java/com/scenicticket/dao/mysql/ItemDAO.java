@@ -198,13 +198,20 @@ public class ItemDAO extends BaseDAO {
     }
 
     public boolean update(Item item) {
+        try (Connection connection = getConnection()) {
+            return update(connection, item);
+        } catch (SQLException e) {
+            throw new DBException("Failed to update item.", e);
+        }
+    }
+
+    public boolean update(Connection connection, Item item) throws SQLException {
         String sql = """
                 UPDATE items
                 SET title = ?, category_id = ?, price = ?, discount_rate = ?, status = ?, updated_at = CURRENT_TIMESTAMP
                 WHERE item_id = ?
                 """;
-        try (Connection connection = getConnection();
-             PreparedStatement statement = connection.prepareStatement(sql)) {
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setString(1, item.getTitle());
             statement.setLong(2, item.getCategoryId());
             statement.setBigDecimal(3, item.getPrice());
@@ -212,8 +219,6 @@ public class ItemDAO extends BaseDAO {
             statement.setInt(5, item.getStatus() == null ? 1 : item.getStatus());
             statement.setLong(6, item.getItemId());
             return statement.executeUpdate() == 1;
-        } catch (SQLException e) {
-            throw new DBException("Failed to update item.", e);
         }
     }
 

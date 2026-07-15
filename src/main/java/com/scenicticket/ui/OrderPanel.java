@@ -35,8 +35,11 @@ public final class OrderPanel extends JPanel {
     private final JButton payButton = UiComponents.primaryButton("确认支付");
     private final JButton cancelButton = UiComponents.secondaryButton("取消待支付订单");
     private final JButton refundButton = UiComponents.secondaryButton("申请模拟退款");
+    private final JButton timeDetailsButton = UiComponents.secondaryButton("展开时间详情");
+    private final JLabel timeDetailsLabel = new JLabel();
     private final List<OrderViewDTO> visibleOrders = new ArrayList<>();
     private Long selectedOrderId;
+    private Order selectedOrder;
 
     public OrderPanel(long actorUserId, boolean adminView, UiTaskExecutor taskExecutor, Actions actions) {
         this(actorUserId, adminView, taskExecutor, actions, LocalDate::now);
@@ -95,10 +98,17 @@ public final class OrderPanel extends JPanel {
         actionToolbar.add(payButton);
         actionToolbar.add(cancelButton);
         actionToolbar.add(refundButton);
+        actionToolbar.add(timeDetailsButton);
+        JPanel actionContent = new JPanel(new BorderLayout(0, 6));
+        actionContent.setOpaque(false);
+        actionContent.add(actionToolbar, BorderLayout.NORTH);
+        timeDetailsLabel.setBorder(javax.swing.BorderFactory.createEmptyBorder(2, 12, 4, 12));
+        timeDetailsLabel.setVisible(false);
+        actionContent.add(timeDetailsLabel, BorderLayout.CENTER);
         JPanel controls = new JPanel(new GridLayout(2, 1, 0, 8));
         controls.setOpaque(false);
         controls.add(UiComponents.card("订单查询", queryToolbar));
-        controls.add(UiComponents.card("订单生命周期操作", actionToolbar));
+        controls.add(UiComponents.card("订单生命周期操作", actionContent));
         return controls;
     }
 
@@ -137,6 +147,7 @@ public final class OrderPanel extends JPanel {
                 runLifecycleAction("模拟退款", () -> actions.refund(orderId, reason));
             }
         });
+        timeDetailsButton.addActionListener(event -> toggleTimeDetails());
     }
 
     private void refreshOrders() {
@@ -171,7 +182,10 @@ public final class OrderPanel extends JPanel {
             return;
         }
         selectedOrderId = order.getOrderId();
+        selectedOrder = order;
         selectedOrderLabel.setText("已选择订单：" + selectedOrderId);
+        timeDetailsButton.setEnabled(true);
+        timeDetailsLabel.setText(formatTimeDetails(order));
         setActionAvailability(OrderActionPolicy.evaluate(actorUserId, order, todaySupplier.get()));
     }
 
@@ -185,8 +199,12 @@ public final class OrderPanel extends JPanel {
     private void resetSelection() {
         table.clearSelection();
         selectedOrderId = null;
+        selectedOrder = null;
         selectedOrderLabel.setText("请先从表格选择订单");
         setActionAvailability(OrderActionPolicy.Availability.NONE);
+        timeDetailsButton.setEnabled(false);
+        timeDetailsButton.setText("展开时间详情");
+        timeDetailsLabel.setVisible(false);
     }
 
     private void setActionAvailability(OrderActionPolicy.Availability availability) {
@@ -200,6 +218,25 @@ public final class OrderPanel extends JPanel {
             throw new IllegalArgumentException("请先从表格中选择一个订单");
         }
         return selectedOrderId;
+    }
+
+    private void toggleTimeDetails() {
+        if (selectedOrder == null) {
+            return;
+        }
+        boolean show = !timeDetailsLabel.isVisible();
+        timeDetailsLabel.setVisible(show);
+        timeDetailsButton.setText(show ? "收起时间详情" : "展开时间详情");
+        revalidate();
+    }
+
+    private String formatTimeDetails(Order order) {
+        return "<html>创建：" + UiFormatters.date(order.getCreatedAt())
+                + "　过期：" + UiFormatters.date(order.getExpiresAt())
+                + "　支付：" + UiFormatters.date(order.getPaidAt())
+                + "　取消：" + UiFormatters.date(order.getCancelledAt())
+                + "　退款：" + UiFormatters.date(order.getRefundedAt())
+                + "　完成：" + UiFormatters.date(order.getCompletedAt()) + "</html>";
     }
 
     int rowCount() {
@@ -220,6 +257,14 @@ public final class OrderPanel extends JPanel {
 
     boolean refundEnabled() {
         return refundButton.isEnabled();
+    }
+
+    void toggleTimeDetailsForTest() {
+        timeDetailsButton.doClick();
+    }
+
+    boolean timeDetailsVisible() {
+        return timeDetailsLabel.isVisible();
     }
 
     public interface Actions {

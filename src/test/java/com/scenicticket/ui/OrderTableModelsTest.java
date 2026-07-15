@@ -23,6 +23,7 @@ class OrderTableModelsTest {
         assertEquals("游玩日期", model.getColumnName(3));
         assertEquals("学生票", model.getValueAt(0, 2));
         assertEquals("2026-08-01", model.getValueAt(0, 3));
+        assertEquals(11, model.getColumnCount());
         assertFalse(model.isCellEditable(0, 0));
     }
 
@@ -36,6 +37,7 @@ class OrderTableModelsTest {
         assertEquals("太湖", model.getValueAt(0, 2));
         assertEquals("学生票", model.getValueAt(0, 3));
         assertEquals("2026-08-01", model.getValueAt(0, 4));
+        assertEquals(12, model.getColumnCount());
     }
 
     private static OrderViewDTO view() {

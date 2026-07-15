@@ -22,8 +22,11 @@ public final class CreateItemDialogPanel extends JPanel {
     private final JTextArea descriptionArea = textArea(5, 24);
     private final JTextField priceField = new JTextField("80.00", 10);
     private final JTextField discountField = new JTextField("0", 10);
-    private final JTextArea imagesArea = textArea(3, 24);
-    private final JTextArea metadataArea = textArea(3, 24);
+    private final ScenicImageDropPanel imagesPanel = new ScenicImageDropPanel();
+    private final JTextField openTimeField = new JTextField(18);
+    private final JTextField addressField = new JTextField(24);
+    private final JTextArea noticeArea = textArea(3, 24);
+    private String presetMetadataJson;
 
     public CreateItemDialogPanel(Map<Long, String> categoryNames) {
         super(new BorderLayout());
@@ -31,8 +34,6 @@ public final class CreateItemDialogPanel extends JPanel {
             throw new IllegalArgumentException("景点类型尚未加载，请先刷新分类");
         }
         categoryNames.forEach((id, name) -> categoryBox.addItem(new CategoryOption(name, id)));
-        metadataArea.setText("{\"source\": \"Swing后台\"}");
-
         JPanel fields = new JPanel(new GridBagLayout());
         fields.setOpaque(false);
         addField(fields, 0, "景点名称", titleField);
@@ -40,8 +41,10 @@ public final class CreateItemDialogPanel extends JPanel {
         addField(fields, 2, "景点简介", new JScrollPane(descriptionArea));
         addField(fields, 3, "固定票价", priceField);
         addField(fields, 4, "优惠减免%", discountField);
-        addField(fields, 5, "图片地址（每行一个）", new JScrollPane(imagesArea));
-        addField(fields, 6, "扩展属性（JSON）", new JScrollPane(metadataArea));
+        addField(fields, 5, "景点图片", imagesPanel);
+        addField(fields, 6, "开放时间", openTimeField);
+        addField(fields, 7, "景点地址", addressField);
+        addField(fields, 8, "游览提示", new JScrollPane(noticeArea));
         add(UiComponents.card("新增景点", fields), BorderLayout.CENTER);
     }
 
@@ -75,9 +78,14 @@ public final class CreateItemDialogPanel extends JPanel {
         if (category == null || category.categoryId() == null || category.categoryId() <= 0) {
             throw new IllegalArgumentException("请选择景点类型");
         }
+        Document metadata = presetMetadataJson == null
+                ? new Document("source", "Swing后台")
+                : UiInputParsers.metadataDocument(presetMetadataJson);
+        putIfPresent(metadata, "open_time", openTimeField.getText());
+        putIfPresent(metadata, "address", addressField.getText());
+        putIfPresent(metadata, "notice", noticeArea.getText());
         return new CreateItemRequest(titleField.getText(), category.categoryId(), descriptionArea.getText(),
-                UiInputParsers.imageLines(imagesArea.getText()),
-                UiInputParsers.metadataDocument(metadataArea.getText()),
+                imagesPanel.getImageSources(), metadata,
                 UiInputParsers.requiredAmount(priceField.getText(), "票价"),
                 UiInputParsers.requiredAmount(discountField.getText(), "优惠减免比例"));
     }
@@ -89,8 +97,24 @@ public final class CreateItemDialogPanel extends JPanel {
         descriptionArea.setText(description);
         priceField.setText(price);
         discountField.setText(discount);
-        imagesArea.setText(images);
-        metadataArea.setText(metadata);
+        imagesPanel.setImageSources(UiInputParsers.imageLines(images));
+        presetMetadataJson = metadata;
+        try {
+            Document metadataDocument = UiInputParsers.metadataDocument(metadata);
+            openTimeField.setText(UiFormatters.readableText(metadataDocument.get("open_time"), ""));
+            addressField.setText(UiFormatters.readableText(metadataDocument.get("address"), ""));
+            noticeArea.setText(UiFormatters.readableText(metadataDocument.get("notice"), ""));
+        } catch (IllegalArgumentException ignored) {
+            openTimeField.setText("");
+            addressField.setText("");
+            noticeArea.setText("");
+        }
+    }
+
+    private void putIfPresent(Document metadata, String key, String value) {
+        if (value != null && !value.isBlank()) {
+            metadata.put(key, value.trim());
+        }
     }
 
     public record CreateItemRequest(String title, long categoryId, String description,

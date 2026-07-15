@@ -55,6 +55,47 @@ public class TicketInventoryService {
         return ticketTypeDAO.create(ticketType);
     }
 
+    public long createDefaultAdultTicketWithInventory(long actorUserId, long itemId,
+                                                       BigDecimal price, BigDecimal discountRate,
+                                                       LocalDate firstDate, int days, int stockPerDay) {
+        authorizationService.requireAdmin(actorUserId);
+        requireItem(itemId);
+        if (firstDate == null || firstDate.isBefore(LocalDate.now())) {
+            throw new BusinessException("默认库存开始日期必须是今天或未来日期");
+        }
+        if (days <= 0 || days > 366 || stockPerDay < 0 || stockPerDay > 1_000_000) {
+            throw new BusinessException("默认库存天数或数量无效");
+        }
+        TicketType ticketType = new TicketType();
+        ticketType.setItemId(itemId);
+        ticketType.setName("成人票");
+        ticketType.setOriginalPrice(normalizePrice(price));
+        ticketType.setDiscountRate(normalizeDiscount(discountRate));
+        ticketType.setStatus(1);
+        try (Connection connection = connectionProvider.getConnection()) {
+            connection.setAutoCommit(false);
+            try {
+                long ticketTypeId = ticketTypeDAO.create(connection, ticketType);
+                for (int offset = 0; offset < days; offset += 1) {
+                    inventoryDAO.insert(connection, ticketTypeId, firstDate.plusDays(offset), stockPerDay);
+                }
+                connection.commit();
+                return ticketTypeId;
+            } catch (RuntimeException | SQLException exception) {
+                rollback(connection, exception instanceof RuntimeException runtimeException
+                        ? runtimeException : new DBException("创建默认成人票和库存失败", exception));
+                if (exception instanceof RuntimeException runtimeException) {
+                    throw runtimeException;
+                }
+                throw new DBException("创建默认成人票和库存失败", exception);
+            } finally {
+                connection.setAutoCommit(true);
+            }
+        } catch (SQLException exception) {
+            throw new DBException("默认票种库存事务失败", exception);
+        }
+    }
+
     public boolean updateTicketType(long actorUserId, long ticketTypeId, String name, BigDecimal originalPrice,
                                     BigDecimal discountRate, int status) {
         authorizationService.requireAdmin(actorUserId);
@@ -77,6 +118,15 @@ public class TicketInventoryService {
         }
         requireItem(itemId);
         return ticketTypeDAO.findByItemId(itemId, !includeInactive);
+    }
+
+    public List<TicketType> listAllTicketTypes(long actorUserId, boolean includeInactive) {
+        if (includeInactive) {
+            authorizationService.requireAdmin(actorUserId);
+        } else {
+            authorizationService.requireActiveUser(actorUserId);
+        }
+        return ticketTypeDAO.findAll(!includeInactive);
     }
 
     public List<TicketInventory> listInventory(long actorUserId, long ticketTypeId,
