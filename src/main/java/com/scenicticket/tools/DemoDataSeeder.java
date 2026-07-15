@@ -26,6 +26,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /** Idempotent CLI seeder for an additional set of realistic demonstration data. */
 public final class DemoDataSeeder {
@@ -34,6 +36,8 @@ public final class DemoDataSeeder {
     static final long ITEM_ID_BASE = 20_000L;
     static final long ORDER_ID_BASE = 40_000L;
     private static final String SEED_SOURCE = "DEMO50_SEED_V1";
+    private static final Pattern LEGACY_COMMENT_SEQUENCE_PREFIX =
+            Pattern.compile("^第\\s*\\d+\\s*条评论[：:]\\s*(.+)$", Pattern.DOTALL);
     private static final String DEMO_PASSWORD = "DemoPass123";
     private static final Set<String> ALLOWED_DATABASES = Set.of("scenic_ticket", "scenic_ticket_test");
     private static final String[] REGIONS = {
@@ -71,9 +75,9 @@ public final class DemoDataSeeder {
             MySqlSeedResult mysql = seedMySql(users, scenics);
             MongoSeedResult mongo = seedMongo(users, scenics);
             System.out.printf(Locale.ROOT,
-                    "演示数据完成：用户 %d（新增 %d），景点 %d（新增 %d），评论 %d（新增 %d），订单新增 %d。%n",
+                    "演示数据完成：用户 %d（新增 %d），景点 %d（新增 %d），评论 %d（新增 %d），清理评论编号 %d，订单新增 %d。%n",
                     users.size(), mysql.insertedUsers(), scenics.size(), mysql.insertedItems(),
-                    scenics.size(), mongo.insertedComments(), mysql.insertedOrders());
+                    scenics.size(), mongo.insertedComments(), mongo.cleanedCommentPrefixes(), mysql.insertedOrders());
             System.out.println("演示账号：demo_user_001 至 demo_user_"
                     + String.format(Locale.ROOT, "%03d", arguments.count()));
             System.out.println("统一演示密码：" + DEMO_PASSWORD);
@@ -349,6 +353,7 @@ public final class DemoDataSeeder {
         }
         MongoCollection<Document> details = database.getCollection("item_details");
         MongoCollection<Document> comments = database.getCollection("comments");
+        int cleanedCommentPrefixes = cleanLegacyCommentSequencePrefixes(comments);
         int insertedDetails = 0;
         int insertedComments = 0;
         java.util.Date now = new java.util.Date();
@@ -405,7 +410,28 @@ public final class DemoDataSeeder {
                                 .append("count", scenics.size())),
                         Updates.setOnInsert("timestamp", now)),
                 new UpdateOptions().upsert(true));
-        return new MongoSeedResult(insertedDetails, insertedComments);
+        return new MongoSeedResult(insertedDetails, insertedComments, cleanedCommentPrefixes);
+    }
+
+    private static int cleanLegacyCommentSequencePrefixes(MongoCollection<Document> comments) {
+        int cleaned = 0;
+        for (Document comment : comments.find(Filters.regex("content", LEGACY_COMMENT_SEQUENCE_PREFIX))) {
+            String original = comment.getString("content");
+            String normalized = removeLegacyCommentSequencePrefix(original);
+            if (!normalized.equals(original)) {
+                cleaned += (int) comments.updateOne(Filters.eq("_id", comment.get("_id")),
+                        Updates.set("content", normalized)).getModifiedCount();
+            }
+        }
+        return cleaned;
+    }
+
+    static String removeLegacyCommentSequencePrefix(String content) {
+        if (content == null) {
+            return null;
+        }
+        Matcher matcher = LEGACY_COMMENT_SEQUENCE_PREFIX.matcher(content);
+        return matcher.matches() ? matcher.group(1).stripLeading() : content;
     }
 
     private static void validateCount(int count) {
@@ -430,7 +456,7 @@ public final class DemoDataSeeder {
     private record MySqlSeedResult(int insertedUsers, int insertedItems, int insertedOrders) {
     }
 
-    private record MongoSeedResult(int insertedDetails, int insertedComments) {
+    private record MongoSeedResult(int insertedDetails, int insertedComments, int cleanedCommentPrefixes) {
     }
 
     private record SeedArguments(boolean apply, int count) {

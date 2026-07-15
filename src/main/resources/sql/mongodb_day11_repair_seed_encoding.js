@@ -88,7 +88,7 @@ for (const comment of damagedComments) {
   }
   const result = db.comments.updateOne({ _id: comment._id }, {
     $set: {
-      content: `第 ${sequence} 条评论：景区体验良好，购票流程顺畅。`,
+      content: "景区体验良好，购票流程顺畅。",
       tags: tagSets[sequence % tagSets.length]
     }
   });

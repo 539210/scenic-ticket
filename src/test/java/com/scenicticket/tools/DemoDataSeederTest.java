@@ -28,4 +28,12 @@ class DemoDataSeederTest {
         assertThrows(IllegalArgumentException.class, () -> DemoDataSeeder.buildUsers(0));
         assertThrows(IllegalArgumentException.class, () -> DemoDataSeeder.buildScenics(51));
     }
+
+    @Test
+    void removesLegacySequencePrefixWithoutChangingNormalComments() {
+        assertEquals("景区体验良好，购票流程顺畅。",
+                DemoDataSeeder.removeLegacyCommentSequencePrefix("第 40 条评论：景区体验良好，购票流程顺畅。"));
+        assertEquals("正常评论正文",
+                DemoDataSeeder.removeLegacyCommentSequencePrefix("正常评论正文"));
+    }
 }

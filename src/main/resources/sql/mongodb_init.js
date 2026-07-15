@@ -64,7 +64,7 @@ for (let i = 1; i <= 30; i += 1) {
   comments.push({
     user_id: Math.floor((i - 1) / 20) + 1,
     item_id: ((i - 1) % 20) + 1,
-    content: `第 ${i} 条评论：景区体验良好，购票流程顺畅。`,
+    content: "景区体验良好，购票流程顺畅。",
     rating: (i % 5) + 1,
     tags: tags[i % tags.length],
     created_at: new Date(Date.now() - i * 3600 * 1000),
