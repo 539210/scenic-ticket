@@ -17,7 +17,7 @@
 
 ```text
 item1.comments=1
-comment.keys=[_id, user_id, item_id, content, rating, tags, created_at]
+comment.keys=[_id, user_id, item_id, content, rating, created_at]
 comment.content=?????? 40???????????????
 ```
 
@@ -26,9 +26,9 @@ comment.content=?????? 40???????????????
 - 当前实例不是 `item_id` 数字/字符串不匹配；查询能返回评论。
 - MongoDB 中 `content` 已经被写成问号，显示层自身无法还原；但本批 20 条记录仍保留 21–40 序号，且用户、景点、评分全部匹配 Git 历史中的初始化公式，可以从可信模板恢复。
 - `UiFormatters.readableText` 会把多个问号替换成“历史数据编码异常，暂无法显示”，这只是降级提示，不能算数据修复。
-- 原 Swing `formatComments` 只展示评分、时间、正文，遗漏用户信息和标签，并继续使用详情区同一个 JTextArea。
+- 原 Swing `formatComments` 只展示评分、时间、正文，遗漏用户信息，并继续使用详情区同一个 JTextArea。
 
-修复结果：评论改由 `CommentService` 和专用 DTO 读取，兼容数值/字符串 `user_id`、`item_id`；独立评论页签显示脱敏用户名、评分、正文、标签、创建时间和更新时间。Day11 修复脚本把原文档完整写入 `DATA_REPAIR_BACKUP` 审计后，仅恢复同时匹配可信初始化公式的 20 条样例正文和标签，业务库剩余问号异常为 0。未知来源乱码仍由 `ItemDisplayFormatter` 明确降级，正文与标签都不直接展示问号。
+修复结果：评论改由 `CommentService` 和专用 DTO 读取，兼容数值/字符串 `user_id`、`item_id`；独立评论页签显示脱敏用户名、评分、正文、创建时间和更新时间。Day11 修复脚本把原文档完整写入 `DATA_REPAIR_BACKUP` 审计后，仅恢复同时匹配可信初始化公式的 20 条样例正文，业务库剩余问号异常为 0。未知来源乱码仍由 `ItemDisplayFormatter` 明确降级，正文不直接展示问号。
 
 ## KB-2 景点简介显示错误
 

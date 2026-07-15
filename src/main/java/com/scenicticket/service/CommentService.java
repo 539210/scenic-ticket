@@ -48,7 +48,7 @@ public class CommentService {
     }
 
     public CommentSubmissionResult submit(long actorUserId, long itemId, String content, int rating,
-                                          List<String> tags, String ip) {
+                                          String ip) {
         authorizationService.requireActiveUser(actorUserId);
         if (itemId <= 0) throw new BusinessException("景点ID必须大于 0");
         itemDAO.findById(itemId).orElseThrow(() -> new BusinessException("景点不存在"));
@@ -57,10 +57,9 @@ public class CommentService {
         }
         if (rating < 1 || rating > 5) throw new BusinessException("评分必须在 1 到 5 之间");
         String safeContent = SecurityUtil.requireText(content, "评论内容", 1000);
-        List<String> safeTags = normalizeTags(tags);
         boolean updated = commentDAO.findByUserAndItem(actorUserId, itemId) != null;
-        commentDAO.upsertComment(actorUserId, itemId, safeContent, rating, safeTags);
-        boolean audited = safeAudit(actorUserId, itemId, updated, rating, safeTags, safeContent.length(), ip);
+        commentDAO.upsertComment(actorUserId, itemId, safeContent, rating);
+        boolean audited = safeAudit(actorUserId, itemId, updated, rating, safeContent.length(), ip);
         String message = updated ? "评论已更新" : "评论已发布";
         return new CommentSubmissionResult(updated, audited,
                 audited ? message : message + "；但审计日志写入失败");
@@ -76,24 +75,13 @@ public class CommentService {
             Object content = document.get("content");
             views.add(new CommentViewDTO(userId, maskUsername(username), number(document.get("rating")),
                     SecurityUtil.normalizeText(content == null ? "" : String.valueOf(content), 1000),
-                    stringList(document.get("tags")), date(document.get("created_at")), date(document.get("updated_at"))));
+                    date(document.get("created_at")), date(document.get("updated_at"))));
         }
         return new CommentListDTO(commentDAO.aggregateRatingByItem(itemId), views);
     }
 
-    private List<String> normalizeTags(List<String> tags) {
-        if (tags == null || tags.isEmpty()) return List.of();
-        List<String> result = new ArrayList<>();
-        for (String tag : tags) {
-            String safe = SecurityUtil.normalizeText(tag, 30);
-            if (safe != null && !safe.isBlank() && !result.contains(safe)) result.add(safe);
-            if (result.size() > 10) throw new BusinessException("评论标签最多 10 个");
-        }
-        return List.copyOf(result);
-    }
-
     private boolean safeAudit(long userId, long itemId, boolean updated, int rating,
-                              List<String> tags, int contentLength, String ip) {
+                              int contentLength, String ip) {
         String safeIp = SecurityUtil.normalizeIp(ip);
         boolean behaviorRecorded = true;
         try {
@@ -107,7 +95,6 @@ public class CommentService {
         Document detail = new Document("actor_user_id", userId)
                 .append("item_id", itemId)
                 .append("rating", rating)
-                .append("tags", tags)
                 .append("content_length", contentLength)
                 .append("operation", updated ? "更新评论" : "发表评论")
                 .append("ip", safeIp)
@@ -128,10 +115,6 @@ public class CommentService {
     }
     private int number(Object value) { return value instanceof Number number ? number.intValue() : 0; }
     private Date date(Object value) { return value instanceof Date date ? date : null; }
-    private List<String> stringList(Object value) {
-        if (!(value instanceof List<?> list)) return List.of();
-        return list.stream().map(String::valueOf).toList();
-    }
     private String maskUsername(String username) {
         if (username == null || username.isBlank()) return "未知用户";
         return username.substring(0, 1) + "***";

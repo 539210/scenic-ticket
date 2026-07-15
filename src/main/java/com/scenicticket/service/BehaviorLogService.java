@@ -41,7 +41,7 @@ public class BehaviorLogService {
         logDAO.insertActionLog(actionLog);
     }
 
-    public void addComment(long userId, long itemId, String content, int rating, List<String> tags, String ip) {
+    public void addComment(long userId, long itemId, String content, int rating, String ip) {
         throw new BusinessException("旧评论接口已停用，请使用带购买资格校验的 CommentService");
     }
 

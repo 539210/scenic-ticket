@@ -75,9 +75,10 @@ public final class DemoDataSeeder {
             MySqlSeedResult mysql = seedMySql(users, scenics);
             MongoSeedResult mongo = seedMongo(users, scenics);
             System.out.printf(Locale.ROOT,
-                    "演示数据完成：用户 %d（新增 %d），景点 %d（新增 %d），评论 %d（新增 %d），清理评论编号 %d，订单新增 %d。%n",
+                    "演示数据完成：用户 %d（新增 %d），景点 %d（新增 %d），评论 %d（新增 %d），清理评论编号 %d、评论标签 %d、审计标签 %d，订单新增 %d。%n",
                     users.size(), mysql.insertedUsers(), scenics.size(), mysql.insertedItems(),
-                    scenics.size(), mongo.insertedComments(), mongo.cleanedCommentPrefixes(), mysql.insertedOrders());
+                    scenics.size(), mongo.insertedComments(), mongo.cleanedCommentPrefixes(),
+                    mongo.cleanedCommentTags(), mongo.cleanedAuditTags(), mysql.insertedOrders());
             System.out.println("演示账号：demo_user_001 至 demo_user_"
                     + String.format(Locale.ROOT, "%03d", arguments.count()));
             System.out.println("统一演示密码：" + DEMO_PASSWORD);
@@ -353,7 +354,12 @@ public final class DemoDataSeeder {
         }
         MongoCollection<Document> details = database.getCollection("item_details");
         MongoCollection<Document> comments = database.getCollection("comments");
+        MongoCollection<Document> systemLogs = database.getCollection("system_logs");
         int cleanedCommentPrefixes = cleanLegacyCommentSequencePrefixes(comments);
+        int cleanedCommentTags = (int) comments.updateMany(Filters.exists("tags"),
+                Updates.unset("tags")).getModifiedCount();
+        int cleanedAuditTags = (int) systemLogs.updateMany(Filters.exists("action_detail.tags"),
+                Updates.unset("action_detail.tags")).getModifiedCount();
         int insertedDetails = 0;
         int insertedComments = 0;
         java.util.Date now = new java.util.Date();
@@ -391,14 +397,13 @@ public final class DemoDataSeeder {
                             Updates.setOnInsert("item_id", scenic.itemId()),
                             Updates.setOnInsert("content", COMMENT_TEXTS[index % COMMENT_TEXTS.length]),
                             Updates.setOnInsert("rating", rating),
-                            Updates.setOnInsert("tags", scenic.tags()),
                             Updates.setOnInsert("source", SEED_SOURCE),
                             Updates.setOnInsert("created_at", new java.util.Date(now.getTime() - index * 3_600_000L)),
                             Updates.setOnInsert("updated_at", new java.util.Date(now.getTime() - index * 3_600_000L))),
                     new UpdateOptions().upsert(true));
             if (commentResult.getUpsertedId() != null) insertedComments++;
         }
-        database.getCollection("system_logs").updateOne(
+        systemLogs.updateOne(
                 Filters.and(Filters.eq("log_type", "DEMO_DATA_SEED"),
                         Filters.eq("action_detail.seed_source", SEED_SOURCE)),
                 Updates.combine(
@@ -410,7 +415,8 @@ public final class DemoDataSeeder {
                                 .append("count", scenics.size())),
                         Updates.setOnInsert("timestamp", now)),
                 new UpdateOptions().upsert(true));
-        return new MongoSeedResult(insertedDetails, insertedComments, cleanedCommentPrefixes);
+        return new MongoSeedResult(insertedDetails, insertedComments, cleanedCommentPrefixes,
+                cleanedCommentTags, cleanedAuditTags);
     }
 
     private static int cleanLegacyCommentSequencePrefixes(MongoCollection<Document> comments) {
@@ -456,7 +462,8 @@ public final class DemoDataSeeder {
     private record MySqlSeedResult(int insertedUsers, int insertedItems, int insertedOrders) {
     }
 
-    private record MongoSeedResult(int insertedDetails, int insertedComments, int cleanedCommentPrefixes) {
+    private record MongoSeedResult(int insertedDetails, int insertedComments, int cleanedCommentPrefixes,
+                                   int cleanedCommentTags, int cleanedAuditTags) {
     }
 
     private record SeedArguments(boolean apply, int count) {

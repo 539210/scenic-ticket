@@ -28,32 +28,30 @@ class CommentServiceTest {
         fixture.orders.eligible = false;
 
         assertThrows(BusinessException.class,
-                () -> fixture.service.submit(2L, 7L, "很好", 5, List.of("环境好"), "127.0.0.1"));
+                () -> fixture.service.submit(2L, 7L, "很好", 5, "127.0.0.1"));
 
         assertEquals(null, fixture.comments.saved);
     }
 
     @Test
-    void createsThenUpdatesSingleCommentWithNormalizedTags() {
+    void createsThenUpdatesSingleCommentWithoutTags() {
         Fixture fixture = new Fixture();
 
-        var created = fixture.service.submit(2L, 7L, "  首次评论  ", 5,
-                List.of(" 环境好 ", "", "环境好", "交通方便"), "127.0.0.1");
-        var updated = fixture.service.submit(2L, 7L, "更新后的评论", 4,
-                List.of("适合家庭"), "127.0.0.1");
+        var created = fixture.service.submit(2L, 7L, "  首次评论  ", 5, "127.0.0.1");
+        var updated = fixture.service.submit(2L, 7L, "更新后的评论", 4, "127.0.0.1");
 
         assertFalse(created.updated());
         assertTrue(updated.updated());
         assertEquals("更新后的评论", fixture.comments.saved.getString("content"));
         assertEquals(4, fixture.comments.saved.getInteger("rating"));
-        assertEquals(List.of("适合家庭"), fixture.comments.saved.getList("tags", String.class));
+        assertFalse(fixture.comments.saved.containsKey("tags"));
         assertEquals(1, fixture.comments.documentCount);
         assertEquals(List.of("COMMENT_CREATE", "COMMENT_UPDATE"), fixture.systemLogs.types);
         assertEquals("更新评论", fixture.systemLogs.details.get(1).getString("operation"));
     }
 
     @Test
-    void listIncludesMaskedUsernameTagsAndBothTimestamps() {
+    void listIncludesMaskedUsernameAndBothTimestampsWhileIgnoringLegacyTags() {
         Fixture fixture = new Fixture();
         Date createdAt = new Date(1000);
         Date updatedAt = new Date(2000);
@@ -69,7 +67,6 @@ class CommentServiceTest {
         var view = result.comments().get(0);
         assertEquals("u***", view.displayUsername());
         assertEquals("中文评论", view.content());
-        assertEquals(List.of("景色好", "服务好"), view.tags());
         assertEquals(createdAt, view.createdAt());
         assertEquals(updatedAt, view.updatedAt());
     }
@@ -79,7 +76,7 @@ class CommentServiceTest {
         Fixture fixture = new Fixture();
         fixture.logs.fail = true;
 
-        var result = fixture.service.submit(2L, 7L, "日志故障仍保存", 5, List.of(), "127.0.0.1");
+        var result = fixture.service.submit(2L, 7L, "日志故障仍保存", 5, "127.0.0.1");
 
         assertFalse(result.auditRecorded());
         assertTrue(result.message().contains("审计日志写入失败"));
@@ -91,7 +88,7 @@ class CommentServiceTest {
         Fixture fixture = new Fixture();
         fixture.systemLogs.fail = true;
 
-        var result = fixture.service.submit(2L, 7L, "系统审计故障仍保存", 5, List.of(), "127.0.0.1");
+        var result = fixture.service.submit(2L, 7L, "系统审计故障仍保存", 5, "127.0.0.1");
 
         assertFalse(result.auditRecorded());
         assertEquals("系统审计故障仍保存", fixture.comments.saved.getString("content"));
@@ -124,10 +121,10 @@ class CommentServiceTest {
         @Override
         public Document findByUserAndItem(long userId, long itemId) { return saved; }
         @Override
-        public Document upsertComment(long userId, long itemId, String content, int rating, List<String> tags) {
+        public Document upsertComment(long userId, long itemId, String content, int rating) {
             Date created = saved == null ? new Date(1000) : saved.getDate("created_at");
             saved = new Document("user_id", userId).append("item_id", itemId).append("content", content)
-                    .append("rating", rating).append("tags", tags).append("created_at", created)
+                    .append("rating", rating).append("created_at", created)
                     .append("updated_at", new Date(2000));
             documentCount = 1;
             return saved;

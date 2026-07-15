@@ -730,7 +730,7 @@ public class AppFrame extends JFrame {
         }
         CommentDialogPanel.CommentSubmission submission = form.submission();
         runTask("发表评论", () -> commentService.submit(actorUserId, item.getItemId(),
-                submission.content(), submission.rating(), submission.tags(), "127.0.0.1"), resultMessage -> {
+                submission.content(), submission.rating(), "127.0.0.1"), resultMessage -> {
             setStatus(resultMessage.message());
             if (!resultMessage.auditRecorded()) {
                 JOptionPane.showMessageDialog(this, resultMessage.message(),

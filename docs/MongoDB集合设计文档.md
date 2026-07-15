@@ -46,7 +46,7 @@ scenic_ticket
 
 ### 3.2 comments
 
-用途：存储用户对景点的评分、文字评论和标签。
+用途：存储用户对景点的评分和文字评论。
 
 示例文档：
 
@@ -56,7 +56,6 @@ scenic_ticket
   "item_id": 2001,
   "content": "景区环境很好，入园很方便。",
   "rating": 5,
-  "tags": ["环境好", "适合亲子"],
   "created_at": "ISODate(...)",
   "updated_at": "ISODate(...)"
 }

@@ -314,10 +314,6 @@ public final class AuditPanel extends JPanel {
         addDetail(parts, "金额", detail.get("amount"));
         addDetail(parts, "付款方式", detail.get("payment_method"));
         addDetail(parts, "评分", detail.get("rating"));
-        Object tags = detail.get("tags");
-        if (tags instanceof List<?> values && !values.isEmpty()) {
-            parts.add("标签=" + values.stream().map(String::valueOf).reduce((left, right) -> left + "、" + right).orElse("-"));
-        }
         addDetail(parts, "原因", detail.get("reason"));
         addDetail(parts, "目标账号", detail.get("target_username"));
         addDetail(parts, "原状态", userStatusText(detail.get("previous_status")));

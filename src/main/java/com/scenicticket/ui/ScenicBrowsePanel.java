@@ -437,10 +437,7 @@ public final class ScenicBrowsePanel extends JPanel {
             title.setFont(UiTheme.SECTION_FONT);
             JTextArea content = UiComponents.readOnlyTextArea(2, 24);
             content.setText(UiFormatters.readableText(comment.content(), "该评论没有文字内容"));
-            List<String> readableTags = comment.tags() == null ? List.of() : comment.tags().stream()
-                    .filter(java.util.Objects::nonNull).map(String::trim).filter(tag -> !tag.isBlank()).toList();
-            String tags = readableTags.isEmpty() ? "无标签" : "标签：" + String.join(" · ", readableTags);
-            JLabel meta = new JLabel(tags + "　评论时间：" + UiFormatters.date(comment.createdAt()));
+            JLabel meta = new JLabel("评论时间：" + UiFormatters.date(comment.createdAt()));
             meta.setForeground(UiTheme.MUTED);
             card.add(title, BorderLayout.NORTH);
             card.add(content, BorderLayout.CENTER);

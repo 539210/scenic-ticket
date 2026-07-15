@@ -111,14 +111,6 @@ public class StatisticsService {
         return commentDAO.aggregateRatingDistribution(itemId);
     }
 
-    public List<Document> getHotTags(int limit) {
-        return commentDAO.aggregateHotTags(normalizeLimit(limit)).stream()
-                .sorted(Comparator.comparingLong((Document document) -> readLongOrZero(document.get("tag_count")))
-                        .reversed()
-                        .thenComparing(document -> String.valueOf(document.get("_id"))))
-                .toList();
-    }
-
     public List<Document> getSystemAuditSummary(long actorUserId, Date startTime, Date endTime) {
         authorizationService.requireAdmin(actorUserId);
         return systemLogDAO.aggregateAuditSummary(startTime, endTime);
@@ -188,7 +180,6 @@ public class StatisticsService {
         report.setHotItems(getHotItemRanking(startTime, endTime, 10));
         report.setActionTypeSummary(getActionTypeSummary(startTime, endTime));
         report.setDailyTrend(getDailyActionTrend(startTime, endTime));
-        report.setHotTags(getHotTags(10));
         report.setSystemAuditSummary(getSystemAuditSummary(actorUserId, startTime, endTime));
         report.setSystemAuditTrend(getSystemAuditTrend(actorUserId, startTime, endTime));
         return report;

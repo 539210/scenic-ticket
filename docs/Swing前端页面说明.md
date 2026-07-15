@@ -24,7 +24,7 @@ src/main/java/com/scenicticket/ui/AppFrame.java
 | 注册页 | 从登录页跳转注册新用户，注册成功后返回登录页 | `UserService#register` |
 | 首页 | 展示当前账号、账号类型和快捷入口 | 本地 UI 状态 |
 | 个人档案 | 保存用户真实姓名、证件号、地址、个人简介 | `UserService#updateProfile` |
-| 景点浏览 | 按预设关键词/数据库分类查询景点；概览、简介、评论使用独立页签，过时异步详情不会覆盖新选择；评论支持标签和原位修改 | `BusinessService`、`CrossDatabaseQueryService`、`RecommendService`、`CommentService` |
+| 景点浏览 | 按预设关键词/数据库分类查询景点；概览、简介、评论使用独立页签，过时异步详情不会覆盖新选择；评论支持评分、正文和原位修改 | `BusinessService`、`CrossDatabaseQueryService`、`RecommendService`、`CommentService` |
 | 我的订单 | 按订单号和状态查询订单，显示票种/日期/价格快照；专用按钮执行支付、待支付取消和退款 | `BusinessService`、`OrderLifecycleService` |
 | 后台管理 | 景点、分类、用户和票种/库存独立页签；核销入口不在当前界面展示 | `BusinessService`、`AdminUserService`、`TicketInventoryService` |
 | 统计报表 | 以表格展示月度订单、带景点名称的热门排行、用户报告和综合汇总 | `StatisticsService` |

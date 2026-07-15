@@ -276,10 +276,6 @@ public final class ReportPanel extends JPanel {
             dashboardModel.addRow(new Object[]{"用户行为", actionTypeName(document.getString("action_type")),
                     numberText(document.get("action_count")) + " 次"});
         }
-        for (Document document : safeList(dto.getHotTags())) {
-            dashboardModel.addRow(new Object[]{"热门标签", valueText(document.get("_id")),
-                    numberText(document.get("tag_count")) + " 次"});
-        }
         for (Document document : safeList(dto.getSystemAuditSummary())) {
             dashboardModel.addRow(new Object[]{"系统审计", logTypeName(document.getString("log_type")) + " / "
                     + logLevelName(document.getString("log_level")),

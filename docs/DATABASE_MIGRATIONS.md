@@ -30,7 +30,8 @@
 | 06 | `mysql_triggers.sql` | 安装/更新两个课程触发器 | 恢复上一版本定义 |
 | 07 | `mongodb_day09_id_compatibility.js` | 检测/迁移字符串 ID、补 updated_at、评论唯一性准备 | 备份后回退字段类型；脚本不删评论 |
 | 08 | `mongodb_day09_indexes.js` | 新复合/文本索引与评论唯一索引（数据清理后） | 可删除新索引，不删除文档 |
-| 09 | `mongodb_day11_repair_seed_encoding.js` | 备份并恢复能严格匹配可信初始化公式的问号简介、地址、评论和标签 | 原 BSON 保存在 `DATA_REPAIR_BACKUP` 审计记录，可按 `_id` 回写；未知来源数据不自动修改 |
+| 09 | `mongodb_day11_repair_seed_encoding.js` | 备份并恢复能严格匹配可信初始化公式的问号简介、地址和评论 | 原 BSON 保存在 `DATA_REPAIR_BACKUP` 审计记录，可按 `_id` 回写；未知来源数据不自动修改 |
+| 10 | `mongodb_day11_remove_comment_tags.js` | 删除评论及评论审计中的旧标签字段 | 如需回退只能从执行前备份恢复；不影响评分、正文和时间 |
 
 ## 测试数据库策略
 
@@ -47,6 +48,7 @@
 - `mongodb_day09_id_compatibility.js`
 - `mongodb_day09_indexes.js`
 - `mongodb_day11_repair_seed_encoding.js`
+- `mongodb_day11_remove_comment_tags.js`
 
 回滚策略：新业务启用前可回退应用并保留新增表/列；退款、核销、订单快照等审计性数据不得自动删除。需要物理回滚时先导出新增表并确认没有新流程数据，再由管理员执行独立回滚脚本。MongoDB 迁移只做可逆类型规范化/补字段和索引，不自动删除重复评论。
 
@@ -56,7 +58,7 @@
 - 全新 MySQL `scenic_ticket_test`：10 表、12 外键、2 视图、2 存储过程、2 触发器、60 票种、420 库存行、4 迁移记录；库存不变量违规 0。
 - Day08 旧结构夹具升级：原 users/profiles/orders 记录保留，订单成功回填成人票和 100.00/90.00 价格快照；升级后 10 表、2 视图、2 过程、2 触发器。
 - MongoDB `scenic_ticket_test`：四集合、索引、中文文本、数值 ID 和至少四类真实聚合通过 Java Driver 集成测试。
-- MongoDB `scenic_ticket` 编码修复：修复前将 20 条详情和 20 条评论完整保存到 `DATA_REPAIR_BACKUP`；恢复后损坏简介/地址/评论/标签计数均为 0，`item_id=10` 中文详情和第 29 条初始化评论只读复核通过。
+- MongoDB `scenic_ticket` 编码修复：修复前将 20 条详情和 20 条评论完整保存到 `DATA_REPAIR_BACKUP`；恢复后损坏简介/地址/评论计数均为 0，`item_id=10` 中文详情和第 29 条初始化评论只读复核通过。随后删除所有评论及评论审计标签字段。
 - M10 完整 Java 21 集成命令：167 tests，0 failures，0 errors，1 skipped（仅 Fake DAO 压力测试）。
 - M11 加入 5 项文档一致性回归后的最终完整命令：172 tests，0 failures，0 errors，1 skipped。
 - 库存并发、支付/退款/核销、Mongo 降级和普通用户/管理员完整流程均在空测试库最终重跑通过。

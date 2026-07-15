@@ -31,7 +31,7 @@ action_logs
 
 | 类 | 功能 |
 | --- | --- |
-| `CommentDAO` | 评论写入、按景点查询、按用户查询、评分汇总、评分分布、热门标签 |
+| `CommentDAO` | 评论写入、按景点查询、按用户查询、评分汇总、评分分布 |
 | `BehaviorLogService#addComment` | 校验评分和内容，写入评论，同时记录 `COMMENT` 行为日志 |
 
 评论写入集合：
@@ -58,14 +58,13 @@ Day 04 已实现以下 MongoDB 聚合：
 | `aggregateDailyTrend` | `action_logs` | 按日期和行为类型统计趋势 |
 | `aggregateRatingByItem` | `comments` | 按景点统计评论数、平均分、最高分、最低分 |
 | `aggregateRatingDistribution` | `comments` | 按景点评分分布 |
-| `aggregateHotTags` | `comments` | 全局热门评论标签 |
 
 ## 统计服务初版
 
 | 类 | 功能 |
 | --- | --- |
-| `StatisticsService` | 对外提供用户行为报告、热门景点排行、行为类型统计、每日趋势、评分统计、热门标签 |
-| `StatisticsReportDTO` | 聚合首页/报表页需要的热门景点、行为类型、趋势、热门标签 |
+| `StatisticsService` | 对外提供用户行为报告、热门景点排行、行为类型统计、每日趋势、评分统计 |
+| `StatisticsReportDTO` | 聚合首页/报表页需要的热门景点、行为类型和趋势 |
 
 统计服务目前返回 MongoDB `Document` 结果，便于后续 Swing 报表界面直接展示或转换成表格模型。
 

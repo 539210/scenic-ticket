@@ -6,7 +6,6 @@ if (!allowedDatabases.includes(db.getName())) {
 const migrationId = "day11_repair_seed_encoding_v1";
 const corruptedText = /\?{2,}/;
 const corruptedOnlyWithSequence = /^\?+\s+\d+\?+$/;
-const corruptedOnly = /^\?+$/;
 
 const damagedDetails = db.item_details.find({
   $or: [
@@ -15,12 +14,7 @@ const damagedDetails = db.item_details.find({
   ]
 }).toArray();
 
-const damagedComments = db.comments.find({
-  $or: [
-    { content: corruptedText },
-    { tags: { $elemMatch: { $regex: corruptedText } } }
-  ]
-}).toArray();
+const damagedComments = db.comments.find({ content: corruptedText }).toArray();
 
 const existingBackup = db.system_logs.findOne({
   log_type: "DATA_REPAIR_BACKUP",
@@ -61,25 +55,15 @@ for (const detail of damagedDetails) {
   }
 }
 
-const tagSets = [
-  ["环境好", "适合亲子"],
-  ["服务好", "交通方便"],
-  ["景色美", "拍照推荐"],
-  ["排队少", "体验好"]
-];
 let repairedComments = 0;
 for (const comment of damagedComments) {
   const content = String(comment.content ?? "");
   const sequenceMatch = content.match(/\d+/);
   const sequence = sequenceMatch ? Number(sequenceMatch[0]) : NaN;
-  const tagsAreCorrupted = Array.isArray(comment.tags)
-    && comment.tags.length > 0
-    && comment.tags.every(tag => corruptedOnly.test(String(tag)));
   const matchesLegacySeedFormula = Number.isInteger(sequence)
     && sequence >= 1
     && sequence <= 1000
     && corruptedOnlyWithSequence.test(content)
-    && tagsAreCorrupted
     && Number(comment.user_id) === (sequence % 10) + 1
     && Number(comment.item_id) === (sequence % 20) + 1
     && Number(comment.rating) === (sequence % 5) + 1;
@@ -87,10 +71,8 @@ for (const comment of damagedComments) {
     continue;
   }
   const result = db.comments.updateOne({ _id: comment._id }, {
-    $set: {
-      content: "景区体验良好，购票流程顺畅。",
-      tags: tagSets[sequence % tagSets.length]
-    }
+    $set: { content: "景区体验良好，购票流程顺畅。" },
+    $unset: { tags: "" }
   });
   repairedComments += result.modifiedCount;
 }
@@ -101,12 +83,7 @@ const remainingDetails = db.item_details.countDocuments({
     { "metadata.address": corruptedText }
   ]
 });
-const remainingComments = db.comments.countDocuments({
-  $or: [
-    { content: corruptedText },
-    { tags: { $elemMatch: { $regex: corruptedText } } }
-  ]
-});
+const remainingComments = db.comments.countDocuments({ content: corruptedText });
 
 printjson({
   database: db.getName(),

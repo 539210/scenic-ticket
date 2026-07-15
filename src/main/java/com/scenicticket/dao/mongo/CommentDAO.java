@@ -17,6 +17,7 @@ import java.util.List;
 
 public class CommentDAO extends MongoBaseDAO {
     public void insertComment(Document comment) {
+        comment.remove("tags");
         if (!comment.containsKey("created_at")) {
             comment.append("created_at", new Date());
         }
@@ -31,8 +32,8 @@ public class CommentDAO extends MongoBaseDAO {
                 .into(new ArrayList<>());
     }
 
-    public void addComment(long userId, long itemId, String content, int rating, List<String> tags) {
-        upsertComment(userId, itemId, content, rating, tags);
+    public void addComment(long userId, long itemId, String content, int rating) {
+        upsertComment(userId, itemId, content, rating);
     }
 
     public Document findByUserAndItem(long userId, long itemId) {
@@ -41,7 +42,7 @@ public class CommentDAO extends MongoBaseDAO {
                 Filters.in("item_id", itemId, String.valueOf(itemId)))).first();
     }
 
-    public Document upsertComment(long userId, long itemId, String content, int rating, List<String> tags) {
+    public Document upsertComment(long userId, long itemId, String content, int rating) {
         MongoCollection<Document> comments = getCollection("comments");
         Document existing = findByUserAndItem(userId, itemId);
         Bson filter = existing != null && existing.get("_id") != null
@@ -53,7 +54,7 @@ public class CommentDAO extends MongoBaseDAO {
                 Updates.set("item_id", itemId),
                 Updates.set("content", content),
                 Updates.set("rating", rating),
-                Updates.set("tags", tags == null ? List.of() : tags),
+                Updates.unset("tags"),
                 Updates.set("updated_at", now),
                 Updates.setOnInsert("created_at", now));
         FindOneAndUpdateOptions options = new FindOneAndUpdateOptions()
@@ -105,17 +106,6 @@ public class CommentDAO extends MongoBaseDAO {
                 new Document("$group", new Document("_id", "$rating")
                         .append("count", new Document("$sum", 1))),
                 new Document("$sort", new Document("_id", 1))
-        );
-        return getCollection("comments").aggregate(pipeline).into(new ArrayList<>());
-    }
-
-    public List<Document> aggregateHotTags(int limit) {
-        List<Bson> pipeline = List.of(
-                new Document("$unwind", "$tags"),
-                new Document("$group", new Document("_id", "$tags")
-                        .append("tag_count", new Document("$sum", 1))),
-                new Document("$sort", new Document("tag_count", -1).append("_id", 1)),
-                new Document("$limit", limit)
         );
         return getCollection("comments").aggregate(pipeline).into(new ArrayList<>());
     }

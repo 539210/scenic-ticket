@@ -59,14 +59,12 @@ for (let i = 1; i <= 20; i += 1) {
 db.item_details.insertMany(itemDetails);
 
 const comments = [];
-const tags = [["环境好", "适合亲子"], ["服务好", "交通方便"], ["景色美", "拍照推荐"], ["排队少", "体验好"]];
 for (let i = 1; i <= 30; i += 1) {
   comments.push({
     user_id: Math.floor((i - 1) / 20) + 1,
     item_id: ((i - 1) % 20) + 1,
     content: "景区体验良好，购票流程顺畅。",
     rating: (i % 5) + 1,
-    tags: tags[i % tags.length],
     created_at: new Date(Date.now() - i * 3600 * 1000),
     updated_at: new Date(Date.now() - i * 3600 * 1000)
   });

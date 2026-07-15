@@ -125,8 +125,7 @@ class RoleBusinessFlowIntegrationTest {
             assertTrue(businessService.listUserOrders(flowUserId, 20, 0).stream()
                     .anyMatch(order -> order.getOrderId() == paidFutureOrderId && order.getStatus() == 1));
 
-            var comment = commentService.submit(flowUserId, itemId, "完整流程中文评论", 5,
-                    List.of("流程顺畅", "适合答辩"), IP);
+            var comment = commentService.submit(flowUserId, itemId, "完整流程中文评论", 5, IP);
             assertFalse(comment.updated());
             assertTrue(commentService.listForItem(flowUserId, itemId, 50).comments().stream()
                     .anyMatch(view -> "完整流程中文评论".equals(view.content())));

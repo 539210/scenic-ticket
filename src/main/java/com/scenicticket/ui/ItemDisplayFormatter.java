@@ -5,7 +5,6 @@ import com.scenicticket.dto.CrossDatabaseItemDTO;
 import com.scenicticket.model.Item;
 import org.bson.Document;
 
-import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
@@ -52,13 +51,10 @@ public final class ItemDisplayFormatter {
         }
         int index = 1;
         for (var comment : dto.comments()) {
-            List<String> tags = comment.tags() == null ? List.of() : comment.tags();
             builder.append(index++).append(". 用户：").append(text(comment.displayUsername(), "未知用户"))
                     .append("  评分：").append(comment.rating()).append(System.lineSeparator())
                     .append("   正文：").append(UiFormatters.readableText(
                             comment.content(), "该评论没有文字内容"))
-                    .append(System.lineSeparator())
-                    .append("   标签：").append(formatTags(tags))
                     .append(System.lineSeparator())
                     .append("   创建：").append(UiFormatters.date(comment.createdAt()))
                     .append("  更新：").append(UiFormatters.date(comment.updatedAt()))
@@ -75,19 +71,6 @@ public final class ItemDisplayFormatter {
                 + "，平均分：" + decimal(summary.get("avg_rating"))
                 + "，最高分：" + integer(summary.get("max_rating"))
                 + "，最低分：" + integer(summary.get("min_rating"));
-    }
-
-    private String formatTags(List<String> tags) {
-        if (tags == null || tags.isEmpty()) {
-            return "无";
-        }
-        List<String> readableTags = tags.stream()
-                .filter(Objects::nonNull)
-                .map(tag -> UiFormatters.readableText(tag, ""))
-                .filter(tag -> !tag.isBlank())
-                .distinct()
-                .toList();
-        return readableTags.isEmpty() ? "无" : String.join("、", readableTags);
     }
 
     private void appendFriendlyMetadata(StringBuilder builder, Object value) {

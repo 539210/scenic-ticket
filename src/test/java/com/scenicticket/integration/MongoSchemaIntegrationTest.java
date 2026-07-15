@@ -185,7 +185,6 @@ class MongoSchemaIntegrationTest {
                     .append("item_id", itemId)
                     .append("content", "景区体验良好，购票流程顺畅。")
                     .append("rating", (int) (itemId % 5) + 1)
-                    .append("tags", List.of("环境好", "购票方便"))
                     .append("created_at", now)
                     .append("updated_at", now));
         }

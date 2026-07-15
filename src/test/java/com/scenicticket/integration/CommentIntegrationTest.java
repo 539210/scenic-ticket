@@ -73,16 +73,14 @@ class CommentIntegrationTest {
                     "微信", "127.0.0.1").orderId();
             lifecycleService.pay(USER_ID, orderId, "127.0.0.1");
 
-            var created = commentService.submit(USER_ID, ITEM_ID, "首次中文评论", 5,
-                    List.of("景色好", "交通方便"), "127.0.0.1");
+            var created = commentService.submit(USER_ID, ITEM_ID, "首次中文评论", 5, "127.0.0.1");
             Document first = new CommentDAO().findByUserAndItem(USER_ID, ITEM_ID);
             assertFalse(created.updated());
             assertNotNull(first);
             Date createdAt = first.getDate("created_at");
             assertNotNull(createdAt);
 
-            var updated = commentService.submit(USER_ID, ITEM_ID, "更新后的中文评论", 4,
-                    List.of("适合家庭"), "127.0.0.1");
+            var updated = commentService.submit(USER_ID, ITEM_ID, "更新后的中文评论", 4, "127.0.0.1");
             Document saved = new CommentDAO().findByUserAndItem(USER_ID, ITEM_ID);
             assertTrue(updated.updated());
             assertEquals(1L, comments.countDocuments(compatibleCommentFilter()));
@@ -91,7 +89,7 @@ class CommentIntegrationTest {
             assertTrue(saved.get("user_id") instanceof Number);
             assertTrue(saved.get("item_id") instanceof Number);
             assertEquals("更新后的中文评论", saved.getString("content"));
-            assertEquals(List.of("适合家庭"), saved.getList("tags", String.class));
+            assertFalse(saved.containsKey("tags"));
 
             var list = commentService.listForItem(USER_ID, ITEM_ID, 100);
             assertEquals(baselineItemComments + 1, list.comments().size());

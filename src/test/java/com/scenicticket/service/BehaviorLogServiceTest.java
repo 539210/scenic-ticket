@@ -43,7 +43,7 @@ class BehaviorLogServiceTest {
     @Test
     void legacyCommentSubmissionIsDisabled() {
         BusinessException exception = assertThrows(BusinessException.class,
-                () -> service.addComment(3L, 4L, "good view", 5, List.of("family"), "10.0.0.1"));
+                () -> service.addComment(3L, 4L, "good view", 5, "10.0.0.1"));
         assertEquals("旧评论接口已停用，请使用带购买资格校验的 CommentService", exception.getMessage());
     }
 
@@ -89,13 +89,12 @@ class BehaviorLogServiceTest {
         private Document comment;
 
         @Override
-        public void addComment(long userId, long itemId, String content, int rating, List<String> tags) {
+        public void addComment(long userId, long itemId, String content, int rating) {
             comment = new Document()
                     .append("user_id", userId)
                     .append("item_id", itemId)
                     .append("content", content)
-                    .append("rating", rating)
-                    .append("tags", tags);
+                    .append("rating", rating);
         }
     }
 
