@@ -13,9 +13,16 @@ set "PROJECT_ROOT=%~dp0"
 cd /d "%PROJECT_ROOT%"
 
 if defined SCENIC_JAVA_HOME set "JAVA_HOME=%SCENIC_JAVA_HOME%"
+if defined JAVA_HOME if not exist "%JAVA_HOME%\bin\javac.exe" set "JAVA_HOME="
 if not defined JAVA_HOME (
   for /f "delims=" %%I in ('where javac.exe 2^>nul') do if not defined JAVA_HOME (
     for %%J in ("%%~dpI..") do set "JAVA_HOME=%%~fJ"
+  )
+)
+if not exist "%JAVA_HOME%\bin\javac.exe" if exist "%PROJECT_ROOT%scripts\find-jdk21.ps1" (
+  for /f "delims=" %%I in ('powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%PROJECT_ROOT%scripts\find-jdk21.ps1" 2^>nul') do if not defined JDK_READY (
+    set "JAVA_HOME=%%~fI"
+    set "JDK_READY=1"
   )
 )
 if not exist "%JAVA_HOME%\bin\javac.exe" (
@@ -44,9 +51,9 @@ if not defined MAVEN_CMD (
 
 echo Seeding 50 demo users, scenic items, paid orders and comments...
 if exist "%MAVEN_CMD%" (
-  call "%MAVEN_CMD%" -q compile exec:java -Dexec.mainClass=com.scenicticket.tools.DemoDataSeeder -Dexec.args="--apply --count=50"
+  call "%MAVEN_CMD%" -q -Dexec.mainClass=com.scenicticket.tools.DemoDataSeeder -Dexec.args="--apply --count=50" compile exec:java
 ) else (
-  call %MAVEN_CMD% -q compile exec:java -Dexec.mainClass=com.scenicticket.tools.DemoDataSeeder -Dexec.args="--apply --count=50"
+  call %MAVEN_CMD% -q -Dexec.mainClass=com.scenicticket.tools.DemoDataSeeder -Dexec.args="--apply --count=50" compile exec:java
 )
 if errorlevel 1 (
   echo Demo data generation failed. Fix the reported problem and rerun; completed rows are idempotent and will not be duplicated.

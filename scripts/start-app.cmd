@@ -20,6 +20,13 @@ if not defined JDK_READY (
   )
 )
 
+if not defined JDK_READY if exist "%SCRIPT_DIR%find-jdk21.ps1" (
+  for /f "delims=" %%I in ('powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%SCRIPT_DIR%find-jdk21.ps1" 2^>nul') do if not defined JDK_READY (
+    set "JAVA_HOME=%%~fI"
+    if exist "!JAVA_HOME!\bin\javac.exe" set "JDK_READY=1"
+  )
+)
+
 if not defined JDK_READY (
   echo JDK 21 was not found. Set JAVA_HOME or SCENIC_JAVA_HOME to a JDK 21 installation.
   exit /b 1
@@ -88,9 +95,9 @@ if /i "%~1"=="--check" (
 )
 
 if exist "%MAVEN_CMD%" (
-  call "%MAVEN_CMD%" exec:java -Dexec.mainClass=com.scenicticket.Main
+  call "%MAVEN_CMD%" -Dexec.mainClass=com.scenicticket.Main exec:java
 ) else (
-  call %MAVEN_CMD% exec:java -Dexec.mainClass=com.scenicticket.Main
+  call %MAVEN_CMD% -Dexec.mainClass=com.scenicticket.Main exec:java
 )
 
 if errorlevel 1 (
