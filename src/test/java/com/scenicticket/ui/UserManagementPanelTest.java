@@ -24,16 +24,17 @@ class UserManagementPanelTest {
     void queryBuildsCompleteCriteriaAndRendersUsers() {
         FakeActions actions = new FakeActions(List.of(user(2L, "alice", "USER", 1)));
         UserManagementPanel panel = new UserManagementPanel(1L, new ImmediateTaskExecutor(), actions);
-        panel.setFilters(" alice ", "a@example.com", 2, 1);
+        panel.setFilters("2", " alice ", "a@example.com", 2, 1);
 
         click(panel, "查询用户");
 
         UserSearchCriteria criteria = actions.lastCriteria;
+        assertEquals(2L, criteria.userId());
         assertEquals("alice", criteria.username());
         assertEquals("a@example.com", criteria.email());
         assertEquals("USER", criteria.role());
         assertEquals(1, criteria.status());
-        assertEquals(100, criteria.limit());
+        assertEquals(50, criteria.limit());
         assertEquals(1, panel.rowCount());
     }
 
@@ -62,12 +63,14 @@ class UserManagementPanelTest {
         click(panel, "查询用户");
         panel.selectRow(1);
         assertTrue(panel.statusUpdateEnabled());
-        panel.setTargetStatusIndex(0);
-        click(panel, "更新状态");
+        assertTrue(panel.banEnabled());
+        panel.setBanReason("恶意刷单");
+        click(panel, "封禁账号");
 
         assertEquals(2L, actions.statusTargetId);
         assertEquals(0, actions.newStatus);
-        assertEquals("用户状态已更新", last(actions.statuses));
+        assertEquals("恶意刷单", actions.statusReason);
+        assertEquals("用户账号已封禁", last(actions.statuses));
 
         panel.selectRow(1);
         panel.setTargetRoleIndex(1);
@@ -76,6 +79,34 @@ class UserManagementPanelTest {
         assertEquals(2L, actions.roleTargetId);
         assertEquals("ADMIN", actions.newRole);
         assertEquals("用户角色已更新", last(actions.statuses));
+    }
+
+    @Test
+    void disabledUserCanBeUnblockedDirectly() {
+        FakeActions actions = new FakeActions(List.of(user(2L, "blocked", "USER", 0)));
+        UserManagementPanel panel = new UserManagementPanel(1L, new ImmediateTaskExecutor(), actions);
+
+        click(panel, "查询用户");
+        panel.selectRow(0);
+
+        assertFalse(panel.banEnabled());
+        assertTrue(panel.unbanEnabled());
+        click(panel, "解除封禁");
+        assertEquals(1, actions.newStatus);
+    }
+
+    @Test
+    void fullPageEnablesNextPageAndPassesOffset() {
+        List<User> users = java.util.stream.LongStream.rangeClosed(2, 51)
+                .mapToObj(id -> user(id, "user" + id, "USER", 1)).toList();
+        FakeActions actions = new FakeActions(users);
+        UserManagementPanel panel = new UserManagementPanel(1L, new ImmediateTaskExecutor(), actions);
+
+        click(panel, "查询用户");
+        click(panel, "下一页");
+
+        assertEquals(50, actions.lastCriteria.offset());
+        assertEquals(50, actions.lastCriteria.limit());
     }
 
     private static String last(List<String> values) {
@@ -132,6 +163,7 @@ class UserManagementPanelTest {
         private boolean behaviorAvailable = true;
         private long statusTargetId;
         private int newStatus;
+        private String statusReason;
         private long roleTargetId;
         private String newRole;
 
@@ -155,10 +187,11 @@ class UserManagementPanelTest {
         }
 
         @Override
-        public AdminChangeResult changeStatus(long targetUserId, int status) {
+        public AdminChangeResult changeStatus(long targetUserId, int status, String reason) {
             statusTargetId = targetUserId;
             newStatus = status;
-            return new AdminChangeResult(true, true, "用户状态已更新");
+            statusReason = reason;
+            return new AdminChangeResult(true, true, status == 0 ? "用户账号已封禁" : "用户账号已解除封禁");
         }
 
         @Override

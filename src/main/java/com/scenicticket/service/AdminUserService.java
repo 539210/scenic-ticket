@@ -1,6 +1,7 @@
 package com.scenicticket.service;
 
 import com.scenicticket.dao.mongo.LogDAO;
+import com.scenicticket.dao.mongo.CommentDAO;
 import com.scenicticket.dao.mongo.SystemLogDAO;
 import com.scenicticket.dao.mysql.OrderDAO;
 import com.scenicticket.dao.mysql.ProfileDAO;
@@ -29,22 +30,24 @@ public class AdminUserService {
     private final ProfileDAO profileDAO;
     private final OrderDAO orderDAO;
     private final LogDAO logDAO;
+    private final CommentDAO commentDAO;
     private final SystemLogDAO systemLogDAO;
     private final AuthorizationService authorizationService;
     private final ConnectionProvider connectionProvider;
 
     public AdminUserService() {
-        this(new UserDAO(), new ProfileDAO(), new OrderDAO(), new LogDAO(), new SystemLogDAO(),
+        this(new UserDAO(), new ProfileDAO(), new OrderDAO(), new LogDAO(), new CommentDAO(), new SystemLogDAO(),
                 new AuthorizationService(), MySQLDBUtil::getConnection);
     }
 
     public AdminUserService(UserDAO userDAO, ProfileDAO profileDAO, OrderDAO orderDAO, LogDAO logDAO,
-                            SystemLogDAO systemLogDAO, AuthorizationService authorizationService,
+                            CommentDAO commentDAO, SystemLogDAO systemLogDAO, AuthorizationService authorizationService,
                             ConnectionProvider connectionProvider) {
         this.userDAO = userDAO;
         this.profileDAO = profileDAO;
         this.orderDAO = orderDAO;
         this.logDAO = logDAO;
+        this.commentDAO = commentDAO;
         this.systemLogDAO = systemLogDAO;
         this.authorizationService = authorizationService;
         this.connectionProvider = connectionProvider;
@@ -53,11 +56,12 @@ public class AdminUserService {
     public List<User> searchUsers(long actorUserId, UserSearchCriteria criteria) {
         authorizationService.requireAdmin(actorUserId);
         UserSearchCriteria safeCriteria = criteria == null
-                ? new UserSearchCriteria(null, null, null, null, 50, 0)
+                ? new UserSearchCriteria(null, null, null, null, null, 50, 0)
                 : criteria;
+        Long userId = normalizeUserIdFilter(safeCriteria.userId());
         String role = normalizeRoleFilter(safeCriteria.role());
         Integer status = normalizeStatusFilter(safeCriteria.status());
-        return userDAO.search(
+        return userDAO.search(userId,
                 SecurityUtil.normalizeText(safeCriteria.username(), 50),
                 SecurityUtil.normalizeText(safeCriteria.email(), 100),
                 role,
@@ -78,8 +82,13 @@ public class AdminUserService {
         detail.setUser(target);
         detail.setProfile(profileDAO.findByUserId(targetUserId).orElse(null));
         detail.setOrderSummary(orderDAO.summarizeByUserId(targetUserId));
+        detail.setRecentOrders(orderDAO.findByUserId(targetUserId, 10, 0));
         try {
             detail.setBehaviorCount(logDAO.countByUserId(targetUserId));
+            detail.setRecentActions(logDAO.findRecentByUserId(targetUserId, 10));
+            detail.setRecentComments(commentDAO.findByUserId(targetUserId, 10));
+            detail.setRecentAuditLogs(systemLogDAO.findByCondition(
+                    targetUserId, null, null, null, null, 10));
         } catch (RuntimeException e) {
             detail.setBehaviorDataAvailable(false);
             log.warn("Failed to read MongoDB behavior summary for user {}", targetUserId, e);
@@ -88,12 +97,23 @@ public class AdminUserService {
     }
 
     public AdminChangeResult changeUserStatus(long actorUserId, long targetUserId, int newStatus) {
+        return changeUserStatus(actorUserId, targetUserId, newStatus,
+                newStatus == 0 ? "管理员封禁账号" : "管理员解除封禁");
+    }
+
+    public AdminChangeResult changeUserStatus(long actorUserId, long targetUserId, int newStatus, String reason) {
         authorizationService.requireAdmin(actorUserId);
         if (targetUserId <= 0) {
             throw new BusinessException("目标用户ID必须大于 0");
         }
         if (newStatus != 0 && newStatus != 1) {
             throw new BusinessException("用户状态只能是启用或禁用");
+        }
+        String safeReason = newStatus == 0
+                ? SecurityUtil.requireText(reason, "封禁原因", 200)
+                : SecurityUtil.normalizeText(reason, 200);
+        if (safeReason == null || safeReason.isBlank()) {
+            safeReason = "管理员解除封禁";
         }
 
         try (Connection connection = connectionProvider.getConnection()) {
@@ -113,11 +133,18 @@ public class AdminUserService {
                         && target.getStatus() == 1 && newStatus == 0) {
                     requireAnotherActiveAdmin(connection);
                 }
+                Integer previousStatus = target.getStatus();
                 boolean updated = userDAO.updateStatus(connection, targetUserId, newStatus);
                 connection.commit();
-                return auditChange(actorUserId, "USER_STATUS_UPDATE",
-                        "用户状态已更新", new Document("target_user_id", targetUserId)
-                                .append("new_status", newStatus), updated);
+                String message = newStatus == 0 ? "用户账号已封禁" : "用户账号已解除封禁";
+                return auditChange(actorUserId, "USER_STATUS_UPDATE", message,
+                        new Document("target_user_id", targetUserId)
+                                .append("target_username", target.getUsername())
+                                .append("target_role", target.getRole())
+                                .append("previous_status", previousStatus)
+                                .append("new_status", newStatus)
+                                .append("reason", safeReason)
+                                .append("operation", newStatus == 0 ? "封禁账号" : "解除封禁"), updated);
             } catch (SQLException e) {
                 rollback(connection, e);
                 throw new DBException("更新用户状态失败", e);
@@ -156,11 +183,15 @@ public class AdminUserService {
                         && target.getStatus() != null && target.getStatus() == 1) {
                     requireAnotherActiveAdmin(connection);
                 }
+                String previousRole = target.getRole();
                 boolean updated = userDAO.updateRole(connection, targetUserId, safeRole);
                 connection.commit();
                 return auditChange(actorUserId, "USER_ROLE_UPDATE",
                         "用户角色已更新", new Document("target_user_id", targetUserId)
-                                .append("new_role", safeRole), updated);
+                                .append("target_username", target.getUsername())
+                                .append("previous_role", previousRole)
+                                .append("new_role", safeRole)
+                                .append("operation", "修改用户角色"), updated);
             } catch (SQLException e) {
                 rollback(connection, e);
                 throw new DBException("更新用户角色失败", e);
@@ -228,6 +259,12 @@ public class AdminUserService {
             throw new BusinessException("用户状态只能是启用或禁用");
         }
         return status;
+    }
+
+    private Long normalizeUserIdFilter(Long userId) {
+        if (userId == null) return null;
+        if (userId <= 0) throw new BusinessException("用户ID必须大于 0");
+        return userId;
     }
 
     private void rollback(Connection connection, Throwable original) {

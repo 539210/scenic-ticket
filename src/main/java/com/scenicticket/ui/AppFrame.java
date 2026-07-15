@@ -457,8 +457,8 @@ public class AppFrame extends JFrame {
             }
 
             @Override
-            public AdminChangeResult changeStatus(long targetUserId, int status) {
-                return adminUserService.changeUserStatus(actorUserId, targetUserId, status);
+            public AdminChangeResult changeStatus(long targetUserId, int status, String reason) {
+                return adminUserService.changeUserStatus(actorUserId, targetUserId, status, reason);
             }
 
             @Override

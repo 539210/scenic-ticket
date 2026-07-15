@@ -87,6 +87,7 @@ public class SystemLogDAO extends MongoBaseDAO {
                     regexFilter("action_detail.visit_date", escapedKeyword),
                     regexFilter("action_detail.payment_method", escapedKeyword),
                     regexFilter("action_detail.reason", escapedKeyword),
+                    regexFilter("action_detail.target_username", escapedKeyword),
                     regexFilter("action_detail.tags", escapedKeyword)
             ));
         }

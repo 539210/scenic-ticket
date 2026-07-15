@@ -1,6 +1,7 @@
 package com.scenicticket.service;
 
 import com.scenicticket.dao.mongo.LogDAO;
+import com.scenicticket.dao.mongo.CommentDAO;
 import com.scenicticket.dao.mongo.SystemLogDAO;
 import com.scenicticket.dao.mysql.OrderDAO;
 import com.scenicticket.dao.mysql.ProfileDAO;
@@ -11,6 +12,7 @@ import com.scenicticket.dto.UserOrderSummaryDTO;
 import com.scenicticket.dto.UserSearchCriteria;
 import com.scenicticket.exception.BusinessException;
 import com.scenicticket.model.Profile;
+import com.scenicticket.model.Order;
 import com.scenicticket.model.User;
 import org.bson.Document;
 import org.junit.jupiter.api.Test;
@@ -50,6 +52,17 @@ class AdminUserServiceTest {
     }
 
     @Test
+    void banningRequiresReasonAndDoesNotOpenTransactionWhenMissing() {
+        Fixture fixture = fixture(users(admin(1L), user(2L)));
+
+        assertThrows(BusinessException.class,
+                () -> fixture.service.changeUserStatus(1L, 2L, 0, "  "));
+
+        assertEquals(1, fixture.userDAO.users.get(2L).getStatus());
+        assertEquals(0, fixture.connection.commits);
+    }
+
+    @Test
     void statusAndRoleChangesCommitAndWriteAudit() {
         Fixture fixture = fixture(users(admin(1L), admin(2L), user(3L)));
 
@@ -62,6 +75,7 @@ class AdminUserServiceTest {
         assertTrue(promoted.updated());
         assertEquals("ADMIN", fixture.userDAO.users.get(3L).getRole());
         assertEquals(List.of("USER_STATUS_UPDATE", "USER_ROLE_UPDATE"), fixture.systemLogDAO.types);
+        assertEquals("管理员封禁账号", fixture.systemLogDAO.details.get(0).getString("reason"));
         assertTrue(fixture.connection.commits >= 2);
     }
 
@@ -91,14 +105,16 @@ class AdminUserServiceTest {
         assertEquals(4, detail.getOrderSummary().getTotalOrders());
         assertEquals(new BigDecimal("188.00"), detail.getOrderSummary().getPaidAmount());
         assertFalse(detail.isBehaviorDataAvailable());
+        assertEquals(1, detail.getRecentOrders().size());
     }
 
     @Test
     void searchNormalizesAndPassesAllFilters() {
         Fixture fixture = fixture(users(admin(1L), user(2L)));
 
-        fixture.service.searchUsers(1L, new UserSearchCriteria("  user  ", " example.com ", "user", 1, 999, -4));
+        fixture.service.searchUsers(1L, new UserSearchCriteria(2L, "  user  ", " example.com ", "user", 1, 999, -4));
 
+        assertEquals(2L, fixture.userDAO.userId);
         assertEquals("user", fixture.userDAO.username);
         assertEquals("example.com", fixture.userDAO.email);
         assertEquals("USER", fixture.userDAO.role);
@@ -112,10 +128,11 @@ class AdminUserServiceTest {
         FakeProfileDAO profileDAO = new FakeProfileDAO();
         FakeOrderDAO orderDAO = new FakeOrderDAO();
         FakeLogDAO logDAO = new FakeLogDAO();
+        FakeCommentDAO commentDAO = new FakeCommentDAO();
         FakeSystemLogDAO systemLogDAO = new FakeSystemLogDAO();
         TrackingConnection connection = TrackingConnection.create();
         AuthorizationService authorization = new AuthorizationService(userDAO);
-        AdminUserService service = new AdminUserService(userDAO, profileDAO, orderDAO, logDAO, systemLogDAO,
+        AdminUserService service = new AdminUserService(userDAO, profileDAO, orderDAO, logDAO, commentDAO, systemLogDAO,
                 authorization, () -> connection.connection);
         return new Fixture(service, userDAO, logDAO, systemLogDAO, connection);
     }
@@ -149,6 +166,7 @@ class AdminUserServiceTest {
         private final Map<Long, User> users;
         private int searchCount;
         private String username;
+        private Long userId;
         private String email;
         private String role;
         private Integer status;
@@ -186,8 +204,10 @@ class AdminUserServiceTest {
         }
 
         @Override
-        public List<User> search(String username, String email, String role, Integer status, int limit, int offset) {
+        public List<User> search(Long userId, String username, String email, String role, Integer status,
+                                 int limit, int offset) {
             searchCount += 1;
+            this.userId = userId;
             this.username = username;
             this.email = email;
             this.role = role;
@@ -217,6 +237,14 @@ class AdminUserServiceTest {
             summary.setPaidAmount(new BigDecimal("188.00"));
             return summary;
         }
+
+        @Override
+        public List<Order> findByUserId(long userId, int limit, int offset) {
+            Order order = new Order();
+            order.setOrderId(88L);
+            order.setUserId(userId);
+            return List.of(order);
+        }
     }
 
     private static final class FakeLogDAO extends LogDAO {
@@ -229,10 +257,19 @@ class AdminUserServiceTest {
             }
             return 7;
         }
+
+        @Override
+        public List<Document> findRecentByUserId(long userId, int limit) { return List.of(); }
+    }
+
+    private static final class FakeCommentDAO extends CommentDAO {
+        @Override
+        public List<Document> findByUserId(long userId, int limit) { return List.of(); }
     }
 
     private static final class FakeSystemLogDAO extends SystemLogDAO {
         private final List<String> types = new ArrayList<>();
+        private final List<Document> details = new ArrayList<>();
         private boolean fail;
 
         @Override
@@ -241,6 +278,13 @@ class AdminUserServiceTest {
                 throw new IllegalStateException("Mongo unavailable");
             }
             types.add(logType);
+            details.add(actionDetail);
+        }
+
+        @Override
+        public List<Document> findByCondition(Long userId, String logType, String logLevel,
+                                              java.util.Date startTime, java.util.Date endTime, int limit) {
+            return List.of();
         }
     }
 

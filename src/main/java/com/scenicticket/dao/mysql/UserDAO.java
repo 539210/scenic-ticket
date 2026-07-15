@@ -119,13 +119,18 @@ public class UserDAO extends BaseDAO {
         }
     }
 
-    public List<User> search(String username, String email, String role, Integer status, int limit, int offset) {
+    public List<User> search(Long userId, String username, String email, String role, Integer status,
+                             int limit, int offset) {
         StringBuilder sql = new StringBuilder("""
                 SELECT user_id, username, password_hash, email, phone, role, status, created_at, updated_at
                 FROM users
                 WHERE 1 = 1
                 """);
         List<Object> parameters = new ArrayList<>();
+        if (userId != null) {
+            sql.append(" AND user_id = ?");
+            parameters.add(userId);
+        }
         if (username != null && !username.isBlank()) {
             sql.append(" AND username LIKE ?");
             parameters.add("%" + username + "%");
@@ -148,7 +153,9 @@ public class UserDAO extends BaseDAO {
              PreparedStatement statement = connection.prepareStatement(sql.toString())) {
             int index = 1;
             for (Object parameter : parameters) {
-                if (parameter instanceof Integer integer) {
+                if (parameter instanceof Long longValue) {
+                    statement.setLong(index, longValue);
+                } else if (parameter instanceof Integer integer) {
                     statement.setInt(index, integer);
                 } else {
                     statement.setString(index, String.valueOf(parameter));
@@ -167,6 +174,10 @@ public class UserDAO extends BaseDAO {
         } catch (SQLException e) {
             throw new DBException("Failed to search users.", e);
         }
+    }
+
+    public List<User> search(String username, String email, String role, Integer status, int limit, int offset) {
+        return search(null, username, email, role, status, limit, offset);
     }
 
     public List<Long> lockActiveAdminIds(Connection connection) throws SQLException {

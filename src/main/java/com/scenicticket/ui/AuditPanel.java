@@ -27,7 +27,7 @@ public final class AuditPanel extends JPanel {
     private final JTextField limitField = new JTextField("80", 5);
     private final JComboBox<String> logTypeBox = new JComboBox<>(
             new String[]{"全部类型", "登录", "退出", "注册", "预定下单", "支付购票", "取消预定", "预定过期",
-                    "退款", "发表评论", "更新评论", "门票核销", "景点更新", "查看报表"});
+                    "退款", "发表评论", "更新评论", "门票核销", "景点更新", "查看报表", "用户状态变更", "用户角色变更"});
     private final JComboBox<String> levelBox = new JComboBox<>(
             new String[]{"全部级别", "正常", "警告", "错误"});
     private final DefaultTableModel logModel = tableModel("时间", "用户ID", "类型", "级别", "内容", "业务对象", "业务详情", "IP地址");
@@ -219,6 +219,8 @@ public final class AuditPanel extends JPanel {
             case 11 -> "ADMISSION";
             case 12 -> "ITEM_UPDATE";
             case 13 -> "REPORT_VIEW";
+            case 14 -> "USER_STATUS_UPDATE";
+            case 15 -> "USER_ROLE_UPDATE";
             default -> null;
         };
     }
@@ -250,6 +252,8 @@ public final class AuditPanel extends JPanel {
             case "ADMISSION" -> "门票核销";
             case "ITEM_UPDATE" -> "景点更新";
             case "REPORT_VIEW" -> "查看报表";
+            case "USER_STATUS_UPDATE" -> "用户状态变更";
+            case "USER_ROLE_UPDATE" -> "用户角色变更";
             default -> logType;
         };
     }
@@ -270,9 +274,11 @@ public final class AuditPanel extends JPanel {
         if (detail == null) return "-";
         Object orderId = detail.get("order_id");
         Object itemId = detail.get("item_id");
+        Object targetUserId = detail.get("target_user_id");
         if (orderId != null && itemId != null) return "订单 #" + orderId + " / 景点 #" + itemId;
         if (orderId != null) return "订单 #" + orderId;
         if (itemId != null) return "景点 #" + itemId;
+        if (targetUserId != null) return "用户 #" + targetUserId;
         return "-";
     }
 
@@ -291,12 +297,22 @@ public final class AuditPanel extends JPanel {
             parts.add("标签=" + values.stream().map(String::valueOf).reduce((left, right) -> left + "、" + right).orElse("-"));
         }
         addDetail(parts, "原因", detail.get("reason"));
+        addDetail(parts, "目标账号", detail.get("target_username"));
+        addDetail(parts, "原状态", userStatusText(detail.get("previous_status")));
+        addDetail(parts, "新状态", userStatusText(detail.get("new_status")));
+        addDetail(parts, "原角色", detail.get("previous_role"));
+        addDetail(parts, "新角色", detail.get("new_role"));
         addDetail(parts, "核销数量", detail.get("admitted_quantity"));
         return parts.isEmpty() ? "-" : String.join("；", parts);
     }
 
     private static void addDetail(List<String> parts, String label, Object value) {
         if (value != null && !String.valueOf(value).isBlank()) parts.add(label + "=" + value);
+    }
+
+    private static Object userStatusText(Object value) {
+        if (!(value instanceof Number number)) return value;
+        return number.intValue() == 1 ? "启用" : "禁用";
     }
 
     private static String logTypeListText(Object value) {

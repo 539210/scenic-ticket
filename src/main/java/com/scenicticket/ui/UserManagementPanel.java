@@ -4,7 +4,9 @@ import com.scenicticket.dto.AdminChangeResult;
 import com.scenicticket.dto.AdminUserDetailDTO;
 import com.scenicticket.dto.UserSearchCriteria;
 import com.scenicticket.model.Profile;
+import com.scenicticket.model.Order;
 import com.scenicticket.model.User;
+import org.bson.Document;
 
 import javax.swing.JButton;
 import javax.swing.JComboBox;
@@ -16,13 +18,16 @@ import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.table.DefaultTableModel;
 import java.awt.BorderLayout;
+import java.awt.GridLayout;
 import java.util.ArrayList;
 import java.util.List;
 
 public final class UserManagementPanel extends JPanel {
+    private static final int PAGE_SIZE = 50;
     private final long actorUserId;
     private final UiTaskExecutor taskExecutor;
     private final Actions actions;
+    private final JTextField userIdField = new JTextField(7);
     private final JTextField usernameField = new JTextField(12);
     private final JTextField emailField = new JTextField(16);
     private final JComboBox<String> roleFilter = new JComboBox<>(new String[]{"全部角色", "管理员", "普通用户"});
@@ -31,10 +36,16 @@ public final class UserManagementPanel extends JPanel {
     private final JTable table = UiComponents.table(tableModel);
     private final List<User> visibleUsers = new ArrayList<>();
     private final JTextArea detailArea = UiComponents.readOnlyTextArea(14, 38);
-    private final JComboBox<String> targetStatusBox = new JComboBox<>(new String[]{"禁用", "启用"});
     private final JComboBox<String> targetRoleBox = new JComboBox<>(new String[]{"普通用户", "管理员"});
-    private final JButton statusButton = UiComponents.primaryButton("更新状态");
+    private final JTextField banReasonField = new JTextField(16);
+    private final JButton banButton = UiComponents.primaryButton("封禁账号");
+    private final JButton unbanButton = UiComponents.secondaryButton("解除封禁");
     private final JButton roleButton = UiComponents.secondaryButton("更新角色");
+    private final JButton refreshDetailButton = UiComponents.secondaryButton("刷新详情");
+    private final JButton previousButton = UiComponents.secondaryButton("上一页");
+    private final JButton nextButton = UiComponents.secondaryButton("下一页");
+    private final JLabel pageLabel = new JLabel("第 1 页");
+    private int currentOffset;
     private User selectedUser;
 
     public UserManagementPanel(long actorUserId, UiTaskExecutor taskExecutor, Actions actions) {
@@ -47,7 +58,7 @@ public final class UserManagementPanel extends JPanel {
         this.actions = actions;
         setOpaque(false);
         detailArea.setText("请先查询并选择用户。\n服务层会再次校验管理员权限。");
-        setMutationButtonsEnabled(false);
+        setMutationButtonsEnabled(false, null);
         configureSelection();
         JSplitPane split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT,
                 UiComponents.card("用户列表", UiComponents.scroll(table)),
@@ -56,12 +67,19 @@ public final class UserManagementPanel extends JPanel {
         split.setDividerLocation(760);
         add(UiComponents.card("用户筛选", createFilters()), BorderLayout.NORTH);
         add(split, BorderLayout.CENTER);
+        loadUsers(filterSnapshot(), 0, null);
     }
 
     private JPanel createFilters() {
         JPanel filters = UiComponents.toolbar();
+        JPanel paging = UiComponents.toolbar();
+        JPanel container = new JPanel(new GridLayout(2, 1, 0, 4));
+        container.setOpaque(false);
         JButton queryButton = UiComponents.primaryButton("查询用户");
+        JButton refreshButton = UiComponents.secondaryButton("刷新");
         JButton resetButton = UiComponents.secondaryButton("重置");
+        filters.add(new JLabel("用户ID"));
+        filters.add(userIdField);
         filters.add(new JLabel("用户名"));
         filters.add(usernameField);
         filters.add(new JLabel("邮箱"));
@@ -71,30 +89,47 @@ public final class UserManagementPanel extends JPanel {
         filters.add(new JLabel("状态"));
         filters.add(statusFilter);
         filters.add(queryButton);
+        filters.add(refreshButton);
         filters.add(resetButton);
-        queryButton.addActionListener(event -> loadUsers(filterSnapshot(), null));
+        paging.add(previousButton);
+        paging.add(pageLabel);
+        paging.add(nextButton);
+        previousButton.setEnabled(false);
+        nextButton.setEnabled(false);
+        queryButton.addActionListener(event -> loadUsers(filterSnapshot(), 0, null));
+        refreshButton.addActionListener(event -> loadUsers(filterSnapshot(), currentOffset, null));
         resetButton.addActionListener(event -> {
+            userIdField.setText("");
             usernameField.setText("");
             emailField.setText("");
             roleFilter.setSelectedIndex(0);
             statusFilter.setSelectedIndex(0);
-            loadUsers(filterSnapshot(), null);
+            loadUsers(filterSnapshot(), 0, null);
         });
-        usernameField.addActionListener(event -> loadUsers(filterSnapshot(), null));
-        emailField.addActionListener(event -> loadUsers(filterSnapshot(), null));
-        return filters;
+        userIdField.addActionListener(event -> loadUsers(filterSnapshot(), 0, null));
+        usernameField.addActionListener(event -> loadUsers(filterSnapshot(), 0, null));
+        emailField.addActionListener(event -> loadUsers(filterSnapshot(), 0, null));
+        previousButton.addActionListener(event -> loadUsers(filterSnapshot(), Math.max(0, currentOffset - PAGE_SIZE), null));
+        nextButton.addActionListener(event -> loadUsers(filterSnapshot(), currentOffset + PAGE_SIZE, null));
+        container.add(filters);
+        container.add(paging);
+        return container;
     }
 
     private JPanel createDetailPanel() {
         JPanel actionBar = UiComponents.toolbar();
-        actionBar.add(new JLabel("状态"));
-        actionBar.add(targetStatusBox);
-        actionBar.add(statusButton);
+        actionBar.add(new JLabel("封禁原因"));
+        actionBar.add(banReasonField);
+        actionBar.add(banButton);
+        actionBar.add(unbanButton);
         actionBar.add(new JLabel("角色"));
         actionBar.add(targetRoleBox);
         actionBar.add(roleButton);
-        statusButton.addActionListener(event -> changeStatus());
+        actionBar.add(refreshDetailButton);
+        banButton.addActionListener(event -> changeStatus(0));
+        unbanButton.addActionListener(event -> changeStatus(1));
         roleButton.addActionListener(event -> changeRole());
+        refreshDetailButton.addActionListener(event -> refreshSelectedDetail());
         JPanel panel = new JPanel(new BorderLayout(0, 10));
         panel.setOpaque(false);
         panel.add(UiComponents.scroll(detailArea), BorderLayout.CENTER);
@@ -115,11 +150,12 @@ public final class UserManagementPanel extends JPanel {
         });
     }
 
-    private void loadUsers(FilterSnapshot snapshot, String completionMessage) {
-        taskExecutor.run("查询用户", () -> actions.search(snapshot.toCriteria()), users -> {
+    private void loadUsers(FilterSnapshot snapshot, int requestedOffset, String completionMessage) {
+        taskExecutor.run("查询用户", () -> actions.search(snapshot.toCriteria(requestedOffset)), users -> {
             List<User> safeUsers = users == null ? List.of() : users;
             visibleUsers.clear();
             visibleUsers.addAll(safeUsers);
+            currentOffset = requestedOffset;
             tableModel.setRowCount(0);
             for (User user : safeUsers) {
                 tableModel.addRow(new Object[]{user.getUserId(), user.getUsername(), user.getEmail(), user.getPhone(),
@@ -127,6 +163,9 @@ public final class UserManagementPanel extends JPanel {
                         UiFormatters.date(user.getCreatedAt())});
             }
             resetSelection();
+            pageLabel.setText("第 " + (currentOffset / PAGE_SIZE + 1) + " 页");
+            previousButton.setEnabled(currentOffset > 0);
+            nextButton.setEnabled(safeUsers.size() == PAGE_SIZE);
             detailArea.setText(safeUsers.isEmpty()
                     ? "没有找到符合条件的用户。" : "查询到 " + safeUsers.size() + " 个用户，请选择查看详情。");
             actions.setStatus(completionMessage != null ? completionMessage : "查询到 " + safeUsers.size() + " 个用户");
@@ -135,12 +174,15 @@ public final class UserManagementPanel extends JPanel {
 
     private void selectUser(User user) {
         selectedUser = user;
-        targetStatusBox.setSelectedIndex(user.getStatus() != null && user.getStatus() == 1 ? 1 : 0);
         targetRoleBox.setSelectedIndex("ADMIN".equals(user.getRole()) ? 1 : 0);
         boolean mutableTarget = user.getUserId() != null && user.getUserId() != actorUserId;
-        setMutationButtonsEnabled(mutableTarget);
+        setMutationButtonsEnabled(mutableTarget, user.getStatus());
         long targetUserId = user.getUserId();
         detailArea.setText("正在加载用户 “" + user.getUsername() + "” 的详情……");
+        loadDetail(targetUserId);
+    }
+
+    private void loadDetail(long targetUserId) {
         taskExecutor.run("加载用户详情", () -> actions.detail(targetUserId), detail -> {
             if (isSelectedUser(targetUserId)) {
                 detailArea.setText(formatDetail(detail));
@@ -148,12 +190,20 @@ public final class UserManagementPanel extends JPanel {
         });
     }
 
-    private void changeStatus() {
+    private void refreshSelectedDetail() {
+        if (selectedUser == null || selectedUser.getUserId() == null) {
+            throw new IllegalArgumentException("请先选择用户");
+        }
+        loadDetail(selectedUser.getUserId());
+    }
+
+    private void changeStatus(int status) {
         long targetUserId = requireMutableTargetId();
-        int status = targetStatusBox.getSelectedIndex();
+        String reason = banReasonField.getText();
         FilterSnapshot snapshot = filterSnapshot();
-        taskExecutor.run("更新用户状态", () -> actions.changeStatus(targetUserId, status), result ->
-                loadUsers(snapshot, result.message()));
+        taskExecutor.run(status == 0 ? "封禁用户账号" : "解除用户封禁",
+                () -> actions.changeStatus(targetUserId, status, reason), result ->
+                        loadUsers(snapshot, currentOffset, result.message()));
     }
 
     private void changeRole() {
@@ -161,18 +211,22 @@ public final class UserManagementPanel extends JPanel {
         String role = targetRoleBox.getSelectedIndex() == 1 ? "ADMIN" : "USER";
         FilterSnapshot snapshot = filterSnapshot();
         taskExecutor.run("更新用户角色", () -> actions.changeRole(targetUserId, role), result ->
-                loadUsers(snapshot, result.message()));
+                loadUsers(snapshot, currentOffset, result.message()));
     }
 
     private void resetSelection() {
         table.clearSelection();
         selectedUser = null;
-        setMutationButtonsEnabled(false);
+        banReasonField.setText("");
+        setMutationButtonsEnabled(false, null);
     }
 
-    private void setMutationButtonsEnabled(boolean enabled) {
-        statusButton.setEnabled(enabled);
+    private void setMutationButtonsEnabled(boolean enabled, Integer status) {
+        banButton.setEnabled(enabled && status != null && status == 1);
+        unbanButton.setEnabled(enabled && (status == null || status != 1));
         roleButton.setEnabled(enabled);
+        refreshDetailButton.setEnabled(selectedUser != null);
+        banReasonField.setEnabled(enabled && status != null && status == 1);
     }
 
     private long requireMutableTargetId() {
@@ -190,7 +244,7 @@ public final class UserManagementPanel extends JPanel {
     }
 
     private FilterSnapshot filterSnapshot() {
-        return new FilterSnapshot(usernameField.getText(), emailField.getText(),
+        return new FilterSnapshot(userIdField.getText(), usernameField.getText(), emailField.getText(),
                 roleFilter.getSelectedIndex(), statusFilter.getSelectedIndex());
     }
 
@@ -209,6 +263,8 @@ public final class UserManagementPanel extends JPanel {
                 .append("手机号：").append(valueText(user.getPhone())).append(System.lineSeparator())
                 .append("角色：").append(UiFormatters.role(user.getRole())).append(System.lineSeparator())
                 .append("状态：").append(user.getStatus() != null && user.getStatus() == 1 ? "启用" : "禁用")
+                .append(System.lineSeparator()).append("注册时间：").append(UiFormatters.date(user.getCreatedAt()))
+                .append(System.lineSeparator()).append("最近更新：").append(UiFormatters.date(user.getUpdatedAt()))
                 .append(System.lineSeparator()).append(System.lineSeparator()).append("用户档案").append(System.lineSeparator());
         if (profile == null) {
             builder.append("暂无档案").append(System.lineSeparator());
@@ -229,11 +285,73 @@ public final class UserManagementPanel extends JPanel {
                     .append("，已完成：").append(orders.getCompletedOrders()).append(System.lineSeparator())
                     .append("有效订单金额：").append(UiFormatters.money(orders.getPaidAmount())).append(System.lineSeparator());
         }
-        return builder.append(System.lineSeparator()).append("行为概况").append(System.lineSeparator())
+        builder.append(System.lineSeparator()).append("近期订单（最多10条）").append(System.lineSeparator());
+        if (detail.getRecentOrders().isEmpty()) {
+            builder.append("暂无订单").append(System.lineSeparator());
+        } else {
+            for (Order order : detail.getRecentOrders()) {
+                builder.append("#").append(order.getOrderId())
+                        .append("  景点#").append(order.getItemId())
+                        .append("  ").append(UiFormatters.orderStatus(order.getStatus()))
+                        .append("  ").append(UiFormatters.money(order.getAmount()))
+                        .append("  ").append(valueText(order.getVisitDate())).append(System.lineSeparator());
+            }
+        }
+        builder.append(System.lineSeparator()).append("行为概况").append(System.lineSeparator())
                 .append(detail.isBehaviorDataAvailable()
                         ? "行为日志数量：" + detail.getBehaviorCount()
                         : "MongoDB 行为数据暂不可用，MySQL 用户信息仍可管理")
-                .toString();
+                .append(System.lineSeparator());
+        if (detail.isBehaviorDataAvailable()) {
+            appendRecentActions(builder, detail.getRecentActions());
+            appendRecentComments(builder, detail.getRecentComments());
+            appendRecentAudit(builder, detail.getRecentAuditLogs());
+        }
+        return builder.toString();
+    }
+
+    private static void appendRecentActions(StringBuilder builder, List<Document> actions) {
+        builder.append(System.lineSeparator()).append("近期行为（最多10条）").append(System.lineSeparator());
+        if (actions.isEmpty()) {
+            builder.append("暂无行为记录").append(System.lineSeparator());
+            return;
+        }
+        for (Document action : actions) {
+            builder.append(UiFormatters.date(action.get("created_at"))).append("  ")
+                    .append(valueText(action.get("action_type"))).append("  景点#")
+                    .append(valueText(action.get("item_id"))).append(System.lineSeparator());
+        }
+    }
+
+    private static void appendRecentComments(StringBuilder builder, List<Document> comments) {
+        builder.append(System.lineSeparator()).append("近期评论（最多10条）").append(System.lineSeparator());
+        if (comments.isEmpty()) {
+            builder.append("暂无评论").append(System.lineSeparator());
+            return;
+        }
+        for (Document comment : comments) {
+            builder.append("景点#").append(valueText(comment.get("item_id")))
+                    .append("  评分").append(valueText(comment.get("rating")))
+                    .append("  ").append(shortText(comment.get("content"), 60)).append(System.lineSeparator());
+        }
+    }
+
+    private static void appendRecentAudit(StringBuilder builder, List<Document> logs) {
+        builder.append(System.lineSeparator()).append("近期审计（最多10条）").append(System.lineSeparator());
+        if (logs.isEmpty()) {
+            builder.append("暂无审计记录").append(System.lineSeparator());
+            return;
+        }
+        for (Document log : logs) {
+            builder.append(UiFormatters.date(log.get("timestamp"))).append("  ")
+                    .append(valueText(log.get("log_type"))).append("  ")
+                    .append(shortText(log.get("message"), 80)).append(System.lineSeparator());
+        }
+    }
+
+    private static String shortText(Object value, int maxLength) {
+        String text = UiFormatters.readableText(value, "-");
+        return text.length() <= maxLength ? text : text.substring(0, maxLength) + "…";
     }
 
     private static String valueText(Object value) {
@@ -251,6 +369,11 @@ public final class UserManagementPanel extends JPanel {
     }
 
     void setFilters(String username, String email, int roleIndex, int statusIndex) {
+        setFilters("", username, email, roleIndex, statusIndex);
+    }
+
+    void setFilters(String userId, String username, String email, int roleIndex, int statusIndex) {
+        userIdField.setText(userId);
         usernameField.setText(username);
         emailField.setText(email);
         roleFilter.setSelectedIndex(roleIndex);
@@ -259,10 +382,6 @@ public final class UserManagementPanel extends JPanel {
 
     void selectRow(int row) {
         table.setRowSelectionInterval(row, row);
-    }
-
-    void setTargetStatusIndex(int index) {
-        targetStatusBox.setSelectedIndex(index);
     }
 
     void setTargetRoleIndex(int index) {
@@ -274,8 +393,14 @@ public final class UserManagementPanel extends JPanel {
     }
 
     boolean statusUpdateEnabled() {
-        return statusButton.isEnabled();
+        return banButton.isEnabled() || unbanButton.isEnabled();
     }
+
+    boolean banEnabled() { return banButton.isEnabled(); }
+
+    boolean unbanEnabled() { return unbanButton.isEnabled(); }
+
+    void setBanReason(String reason) { banReasonField.setText(reason); }
 
     boolean roleUpdateEnabled() {
         return roleButton.isEnabled();
@@ -290,15 +415,15 @@ public final class UserManagementPanel extends JPanel {
 
         AdminUserDetailDTO detail(long targetUserId);
 
-        AdminChangeResult changeStatus(long targetUserId, int status);
+        AdminChangeResult changeStatus(long targetUserId, int status, String reason);
 
         AdminChangeResult changeRole(long targetUserId, String role);
 
         void setStatus(String message);
     }
 
-    private record FilterSnapshot(String username, String email, int roleIndex, int statusIndex) {
-        private UserSearchCriteria toCriteria() {
+    private record FilterSnapshot(String userId, String username, String email, int roleIndex, int statusIndex) {
+        private UserSearchCriteria toCriteria(int offset) {
             String role = switch (roleIndex) {
                 case 1 -> "ADMIN";
                 case 2 -> "USER";
@@ -309,8 +434,9 @@ public final class UserManagementPanel extends JPanel {
                 case 2 -> 0;
                 default -> null;
             };
-            return new UserSearchCriteria(UiInputParsers.blankToNull(username), UiInputParsers.blankToNull(email),
-                    role, status, 100, 0);
+            return new UserSearchCriteria(UiInputParsers.optionalLong(userId),
+                    UiInputParsers.blankToNull(username), UiInputParsers.blankToNull(email),
+                    role, status, PAGE_SIZE, offset);
         }
     }
 }
