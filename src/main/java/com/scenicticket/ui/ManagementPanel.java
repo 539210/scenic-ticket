@@ -5,6 +5,8 @@ import com.scenicticket.model.Item;
 import org.bson.Document;
 
 import javax.swing.JButton;
+import javax.swing.Box;
+import javax.swing.BoxLayout;
 import javax.swing.JComboBox;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
@@ -136,14 +138,24 @@ public final class ManagementPanel extends JPanel {
         detailEditor.add(saveBar, BorderLayout.SOUTH);
         updateItemButton.addActionListener(event -> updateSelectedItem());
 
-        JPanel top = new JPanel(new GridLayout(3, 1, 0, 8));
+        JPanel top = new JPanel();
+        top.setLayout(new BoxLayout(top, BoxLayout.Y_AXIS));
         top.setOpaque(false);
-        top.add(UiComponents.card("筛选景点", queryToolbar));
-        top.add(UiComponents.card("编辑所选景点", editToolbar));
-        top.add(UiComponents.card("编辑景点简介", detailEditor));
+        addCompactCard(top, UiComponents.card("筛选景点", queryToolbar));
+        top.add(Box.createVerticalStrut(8));
+        addCompactCard(top, UiComponents.card("编辑所选景点", editToolbar));
+        top.add(Box.createVerticalStrut(8));
+        addCompactCard(top, UiComponents.card("编辑景点简介", detailEditor));
         page.add(top, BorderLayout.NORTH);
         page.add(UiComponents.card("景点列表", UiComponents.scroll(itemTable)), BorderLayout.CENTER);
         return page;
+    }
+
+    private void addCompactCard(JPanel target, JPanel card) {
+        card.setAlignmentX(LEFT_ALIGNMENT);
+        Dimension preferred = card.getPreferredSize();
+        card.setMaximumSize(new Dimension(Integer.MAX_VALUE, preferred.height));
+        target.add(card);
     }
 
     private JPanel createMetadataEditor() {

@@ -25,7 +25,11 @@ class ReportPanelTest {
         actions.hotItems = List.of(ranking(7L, "星湖湿地", 1, true));
         ReportPanel panel = new ReportPanel(2L, false, new ImmediateTaskExecutor(), actions);
 
+        assertTrue(panel.reportButtonSelected("月度订单"));
+
         click(panel, "热门排行");
+        assertTrue(panel.reportButtonSelected("热门排行"));
+        assertTrue(!panel.reportButtonSelected("月度订单"));
         click(panel, "刷新当前报表");
 
         assertEquals(2, actions.hotCalls);
@@ -33,6 +37,7 @@ class ReportPanelTest {
         assertEquals("星湖湿地", panel.tableValueAt(1, 0, 1));
         assertEquals(7L, panel.tableValueAt(1, 0, 2));
         assertEquals("上架", panel.tableValueAt(1, 0, 3));
+        assertTrue(panel.reportButtonSelected("热门排行"));
     }
 
     @Test

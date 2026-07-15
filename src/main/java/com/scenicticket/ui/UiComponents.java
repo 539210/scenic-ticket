@@ -26,6 +26,7 @@ import java.awt.event.MouseEvent;
 import java.awt.event.MouseWheelEvent;
 
 public final class UiComponents {
+    private static final String SELECTED_STYLE = "scenic.selectedStyle";
     private UiComponents() {
     }
 
@@ -39,6 +40,18 @@ public final class UiComponents {
 
     public static JButton dangerButton(String text) {
         return button(text, UiTheme.DANGER, Color.WHITE, UiTheme.DANGER.darker());
+    }
+
+    public static void setSelectedStyle(JButton button, boolean selected) {
+        if (button == null) {
+            return;
+        }
+        button.putClientProperty(SELECTED_STYLE, selected);
+        button.repaint();
+    }
+
+    static boolean isSelectedStyle(JButton button) {
+        return button != null && Boolean.TRUE.equals(button.getClientProperty(SELECTED_STYLE));
     }
 
     private static JButton button(String text, Color background, Color foreground, Color border) {
@@ -71,22 +84,27 @@ public final class UiComponents {
             Graphics2D g2 = (Graphics2D) graphics.create();
             try {
                 g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                Color background = normalBackground;
-                Color foreground = normalForeground;
+                Boolean selectedStyle = (Boolean) getClientProperty(SELECTED_STYLE);
+                Color background = selectedStyle == null ? normalBackground
+                        : selectedStyle ? UiTheme.PRIMARY : Color.WHITE;
+                Color foreground = selectedStyle == null ? normalForeground
+                        : selectedStyle ? Color.WHITE : UiTheme.TEXT;
+                Color activeBorder = selectedStyle == null ? borderColor
+                        : selectedStyle ? UiTheme.PRIMARY.darker() : UiTheme.BORDER;
                 if (!isEnabled()) {
                     background = new Color(229, 231, 235);
                     foreground = UiTheme.MUTED;
                 } else if (getModel().isPressed()) {
-                    background = normalBackground.darker();
+                    background = background.darker();
                 } else if (getModel().isRollover()) {
                     background = blend(normalBackground, Color.BLACK, 0.08f);
                 }
                 g2.setColor(background);
                 g2.fillRect(0, 0, getWidth(), getHeight());
-                g2.setColor(isEnabled() ? borderColor : UiTheme.BORDER);
+                g2.setColor(isEnabled() ? activeBorder : UiTheme.BORDER);
                 g2.drawRect(0, 0, Math.max(0, getWidth() - 1), Math.max(0, getHeight() - 1));
                 if (hasFocus() && isEnabled()) {
-                    g2.setColor(blend(borderColor, Color.BLACK, 0.18f));
+                    g2.setColor(blend(activeBorder, Color.BLACK, 0.18f));
                     g2.drawRect(2, 2, Math.max(0, getWidth() - 5), Math.max(0, getHeight() - 5));
                 }
                 g2.setFont(getFont());

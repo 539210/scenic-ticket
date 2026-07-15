@@ -98,6 +98,29 @@ class ScenicBrowsePanelTest {
         assertFalse(panel.introductionImageVisible());
     }
 
+    @Test
+    void upperInfoLabelsAreNonClickableAndOnlyIndicateLowerActionSelection() {
+        Item item = item(11L, "南山风景区", 3L, "120", "20", 1);
+        FakeActions actions = new FakeActions(List.of(item), detail(item, List.of()));
+        ScenicBrowsePanel panel = new ScenicBrowsePanel(new ImmediateTaskExecutor(), actions);
+
+        click(panel, "查询");
+        panel.selectRow(0);
+        assertEquals(0, panel.selectedInfoTab());
+        assertTrue(panel.infoIndicatorSelected(0));
+        assertFalse(panel.infoTabClickable(0));
+        assertFalse(panel.infoTabClickable(1));
+        assertFalse(panel.infoTabClickable(2));
+
+        click(panel, "游客评论");
+        assertEquals(2, panel.selectedInfoTab());
+        assertTrue(panel.infoIndicatorSelected(2));
+
+        click(panel, "景点简介");
+        assertEquals(1, panel.selectedInfoTab());
+        assertTrue(panel.infoIndicatorSelected(1));
+    }
+
     private static CrossDatabaseItemDTO detail(Item item, List<String> images) {
         CrossDatabaseItemDTO dto = new CrossDatabaseItemDTO();
         dto.setItem(item);

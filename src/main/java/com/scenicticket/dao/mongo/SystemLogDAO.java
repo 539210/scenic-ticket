@@ -112,7 +112,10 @@ public class SystemLogDAO extends MongoBaseDAO {
                         .append("user_count", new Document("$size", "$unique_users"))
                         .append("latest_timestamp", 1)
                         .append("_id", 0)),
-                new Document("$sort", new Document("operation_count", -1).append("latest_timestamp", -1))
+                new Document("$sort", new Document("operation_count", -1)
+                        .append("latest_timestamp", -1)
+                        .append("log_type", 1)
+                        .append("log_level", 1))
         );
         return getCollection("system_logs").aggregate(pipeline).into(new ArrayList<>());
     }

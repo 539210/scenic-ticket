@@ -48,6 +48,21 @@ class StatisticsServiceTest {
     }
 
     @Test
+    void hotRankingUsesItemIdAsStableFinalTieBreaker() {
+        logDAO.hotItems = List.of(
+                new Document("_id", 99L).append("total_actions", 3).append("view_count", 3)
+                        .append("order_count", 0).append("avg_duration", 20.0),
+                new Document("_id", 1L).append("total_actions", 3).append("view_count", 3)
+                        .append("order_count", 0).append("avg_duration", 20.0)
+        );
+
+        List<HotItemRankingDTO> rankings = service.getHotItemRanking(null, null, 10);
+
+        assertEquals(1L, rankings.get(0).getItemId());
+        assertEquals(99L, rankings.get(1).getItemId());
+    }
+
+    @Test
     void auditQueryPassesKeywordDateAndLimitToDao() {
         Date start = new Date(1_000L);
         Date end = new Date(2_000L);

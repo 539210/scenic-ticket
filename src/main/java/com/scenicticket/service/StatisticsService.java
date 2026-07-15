@@ -14,6 +14,7 @@ import com.scenicticket.model.Item;
 import org.bson.Document;
 
 import java.util.Date;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -81,11 +82,19 @@ public class StatisticsService {
         }
         return hotItems.stream()
                 .map(document -> toHotItemRanking(document, itemById.get(readLong(document.get("_id")))))
+                .sorted(Comparator.comparingLong(HotItemRankingDTO::getTotalActions).reversed()
+                        .thenComparing(Comparator.comparingLong(HotItemRankingDTO::getViewCount).reversed())
+                        .thenComparing(Comparator.comparingLong(HotItemRankingDTO::getOrderCount).reversed())
+                        .thenComparingLong(HotItemRankingDTO::getItemId))
                 .toList();
     }
 
     public List<Document> getActionTypeSummary(Date startTime, Date endTime) {
-        return logDAO.aggregateActionTypeSummary(startTime, endTime);
+        return logDAO.aggregateActionTypeSummary(startTime, endTime).stream()
+                .sorted(Comparator.comparingLong((Document document) -> readLongOrZero(document.get("action_count")))
+                        .reversed()
+                        .thenComparing(document -> String.valueOf(document.get("action_type"))))
+                .toList();
     }
 
     public List<Document> getDailyActionTrend(Date startTime, Date endTime) {
@@ -101,7 +110,11 @@ public class StatisticsService {
     }
 
     public List<Document> getHotTags(int limit) {
-        return commentDAO.aggregateHotTags(normalizeLimit(limit));
+        return commentDAO.aggregateHotTags(normalizeLimit(limit)).stream()
+                .sorted(Comparator.comparingLong((Document document) -> readLongOrZero(document.get("tag_count")))
+                        .reversed()
+                        .thenComparing(document -> String.valueOf(document.get("_id"))))
+                .toList();
     }
 
     public List<Document> getSystemAuditSummary(long actorUserId, Date startTime, Date endTime) {
@@ -153,7 +166,10 @@ public class StatisticsService {
 
     public List<MonthlyOrderReportDTO> getMonthlyOrderReport(int year, int month) {
         validateReportMonth(year, month);
-        return reportDAO.callMonthlyOrderReport(year, month);
+        return reportDAO.callMonthlyOrderReport(year, month).stream()
+                .sorted(Comparator.comparing(MonthlyOrderReportDTO::getOrderDate,
+                        Comparator.nullsLast(Comparator.naturalOrder())))
+                .toList();
     }
 
     public StatisticsReportDTO buildDashboardReport(long actorUserId, Date startTime, Date endTime) {

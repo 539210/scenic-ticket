@@ -114,7 +114,7 @@ public class CommentDAO extends MongoBaseDAO {
                 new Document("$unwind", "$tags"),
                 new Document("$group", new Document("_id", "$tags")
                         .append("tag_count", new Document("$sum", 1))),
-                new Document("$sort", new Document("tag_count", -1)),
+                new Document("$sort", new Document("tag_count", -1).append("_id", 1)),
                 new Document("$limit", limit)
         );
         return getCollection("comments").aggregate(pipeline).into(new ArrayList<>());
@@ -126,7 +126,8 @@ public class CommentDAO extends MongoBaseDAO {
                         .append("comment_count", new Document("$sum", 1))
                         .append("avg_rating", new Document("$avg", "$rating"))),
                 new Document("$match", new Document("comment_count", new Document("$gte", 1))),
-                new Document("$sort", new Document("avg_rating", -1).append("comment_count", -1)),
+                new Document("$sort", new Document("avg_rating", -1)
+                        .append("comment_count", -1).append("_id", 1)),
                 new Document("$limit", limit)
         );
         return getCollection("comments").aggregate(pipeline).into(new ArrayList<>());

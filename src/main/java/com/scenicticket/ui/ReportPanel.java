@@ -31,6 +31,10 @@ public final class ReportPanel extends JPanel {
     private final DefaultTableModel userModel = tableModel("指标", "数据");
     private final DefaultTableModel dashboardModel = tableModel("模块", "指标", "数据");
     private final JTabbedPane resultTabs = new JTabbedPane(JTabbedPane.TOP);
+    private JButton monthlyButton;
+    private JButton hotButton;
+    private JButton userButton;
+    private JButton dashboardButton;
 
     public ReportPanel(long actorUserId, boolean admin, UiTaskExecutor taskExecutor, Actions actions) {
         super(new BorderLayout(12, 12));
@@ -51,6 +55,8 @@ public final class ReportPanel extends JPanel {
         }
         add(UiComponents.card("报表条件", createToolbar()), BorderLayout.NORTH);
         add(UiComponents.card("报表数据", resultTabs), BorderLayout.CENTER);
+        resultTabs.addChangeListener(event -> applyReportButtonStyles(resultTabs.getSelectedIndex()));
+        setActiveReport(0);
     }
 
     private JPanel createToolbar() {
@@ -58,10 +64,10 @@ public final class ReportPanel extends JPanel {
         JPanel buttons = UiComponents.toolbar();
         JPanel toolbar = new JPanel(new GridLayout(2, 1, 0, 4));
         toolbar.setOpaque(false);
-        JButton monthlyButton = UiComponents.primaryButton("月度订单");
-        JButton hotButton = UiComponents.secondaryButton("热门排行");
-        JButton userButton = UiComponents.secondaryButton(admin ? "用户报告" : "我的报告");
-        JButton dashboardButton = UiComponents.secondaryButton("综合汇总");
+        monthlyButton = UiComponents.secondaryButton("月度订单");
+        hotButton = UiComponents.secondaryButton("热门排行");
+        userButton = UiComponents.secondaryButton(admin ? "用户报告" : "我的报告");
+        dashboardButton = UiComponents.secondaryButton("综合汇总");
         JButton refreshButton = UiComponents.secondaryButton("刷新当前报表");
 
         filters.add(new JLabel("年份"));
@@ -96,6 +102,7 @@ public final class ReportPanel extends JPanel {
     }
 
     private void loadMonthly() {
+        setActiveReport(0);
         YearMonthSnapshot snapshot = yearMonthSnapshot();
         taskExecutor.run("月度订单报表", () -> actions.monthly(snapshot.year(), snapshot.month()), reports -> {
             List<MonthlyOrderReportDTO> safeReports = reports == null ? List.of() : reports;
@@ -104,12 +111,12 @@ public final class ReportPanel extends JPanel {
                 monthlyModel.addRow(new Object[]{report.getOrderDate(), report.getOrderCount(),
                         UiFormatters.money(report.getTotalAmount())});
             }
-            resultTabs.setSelectedIndex(0);
             actions.setStatus(safeReports.isEmpty() ? "该月份暂无订单数据" : "月度订单报表已更新");
         });
     }
 
     private void loadHot() {
+        setActiveReport(1);
         taskExecutor.run("热门排行", actions::hot, rankings -> {
             List<HotItemRankingDTO> safeRankings = rankings == null ? List.of() : rankings;
             hotModel.setRowCount(0);
@@ -120,12 +127,12 @@ public final class ReportPanel extends JPanel {
                         ranking.getTotalActions(), ranking.getViewCount(), ranking.getOrderCount(),
                         decimalText(ranking.getAvgDuration())});
             }
-            resultTabs.setSelectedIndex(1);
             actions.setStatus(safeRankings.isEmpty() ? "暂无热门排行数据" : "热门排行已更新");
         });
     }
 
     private void loadUserReport() {
+        setActiveReport(2);
         String userIdText = userIdField.getText();
         taskExecutor.run("用户报告", () -> {
             long targetUserId = admin && userIdText != null && !userIdText.isBlank()
@@ -133,7 +140,6 @@ public final class ReportPanel extends JPanel {
             return actions.userReport(targetUserId);
         }, document -> {
             fillUserReport(document);
-            resultTabs.setSelectedIndex(2);
             actions.setStatus(document == null || document.isEmpty() ? "该用户暂无行为数据" : "用户报告已更新");
         });
     }
@@ -142,10 +148,10 @@ public final class ReportPanel extends JPanel {
         if (!admin) {
             return;
         }
+        setActiveReport(3);
         YearMonthSnapshot snapshot = yearMonthSnapshot();
         taskExecutor.run("综合汇总", () -> actions.dashboard(snapshot.year(), snapshot.month()), dto -> {
             fillDashboard(dto);
-            resultTabs.setSelectedIndex(3);
             actions.setStatus(dashboardModel.getRowCount() == 0 ? "综合汇总暂无数据" : "综合汇总已更新");
         });
     }
@@ -158,6 +164,21 @@ public final class ReportPanel extends JPanel {
             case 3 -> loadDashboard();
             default -> loadMonthly();
         }
+    }
+
+    private void setActiveReport(int index) {
+        if (index < 0 || index >= resultTabs.getTabCount()) {
+            return;
+        }
+        resultTabs.setSelectedIndex(index);
+        applyReportButtonStyles(index);
+    }
+
+    private void applyReportButtonStyles(int index) {
+        UiComponents.setSelectedStyle(monthlyButton, index == 0);
+        UiComponents.setSelectedStyle(hotButton, index == 1);
+        UiComponents.setSelectedStyle(userButton, index == 2);
+        UiComponents.setSelectedStyle(dashboardButton, admin && index == 3);
     }
 
     private YearMonthSnapshot yearMonthSnapshot() {
@@ -285,6 +306,17 @@ public final class ReportPanel extends JPanel {
 
     int selectedTab() {
         return resultTabs.getSelectedIndex();
+    }
+
+    boolean reportButtonSelected(String text) {
+        JButton button = switch (text) {
+            case "月度订单" -> monthlyButton;
+            case "热门排行" -> hotButton;
+            case "用户报告", "我的报告" -> userButton;
+            case "综合汇总" -> dashboardButton;
+            default -> null;
+        };
+        return UiComponents.isSelectedStyle(button);
     }
 
     int rowCount(int tabIndex) {

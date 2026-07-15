@@ -129,7 +129,10 @@ public class LogDAO extends MongoBaseDAO {
                         .append("order_count", new Document("$sum", new Document("$cond", List.of(
                                 new Document("$eq", List.of("$action_type", "ORDER")), 1, 0))))
                         .append("avg_duration", new Document("$avg", "$duration_seconds"))),
-                new Document("$sort", new Document("total_actions", -1).append("view_count", -1)),
+                new Document("$sort", new Document("total_actions", -1)
+                        .append("view_count", -1)
+                        .append("order_count", -1)
+                        .append("_id", 1)),
                 new Document("$limit", limit)
         );
         return getCollection("action_logs").aggregate(pipeline).into(new ArrayList<>());
@@ -169,7 +172,7 @@ public class LogDAO extends MongoBaseDAO {
                         .append("user_count", new Document("$size", "$unique_users"))
                         .append("latest_action_time", 1)
                         .append("_id", 0)),
-                new Document("$sort", new Document("action_count", -1))
+                new Document("$sort", new Document("action_count", -1).append("action_type", 1))
         );
         return getCollection("action_logs").aggregate(pipeline).into(new ArrayList<>());
     }

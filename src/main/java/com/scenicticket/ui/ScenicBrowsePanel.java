@@ -49,6 +49,7 @@ public final class ScenicBrowsePanel extends JPanel {
     private final DefaultTableModel tableModel = readOnlyTableModel();
     private final JTable table = UiComponents.table(tableModel);
     private final JTabbedPane scenicInfoTabs = new JTabbedPane();
+    private final List<JLabel> scenicInfoIndicators = new ArrayList<>();
     private final JButton detailButton = UiComponents.secondaryButton("景点简介");
     private final JButton commentsButton = UiComponents.secondaryButton("游客评论");
     private final JButton availabilityButton = UiComponents.secondaryButton("可售票种与日期");
@@ -147,6 +148,7 @@ public final class ScenicBrowsePanel extends JPanel {
         introductionPanel.add(introductionImagePanel, BorderLayout.SOUTH);
         scenicInfoTabs.addTab("景点简介", introductionPanel);
         scenicInfoTabs.addTab("游客评论", UiComponents.scroll(commentsArea));
+        configureInfoIndicators();
 
         setSelectionActionsEnabled(false, false);
         detailButton.addActionListener(event -> loadIntroduction());
@@ -154,6 +156,30 @@ public final class ScenicBrowsePanel extends JPanel {
         availabilityButton.addActionListener(event -> actions.showTicketAvailability(requireSelectedItem()));
         orderButton.addActionListener(event -> actions.showPurchase(requireSelectedItem(), overviewArea));
         commentButton.addActionListener(event -> actions.showComment(requireSelectedItem(), commentsArea));
+    }
+
+    private void configureInfoIndicators() {
+        for (int index = 0; index < scenicInfoTabs.getTabCount(); index += 1) {
+            JLabel indicator = new JLabel(scenicInfoTabs.getTitleAt(index));
+            indicator.setOpaque(true);
+            indicator.setBorder(javax.swing.BorderFactory.createEmptyBorder(7, 12, 7, 12));
+            indicator.setEnabled(true);
+            indicator.getAccessibleContext().setAccessibleDescription("当前内容位置指示，不可点击");
+            scenicInfoIndicators.add(indicator);
+            scenicInfoTabs.setTabComponentAt(index, indicator);
+            scenicInfoTabs.setEnabledAt(index, false);
+        }
+        showInfoTab(0);
+    }
+
+    private void showInfoTab(int index) {
+        scenicInfoTabs.setSelectedIndex(index);
+        for (int tab = 0; tab < scenicInfoIndicators.size(); tab += 1) {
+            JLabel indicator = scenicInfoIndicators.get(tab);
+            boolean selected = tab == index;
+            indicator.setBackground(selected ? UiTheme.PRIMARY : UiTheme.SURFACE);
+            indicator.setForeground(selected ? Color.WHITE : UiTheme.TEXT);
+        }
     }
 
     private JSplitPane createSplitPane() {
@@ -274,7 +300,7 @@ public final class ScenicBrowsePanel extends JPanel {
         introductionArea.setText("尚未加载“" + item.getTitle() + "”的景点简介。");
         hideIntroductionImage();
         commentsArea.setText("尚未加载“" + item.getTitle() + "”的游客评论。");
-        scenicInfoTabs.setSelectedIndex(0);
+        showInfoTab(0);
         boolean available = item.getStatus() != null && item.getStatus() == 1;
         setSelectionActionsEnabled(true, available);
     }
@@ -286,7 +312,7 @@ public final class ScenicBrowsePanel extends JPanel {
                 introductionArea.setText(actions.formatItemIntroduction(dto));
                 introductionArea.setCaretPosition(0);
                 loadIntroductionImage(itemId, dto);
-                scenicInfoTabs.setSelectedIndex(1);
+                showInfoTab(1);
             }
         });
     }
@@ -297,7 +323,7 @@ public final class ScenicBrowsePanel extends JPanel {
         taskExecutor.run("游客评论", () -> actions.loadComments(itemId), dto -> {
             if (isSelectedItem(itemId)) {
                 commentsArea.setText(actions.formatCommentViews(requestedItem.getTitle(), dto));
-                scenicInfoTabs.setSelectedIndex(2);
+                showInfoTab(2);
             }
         });
     }
@@ -309,6 +335,7 @@ public final class ScenicBrowsePanel extends JPanel {
         introductionArea.setText("请选择景点后点击“景点简介”。");
         hideIntroductionImage();
         commentsArea.setText("请选择景点后点击“游客评论”。");
+        showInfoTab(0);
     }
 
     private void setSelectionActionsEnabled(boolean selected, boolean available) {
@@ -421,6 +448,18 @@ public final class ScenicBrowsePanel extends JPanel {
 
     boolean introductionImageVisible() {
         return introductionImagePanel.isVisible() && introductionImage.getIcon() != null;
+    }
+
+    int selectedInfoTab() {
+        return scenicInfoTabs.getSelectedIndex();
+    }
+
+    boolean infoTabClickable(int index) {
+        return scenicInfoTabs.isEnabledAt(index);
+    }
+
+    boolean infoIndicatorSelected(int index) {
+        return scenicInfoIndicators.get(index).getBackground().equals(UiTheme.PRIMARY);
     }
 
     public interface Actions {
