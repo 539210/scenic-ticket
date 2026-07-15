@@ -1,6 +1,6 @@
 # MongoDB 集合设计文档
 
-更新时间：2026-07-14（M10 实库校准）
+更新时间：2026-07-15（当前实现校准）
 
 ## 1. 设计目标
 
@@ -70,6 +70,8 @@ scenic_ticket
 | user_id | 普通索引 | 用户评论历史 |
 | user_id, item_id | 唯一索引 | 每个用户对同一景点只保留一条评论 |
 
+评论文档只保存评分、正文与时间，不保存 `tags` 或其他评论标签字段。用户再次提交同一景点评论时，系统原位更新正文、评分和 `updated_at`；评论展示不会附加“第几条评论”等测试编号。
+
 ### 3.3 item_details
 
 用途：存储景点长文本详情、图片和扩展元数据。
@@ -81,7 +83,7 @@ scenic_ticket
   "item_id": 2001,
   "description": "景点详细描述",
   "images": [
-    "https://example.com/scenic-2001-1.jpg"
+    "C:/Users/<user>/.scenic-ticket/images/<uuid>.jpg"
   ],
   "metadata": {
     "language": "zh-CN",
@@ -100,6 +102,8 @@ scenic_ticket
 | metadata.language | 普通索引 | 多语言扩展查询 |
 
 `item_id` 的规范 BSON 类型为 64 位数值。为兼容早期数据，Java DAO 会先查询数值 ID，再查询等值数字字符串；管理员再次保存详情时按原文档 `_id` 原位替换，并把 `item_id` 规范为数值，避免新增重复详情。`description` 使用 UTF-8 字符串，`images` 使用字符串数组，`metadata` 保持嵌套文档结构。
+
+管理员可将 jpg、jpeg、png、gif 或 bmp 图片拖入后台图片区域。客户端会验证图片内容和 10MB 单文件限制，将文件复制到当前用户目录的 `.scenic-ticket/images` 后，把本地绝对路径保存到 `images` 数组。用户端仅在能成功读取有效图片时显示图片区；没有图片或图片失效时隐藏该区域，而不显示地址文本。
 
 ### 3.4 system_logs
 
@@ -161,6 +165,13 @@ scenic_ticket
 - 所有 JS 脚本以 `mongosh` 连接 URI 的当前数据库为目标，只允许 `scenic_ticket` 或 `scenic_ticket_test`，不在脚本内部硬编码切库。
 - `mongodb_day09_id_compatibility.js` 将可安全识别的数字字符串 ID 转为 long，并为历史评论补 `updated_at`；不会删除重复评论。
 - `mongodb_day09_indexes.js` 增加审计文本/复合索引。只有不存在重复 user_id + item_id 评论时才创建唯一索引；否则报告并跳过，不自动删用户数据。
+- `mongodb_day11_remove_comment_tags.js` 用于从历史 `comments` 与评论相关审计字段中删除已废弃的评论标签；不会修改评分、正文、用户或时间字段。
 - 真实集成测试只重建 `scenic_ticket_test`，不会清理 `scenic_ticket`。
 - Java Driver 集成测试已验证四集合、唯一/复合/文本索引、中文 UTF-8 往返、数值 ID，以及热门、用户行为、评分和审计聚合。
 - M10 完整真实套件从空 `scenic_ticket_test` 验证上述结构并串联评论、详情、行为和系统日志；M11 又使用官方 `mongosh 2.9.2` 在空测试库顺序实跑全部四个 JS 脚本，验证 4 集合、290 条样例和 7/6/3/7 个索引。
+
+## 8. 当前版本补充
+
+- 景点浏览页的推荐只使用 `comments` 聚合得到的 `avg_rating`，按平均评分从高到低展示，评分采用 5 分制。
+- 系统审计 `system_logs` 记录注册、登录、退出、购买、支付、取消、退款、评论和后台管理等行为；评论审计不再包含标签数据。
+- 2026-07-15 已对现有库执行评论标签清理迁移，并在清理后验证 `comments.tags` 与审计详情中的旧标签字段均不存在。

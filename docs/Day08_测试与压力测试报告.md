@@ -1,5 +1,7 @@
 # Day 08 测试与压力测试报告
 
+更新时间：2026-07-15（当前版本回归结果）
+
 ## 目标
 
 Day 08 按项目要求完成单元测试补充、事务回滚测试、10000 条日志 + 50 并发压力测试，并对影响可测性的代码做小范围重构。
@@ -66,7 +68,7 @@ src/test/java/com/scenicticket/service/BatchLogServiceStressTest.java
 | Java | Zulu JDK 21.0.8 |
 | Maven | IntelliJ IDEA bundled Maven 3.9.9 |
 | 操作系统 | Windows |
-| 时间 | 2026-07-08 |
+| 时间 | 2026-07-15 |
 
 ## 默认测试命令
 
@@ -76,17 +78,14 @@ $env:Path="$env:JAVA_HOME\bin;$env:Path"
 mvn test
 ```
 
-结果：
+当前合并到 `main` 后的回归结果：
 
 ```text
-Tests run: 28, Failures: 0, Errors: 0, Skipped: 2
+Tests run: 182, Failures: 0, Errors: 0, Skipped: 2
 BUILD SUCCESS
 ```
 
-跳过项：
-
-- `UserDAOTest`：需 `-DintegrationTests=true` 并初始化本地 MySQL。
-- `BatchLogServiceStressTest`：需 `-DstressTests=true` 显式开启。
+默认跳过项为显式开启的压力/环境相关测试，不影响常规功能回归。
 
 ## 压力测试命令
 
@@ -96,7 +95,7 @@ $env:Path="$env:JAVA_HOME\bin;$env:Path"
 mvn test -DstressTests=true
 ```
 
-结果：
+历史 Day08 压测执行结果（2026-07-08）：
 
 ```text
 Day08 stress test imported 10,000 logs with 50 workers in 51 ms.
@@ -109,4 +108,16 @@ BUILD SUCCESS
 - 普通单元测试已覆盖核心服务输入校验、日志服务、批量导入、用户服务和事务行为。
 - 事务回滚路径已通过可观测连接验证，确认失败时执行 `rollback()` 且不会写入后续行为日志。
 - 批量日志服务可在 50 并发下完成 10000 条日志分批导入，批次大小符合预期。
-- 真实 MySQL/MongoDB 端到端验证仍需本机数据库启动并导入初始化脚本后执行。
+- 当前回归已额外覆盖：评分推荐、评论标签移除、评论卡片展示、日期月历、景点图片拖拽导入、管理员用户管理、票种空条件查询、库存日期查询、报表/审计按钮状态、月度订单明细钻取，以及异步页面请求保护。
+- 真实 MySQL/MongoDB 端到端验证仍需本机数据库启动并导入初始化脚本后执行；测试保护器只允许 `scenic_ticket_test` 作为集成测试目标。
+
+## 2026-07-15 回归用例补充
+
+| 范围 | 验证内容 |
+| --- | --- |
+| 评论 | 已购票资格、1～5 分评分、同一用户同一景点原位更新、无标签字段、无测试编号展示 |
+| 景点详情 | 简介预取、图片加载/隐藏、拖拽图片校验、详情与评论页签状态 |
+| 日期 | 月历可切换月份并选择年/月/日；库存与审计日期条件不再依赖手工输入 |
+| 管理端 | 一个“保存景点修改”入口同步基础信息与详情；票种空条件查询全部；新景点自动成人票与库存 |
+| 报表 | 热门排行和综合汇总稳定排序；当前报表按钮高亮；月度订单日期行可钻取订单明细 |
+| 审计 | 注册、登录、订单、支付、退款、评论、用户变更等日志可组合查询，当前视图按钮高亮 |
