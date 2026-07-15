@@ -1,6 +1,7 @@
 package com.scenicticket.ui;
 
 import com.scenicticket.dto.HotItemRankingDTO;
+import com.scenicticket.dto.MonthlyOrderDetailDTO;
 import com.scenicticket.dto.MonthlyOrderReportDTO;
 import com.scenicticket.dto.StatisticsReportDTO;
 import org.bson.Document;
@@ -10,10 +11,13 @@ import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTabbedPane;
+import javax.swing.JTable;
 import javax.swing.JTextField;
 import javax.swing.table.DefaultTableModel;
 import java.awt.BorderLayout;
 import java.awt.GridLayout;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -26,6 +30,7 @@ public final class ReportPanel extends JPanel {
     private final JTextField monthField = new JTextField(String.valueOf(LocalDate.now().getMonthValue()), 4);
     private final JTextField userIdField = new JTextField(10);
     private final DefaultTableModel monthlyModel = tableModel("日期", "订单数", "销售金额");
+    private final JTable monthlyTable = UiComponents.table(monthlyModel);
     private final DefaultTableModel hotModel = tableModel(
             "排名", "景点名称", "景点ID", "状态", "总操作", "浏览", "下单", "平均停留(秒)");
     private final DefaultTableModel userModel = tableModel("指标", "数据");
@@ -47,7 +52,8 @@ public final class ReportPanel extends JPanel {
         this.actions = actions;
         setBackground(UiTheme.BACKGROUND);
         setBorder(javax.swing.BorderFactory.createEmptyBorder(16, 16, 16, 16));
-        resultTabs.addTab("月度订单", UiComponents.scroll(UiComponents.table(monthlyModel)));
+        configureMonthlyTable();
+        resultTabs.addTab("月度订单", createMonthlyResultPanel());
         resultTabs.addTab("热门排行", UiComponents.scroll(UiComponents.table(hotModel)));
         resultTabs.addTab(admin ? "用户报告" : "我的报告", UiComponents.scroll(UiComponents.table(userModel)));
         if (admin) {
@@ -57,6 +63,37 @@ public final class ReportPanel extends JPanel {
         add(UiComponents.card("报表数据", resultTabs), BorderLayout.CENTER);
         resultTabs.addChangeListener(event -> applyReportButtonStyles(resultTabs.getSelectedIndex()));
         setActiveReport(0);
+    }
+
+    private void configureMonthlyTable() {
+        if (!admin) {
+            return;
+        }
+        monthlyTable.setToolTipText("单击日期行查看当天订单明细");
+        monthlyTable.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent event) {
+                if (event.getButton() != MouseEvent.BUTTON1) {
+                    return;
+                }
+                int viewRow = monthlyTable.rowAtPoint(event.getPoint());
+                if (viewRow >= 0) {
+                    openMonthlyDetailsAt(monthlyTable.convertRowIndexToModel(viewRow));
+                }
+            }
+        });
+    }
+
+    private JPanel createMonthlyResultPanel() {
+        JPanel panel = new JPanel(new BorderLayout(0, 6));
+        panel.setOpaque(false);
+        if (admin) {
+            JLabel hint = new JLabel("单击日期行可查看当天每笔订单的购买用户和景点明细");
+            hint.setForeground(UiTheme.MUTED);
+            panel.add(hint, BorderLayout.NORTH);
+        }
+        panel.add(UiComponents.scroll(monthlyTable), BorderLayout.CENTER);
+        return panel;
     }
 
     private JPanel createToolbar() {
@@ -112,6 +149,24 @@ public final class ReportPanel extends JPanel {
                         UiFormatters.money(report.getTotalAmount())});
             }
             actions.setStatus(safeReports.isEmpty() ? "该月份暂无订单数据" : "月度订单报表已更新");
+        });
+    }
+
+    void openMonthlyDetailsAt(int modelRow) {
+        if (!admin || modelRow < 0 || modelRow >= monthlyModel.getRowCount()) {
+            return;
+        }
+        Object dateValue = monthlyModel.getValueAt(modelRow, 0);
+        LocalDate orderDate = dateValue instanceof LocalDate localDate
+                ? localDate : LocalDate.parse(String.valueOf(dateValue));
+        taskExecutor.run("查询当日订单明细", () -> actions.monthlyDetails(orderDate), details -> {
+            List<MonthlyOrderDetailDTO> safeDetails = details == null ? List.of() : details;
+            if (safeDetails.isEmpty()) {
+                actions.setStatus(orderDate + " 暂无有效订单明细");
+                return;
+            }
+            actions.showMonthlyDetails(orderDate, safeDetails);
+            actions.setStatus("已加载 " + orderDate + " 的 " + safeDetails.size() + " 笔订单明细");
         });
     }
 
@@ -341,6 +396,10 @@ public final class ReportPanel extends JPanel {
 
     public interface Actions {
         List<MonthlyOrderReportDTO> monthly(int year, int month);
+
+        List<MonthlyOrderDetailDTO> monthlyDetails(LocalDate orderDate);
+
+        void showMonthlyDetails(LocalDate orderDate, List<MonthlyOrderDetailDTO> details);
 
         List<HotItemRankingDTO> hot();
 

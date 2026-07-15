@@ -10,14 +10,17 @@ Day 06 在 Day 04 统计初版和 Day 05 推荐/跨库联查基础上，补齐�
 | --- | --- |
 | `ReportDAO` | 使用 `CallableStatement` 调用 `sp_monthly_order_report` |
 | `MonthlyOrderReportDTO` | 封装月度订单日报结果：日期、订单数、总金额 |
+| `MonthlyOrderDetailDTO` | 封装指定日期的购买用户、景点、票种、金额和状态明细 |
 | `StatisticsService#getMonthlyOrderReport` | 对外提供月度订单报表查询入口 |
+| `StatisticsService#getMonthlyOrderDetails` | 管理员按日期钻取已支付/已完成订单明细 |
 
 调用流程：
 
 1. 服务层校验报表年份和月份。
 2. `ReportDAO` 通过 `{CALL sp_monthly_order_report(?, ?)}` 调用 MySQL 存储过程。
 3. 将结果集映射为 `MonthlyOrderReportDTO` 列表。
-4. 报表结果可供后续 Swing 后台统计界面展示。
+4. Swing 月度订单表按日展示汇总；管理员单击日期行可弹出当天订单明细。
+5. 汇总和明细均仅统计已支付、已完成订单，确保订单数与弹窗记录数一致。
 
 ## MongoDB 行为统计
 

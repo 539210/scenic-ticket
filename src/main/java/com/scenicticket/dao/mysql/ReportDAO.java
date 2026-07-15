@@ -1,6 +1,7 @@
 package com.scenicticket.dao.mysql;
 
 import com.scenicticket.dao.BaseDAO;
+import com.scenicticket.dto.MonthlyOrderDetailDTO;
 import com.scenicticket.dto.MonthlyOrderReportDTO;
 import com.scenicticket.exception.DBException;
 
@@ -9,6 +10,7 @@ import java.sql.Connection;
 import java.sql.Date;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -28,6 +30,52 @@ public class ReportDAO extends BaseDAO {
             }
         } catch (SQLException e) {
             throw new DBException("Failed to call monthly order report procedure.", e);
+        }
+    }
+
+    public List<MonthlyOrderDetailDTO> findMonthlyOrderDetails(LocalDate orderDate) {
+        String sql = """
+                SELECT o.order_id, o.user_id, u.username, o.item_id,
+                       COALESCE(i.title, '景点已删除') AS item_title,
+                       COALESCE(o.ticket_type_name_snapshot, '成人票') AS ticket_type_name,
+                       o.quantity, COALESCE(o.discounted_unit_price, o.unit_price) AS unit_price,
+                       o.amount, o.payment_method, o.status, o.visit_date, o.created_at
+                FROM orders o
+                JOIN users u ON u.user_id = o.user_id
+                LEFT JOIN items i ON i.item_id = o.item_id
+                WHERE o.created_at >= ?
+                  AND o.created_at < ?
+                  AND o.status IN (1, 3)
+                ORDER BY o.created_at, o.order_id
+                """;
+        try (Connection connection = getConnection();
+             var statement = connection.prepareStatement(sql)) {
+            statement.setDate(1, Date.valueOf(orderDate));
+            statement.setDate(2, Date.valueOf(orderDate.plusDays(1)));
+            try (ResultSet resultSet = statement.executeQuery()) {
+                List<MonthlyOrderDetailDTO> details = new ArrayList<>();
+                while (resultSet.next()) {
+                    Date visitDate = resultSet.getDate("visit_date");
+                    var createdAt = resultSet.getTimestamp("created_at");
+                    details.add(new MonthlyOrderDetailDTO(
+                            resultSet.getLong("order_id"),
+                            resultSet.getLong("user_id"),
+                            resultSet.getString("username"),
+                            resultSet.getLong("item_id"),
+                            resultSet.getString("item_title"),
+                            resultSet.getString("ticket_type_name"),
+                            resultSet.getInt("quantity"),
+                            resultSet.getBigDecimal("unit_price"),
+                            resultSet.getBigDecimal("amount"),
+                            resultSet.getString("payment_method"),
+                            resultSet.getInt("status"),
+                            visitDate == null ? null : visitDate.toLocalDate(),
+                            createdAt == null ? null : createdAt.toLocalDateTime()));
+                }
+                return details;
+            }
+        } catch (SQLException e) {
+            throw new DBException("Failed to query monthly order details.", e);
         }
     }
 

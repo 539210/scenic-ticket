@@ -7,6 +7,7 @@ import com.scenicticket.dao.mysql.ItemDAO;
 import com.scenicticket.dao.mysql.ReportDAO;
 import com.scenicticket.dto.AuditLogQuery;
 import com.scenicticket.dto.HotItemRankingDTO;
+import com.scenicticket.dto.MonthlyOrderDetailDTO;
 import com.scenicticket.dto.MonthlyOrderReportDTO;
 import com.scenicticket.dto.StatisticsReportDTO;
 import com.scenicticket.exception.BusinessException;
@@ -14,6 +15,7 @@ import com.scenicticket.model.Item;
 import org.bson.Document;
 
 import java.util.Date;
+import java.time.LocalDate;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -170,6 +172,14 @@ public class StatisticsService {
                 .sorted(Comparator.comparing(MonthlyOrderReportDTO::getOrderDate,
                         Comparator.nullsLast(Comparator.naturalOrder())))
                 .toList();
+    }
+
+    public List<MonthlyOrderDetailDTO> getMonthlyOrderDetails(long actorUserId, LocalDate orderDate) {
+        authorizationService.requireAdmin(actorUserId);
+        if (orderDate == null) {
+            throw new BusinessException("请选择要查看的订单日期");
+        }
+        return reportDAO.findMonthlyOrderDetails(orderDate);
     }
 
     public StatisticsReportDTO buildDashboardReport(long actorUserId, Date startTime, Date endTime) {

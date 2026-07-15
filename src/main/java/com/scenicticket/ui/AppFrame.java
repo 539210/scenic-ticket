@@ -4,6 +4,7 @@ import com.scenicticket.dto.CrossDatabaseItemDTO;
 import com.scenicticket.dto.AuditLogQuery;
 import com.scenicticket.dto.HotItemRankingDTO;
 import com.scenicticket.dto.LoginResult;
+import com.scenicticket.dto.MonthlyOrderDetailDTO;
 import com.scenicticket.dto.MonthlyOrderReportDTO;
 import com.scenicticket.dto.OrderActionResult;
 import com.scenicticket.dto.OrderViewDTO;
@@ -530,6 +531,18 @@ public class AppFrame extends JFrame {
             @Override
             public List<MonthlyOrderReportDTO> monthly(int year, int month) {
                 return statisticsService.getMonthlyOrderReport(year, month);
+            }
+
+            @Override
+            public List<MonthlyOrderDetailDTO> monthlyDetails(LocalDate orderDate) {
+                return statisticsService.getMonthlyOrderDetails(actorUserId, orderDate);
+            }
+
+            @Override
+            public void showMonthlyDetails(LocalDate orderDate, List<MonthlyOrderDetailDTO> details) {
+                JOptionPane.showMessageDialog(AppFrame.this,
+                        new MonthlyOrderDetailDialogPanel(orderDate, details),
+                        orderDate + " 订单明细", JOptionPane.PLAIN_MESSAGE);
             }
 
             @Override

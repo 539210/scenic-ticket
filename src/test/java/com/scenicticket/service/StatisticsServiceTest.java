@@ -7,12 +7,14 @@ import com.scenicticket.dao.mysql.ItemDAO;
 import com.scenicticket.dao.mysql.ReportDAO;
 import com.scenicticket.dto.AuditLogQuery;
 import com.scenicticket.dto.HotItemRankingDTO;
+import com.scenicticket.dto.MonthlyOrderDetailDTO;
 import com.scenicticket.exception.BusinessException;
 import com.scenicticket.model.Item;
 import org.bson.Document;
 import org.junit.jupiter.api.Test;
 
 import java.util.Date;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
@@ -95,6 +97,18 @@ class StatisticsServiceTest {
         assertThrows(BusinessException.class, () -> service.querySystemAuditLogs(1L, query));
     }
 
+    @Test
+    void monthlyOrderDetailsRequireAdminAndPassSelectedDateToDao() {
+        CapturingReportDAO reportDAO = new CapturingReportDAO();
+        StatisticsService detailService = new StatisticsService(logDAO, new CommentDAO(), reportDAO,
+                systemLogDAO, allowAdmin(), new StubItemDAO());
+        LocalDate orderDate = LocalDate.of(2026, 7, 1);
+
+        detailService.getMonthlyOrderDetails(1L, orderDate);
+
+        assertEquals(orderDate, reportDAO.orderDate);
+    }
+
     private static AuthorizationService allowAdmin() {
         return new AuthorizationService(new com.scenicticket.dao.mysql.UserDAO()) {
             @Override
@@ -135,6 +149,16 @@ class StatisticsServiceTest {
             item.setCategoryId(1L);
             item.setStatus(1);
             return item;
+        }
+    }
+
+    private static class CapturingReportDAO extends ReportDAO {
+        private LocalDate orderDate;
+
+        @Override
+        public List<MonthlyOrderDetailDTO> findMonthlyOrderDetails(LocalDate orderDate) {
+            this.orderDate = orderDate;
+            return List.of();
         }
     }
 
