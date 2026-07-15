@@ -60,7 +60,7 @@ public final class ManagementPanel extends JPanel {
     private final JButton updateCategoryButton = UiComponents.secondaryButton("更新所选分类");
 
     public ManagementPanel(UiTaskExecutor taskExecutor, Actions actions,
-                           JPanel userPanel, JPanel inventoryPanel, JPanel admissionPanel) {
+                           JPanel userPanel, JPanel inventoryPanel) {
         super(new BorderLayout(12, 12));
         this.taskExecutor = taskExecutor;
         this.actions = actions;
@@ -75,7 +75,6 @@ public final class ManagementPanel extends JPanel {
         tabs.addTab("分类管理", createCategoryPage());
         tabs.addTab("用户管理", userPanel);
         tabs.addTab("票种与库存", inventoryPanel);
-        tabs.addTab("门票核销", admissionPanel);
         add(tabs, BorderLayout.CENTER);
         loadCategories(null);
     }

@@ -76,6 +76,40 @@ public class SwingTaskRunner implements UiTaskExecutor {
         }.execute();
     }
 
+    @Override
+    public <T> void runQuietly(String name, Callable<T> task, Consumer<T> onSuccess) {
+        runQuietly(name, task, onSuccess, ignored -> { });
+    }
+
+    @Override
+    public <T> void runQuietly(String name, Callable<T> task, Consumer<T> onSuccess, Consumer<String> onError) {
+        long taskGeneration = sessionTaskGuard.currentToken();
+        long requestGeneration = latestTaskGuard.nextToken("quiet:" + name);
+        new SwingWorker<T, Void>() {
+            @Override
+            protected T doInBackground() throws Exception {
+                return task.call();
+            }
+
+            @Override
+            protected void done() {
+                try {
+                    T result = get();
+                    if (isCurrent("quiet:" + name, taskGeneration, requestGeneration)) {
+                        onSuccess.accept(result);
+                    }
+                } catch (InterruptedException exception) {
+                    Thread.currentThread().interrupt();
+                } catch (ExecutionException exception) {
+                    Throwable cause = exception.getCause() == null ? exception : exception.getCause();
+                    onError.accept(UiFormatters.chineseError(cause));
+                } catch (RuntimeException exception) {
+                    onError.accept(UiFormatters.chineseError(exception));
+                }
+            }
+        }.execute();
+    }
+
     private void handleFailure(String name, long taskGeneration, long requestGeneration,
                                Throwable throwable, Consumer<String> onError) {
         if (!isCurrent(name, taskGeneration, requestGeneration)) {

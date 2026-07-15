@@ -11,7 +11,6 @@ import com.scenicticket.dto.RecommendationDTO;
 import com.scenicticket.dto.StatisticsReportDTO;
 import com.scenicticket.dto.AdminUserDetailDTO;
 import com.scenicticket.dto.AdminChangeResult;
-import com.scenicticket.dto.AdmissionResult;
 import com.scenicticket.dto.UserSearchCriteria;
 import com.scenicticket.dto.TicketAvailabilityDTO;
 import com.scenicticket.dto.CommentListDTO;
@@ -21,7 +20,6 @@ import com.scenicticket.model.Order;
 import com.scenicticket.model.User;
 import com.scenicticket.model.TicketInventory;
 import com.scenicticket.model.TicketType;
-import com.scenicticket.model.Admission;
 import com.scenicticket.service.BusinessService;
 import com.scenicticket.service.CrossDatabaseQueryService;
 import com.scenicticket.service.RecommendService;
@@ -31,7 +29,6 @@ import com.scenicticket.service.UserService;
 import com.scenicticket.service.AdminUserService;
 import com.scenicticket.service.TicketInventoryService;
 import com.scenicticket.service.OrderLifecycleService;
-import com.scenicticket.service.AdmissionService;
 import com.scenicticket.service.CommentService;
 import org.bson.Document;
 
@@ -76,7 +73,6 @@ public class AppFrame extends JFrame {
     private final AdminUserService adminUserService = new AdminUserService();
     private final TicketInventoryService ticketInventoryService = new TicketInventoryService();
     private final OrderLifecycleService orderLifecycleService = new OrderLifecycleService();
-    private final AdmissionService admissionService = new AdmissionService();
     private final CommentService commentService = new CommentService();
 
     private final JLabel userLabel = new JLabel("未登录");
@@ -334,8 +330,8 @@ public class AppFrame extends JFrame {
             }
 
             @Override
-            public void showComment(Item item, JTextArea commentsArea) {
-                showCommentDialog(item, commentsArea);
+            public void showComment(Item item, Runnable refreshComments) {
+                showCommentDialog(item, refreshComments);
             }
 
             @Override
@@ -453,7 +449,7 @@ public class AppFrame extends JFrame {
             public void setStatus(String message) {
                 AppFrame.this.setStatus(message);
             }
-        }, createUserManagementPanel(), createTicketInventoryManagementPanel(), createAdmissionManagementPanel());
+        }, createUserManagementPanel(), createTicketInventoryManagementPanel());
     }
 
     private JPanel createUserManagementPanel() {
@@ -477,26 +473,6 @@ public class AppFrame extends JFrame {
             @Override
             public AdminChangeResult changeRole(long targetUserId, String role) {
                 return adminUserService.changeUserRole(actorUserId, targetUserId, role);
-            }
-
-            @Override
-            public void setStatus(String message) {
-                AppFrame.this.setStatus(message);
-            }
-        });
-    }
-
-    private JPanel createAdmissionManagementPanel() {
-        long actorUserId = requireCurrentUserId();
-        return new AdmissionPanel(taskRunner, new AdmissionPanel.Actions() {
-            @Override
-            public List<Admission> listByOrder(long orderId) {
-                return admissionService.listByOrder(actorUserId, orderId);
-            }
-
-            @Override
-            public AdmissionResult admit(long orderId, int quantity, String note) {
-                return admissionService.admit(actorUserId, orderId, quantity, note);
             }
 
             @Override
@@ -731,7 +707,7 @@ public class AppFrame extends JFrame {
                 PurchaseDialogPanel.successText(item.getTitle(), action)));
     }
 
-    private void showCommentDialog(Item item, JTextArea detailArea) {
+    private void showCommentDialog(Item item, Runnable refreshComments) {
         long actorUserId = requireCurrentUserId();
         CommentDialogPanel form = new CommentDialogPanel(item.getTitle());
         int result = JOptionPane.showConfirmDialog(this, form, "发表评论",
@@ -747,12 +723,8 @@ public class AppFrame extends JFrame {
                 JOptionPane.showMessageDialog(this, resultMessage.message(),
                         "评论已保存（审计警告）", JOptionPane.WARNING_MESSAGE);
             }
-            runTask("刷新游客评论", () -> commentService.listForItem(
-                    actorUserId, item.getItemId(), 20),
-                    dto -> {
-                        detailArea.setText(itemDisplayFormatter.formatComments(item.getTitle(), dto));
-                        setStatus(resultMessage.message());
-                    });
+            refreshComments.run();
+            setStatus(resultMessage.message());
         });
     }
 

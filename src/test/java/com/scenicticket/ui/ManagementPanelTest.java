@@ -90,7 +90,7 @@ class ManagementPanelTest {
 
     private static ManagementPanel panel(FakeActions actions) {
         return new ManagementPanel(new ImmediateTaskExecutor(), actions,
-                new JPanel(), new JPanel(), new JPanel());
+                new JPanel(), new JPanel());
     }
 
     private static String last(List<String> values) {

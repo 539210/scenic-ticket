@@ -92,6 +92,7 @@ class AuditPanelTest {
         assertEquals(1, panel.rowCount(1));
         assertEquals("预定下单", panel.tableValueAt(1, 0, 0));
         assertEquals("正常", panel.tableValueAt(1, 0, 1));
+        assertTrue(panel.actionSelected(1));
     }
 
     private static Date dateAtStart(String value) {

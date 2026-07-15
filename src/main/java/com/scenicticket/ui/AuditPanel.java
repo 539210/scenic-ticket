@@ -14,6 +14,8 @@ import javax.swing.JTextField;
 import javax.swing.table.DefaultTableModel;
 import java.awt.BorderLayout;
 import java.awt.GridLayout;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.Date;
 import java.util.List;
 
@@ -21,8 +23,8 @@ public final class AuditPanel extends JPanel {
     private final UiTaskExecutor taskExecutor;
     private final Actions actions;
     private final JTextField userIdField = new JTextField(10);
-    private final JTextField startDateField = new JTextField(10);
-    private final JTextField endDateField = new JTextField(10);
+    private final DatePickerField startDateField = new DatePickerField(null);
+    private final DatePickerField endDateField = new DatePickerField(null);
     private final JTextField keywordField = new JTextField(12);
     private final JTextField limitField = new JTextField("80", 5);
     private final JComboBox<String> logTypeBox = new JComboBox<>(
@@ -39,6 +41,11 @@ public final class AuditPanel extends JPanel {
     private final JScrollPane trendScroll = UiComponents.scroll(UiComponents.table(trendModel));
     private final JScrollPane userSummaryScroll = UiComponents.scroll(UiComponents.table(userSummaryModel));
     private final JTabbedPane auditTabs = new JTabbedPane(JTabbedPane.TOP);
+    private final JButton queryButton = UiComponents.secondaryButton("查询日志");
+    private final JButton summaryButton = UiComponents.secondaryButton("审计汇总");
+    private final JButton trendButton = UiComponents.secondaryButton("审计趋势");
+    private final JButton userSummaryButton = UiComponents.secondaryButton("用户操作");
+    private final List<JButton> viewButtons = List.of(queryButton, summaryButton, trendButton, userSummaryButton);
 
     public AuditPanel(UiTaskExecutor taskExecutor, Actions actions) {
         super(new BorderLayout(12, 12));
@@ -50,8 +57,10 @@ public final class AuditPanel extends JPanel {
         auditTabs.addTab("审计汇总", summaryScroll);
         auditTabs.addTab("审计趋势", trendScroll);
         auditTabs.addTab("用户操作", userSummaryScroll);
+        auditTabs.addChangeListener(event -> updateSelectedButton(auditTabs.getSelectedIndex()));
         add(UiComponents.card("审计条件", createToolbar()), BorderLayout.NORTH);
         add(UiComponents.card("审计结果", auditTabs), BorderLayout.CENTER);
+        updateSelectedButton(0);
     }
 
     private JPanel createToolbar() {
@@ -60,10 +69,6 @@ public final class AuditPanel extends JPanel {
         JPanel buttons = UiComponents.toolbar();
         JPanel toolbar = new JPanel(new GridLayout(3, 1, 0, 4));
         toolbar.setOpaque(false);
-        JButton queryButton = UiComponents.primaryButton("查询日志");
-        JButton summaryButton = UiComponents.secondaryButton("审计汇总");
-        JButton trendButton = UiComponents.secondaryButton("审计趋势");
-        JButton userSummaryButton = UiComponents.secondaryButton("用户操作");
         JButton refreshButton = UiComponents.secondaryButton("刷新当前结果");
         JButton clearButton = UiComponents.secondaryButton("清空条件");
 
@@ -103,6 +108,7 @@ public final class AuditPanel extends JPanel {
     }
 
     private void refreshAuditLogs() {
+        showView(0);
         FilterSnapshot snapshot = filterSnapshot();
         taskExecutor.run("审计日志查询", () -> actions.query(snapshot.toQuery()), documents -> {
             List<Document> safeDocuments = safeDocuments(documents);
@@ -115,13 +121,13 @@ public final class AuditPanel extends JPanel {
                         valueText(document.get("message")), businessObject(detail), businessDetail(detail),
                         detail == null ? "-" : valueText(detail.get("ip"))});
             }
-            auditTabs.setSelectedIndex(0);
             restoreScroll(logScroll, scrollPosition);
             actions.setStatus("查询到 " + safeDocuments.size() + " 条审计日志");
         });
     }
 
     private void loadSummary() {
+        showView(1);
         DateRangeSnapshot snapshot = dateRangeSnapshot();
         taskExecutor.run("审计汇总", () -> actions.summary(snapshot.startTime(), snapshot.endTime()), documents -> {
             int scrollPosition = summaryScroll.getVerticalScrollBar().getValue();
@@ -131,12 +137,12 @@ public final class AuditPanel extends JPanel {
                         logLevelName(document.getString("log_level")), numberText(document.get("operation_count")),
                         numberText(document.get("user_count")), UiFormatters.date(document.get("latest_timestamp"))});
             }
-            auditTabs.setSelectedIndex(1);
             restoreScroll(summaryScroll, scrollPosition);
         });
     }
 
     private void loadTrend() {
+        showView(2);
         DateRangeSnapshot snapshot = dateRangeSnapshot();
         taskExecutor.run("审计趋势", () -> actions.trend(snapshot.startTime(), snapshot.endTime()), documents -> {
             int scrollPosition = trendScroll.getVerticalScrollBar().getValue();
@@ -146,18 +152,17 @@ public final class AuditPanel extends JPanel {
                         logTypeName(document.getString("log_type")), logLevelName(document.getString("log_level")),
                         numberText(document.get("operation_count"))});
             }
-            auditTabs.setSelectedIndex(2);
             restoreScroll(trendScroll, scrollPosition);
         });
     }
 
     private void loadUserSummary() {
-        String startText = startDateField.getText();
-        String endText = endDateField.getText();
+        showView(3);
+        LocalDate startDate = startDateField.getDate();
+        LocalDate endDate = endDateField.getDate();
         String limitText = limitField.getText();
         taskExecutor.run("用户操作汇总", () -> actions.userSummary(
-                UiInputParsers.optionalStartDate(startText, "开始日期"),
-                UiInputParsers.optionalEndDate(endText, "结束日期"),
+                startOfDay(startDate), endOfDay(endDate),
                 UiInputParsers.optionalInt(limitText, 50, "条数")), documents -> {
             int scrollPosition = userSummaryScroll.getVerticalScrollBar().getValue();
             userSummaryModel.setRowCount(0);
@@ -167,7 +172,6 @@ public final class AuditPanel extends JPanel {
                         numberText(document.get("error_count")), UiFormatters.date(document.get("latest_timestamp")),
                         logTypeListText(document.get("log_types"))});
             }
-            auditTabs.setSelectedIndex(3);
             restoreScroll(userSummaryScroll, scrollPosition);
         });
     }
@@ -184,8 +188,8 @@ public final class AuditPanel extends JPanel {
 
     private void clearFilters() {
         userIdField.setText("");
-        startDateField.setText("");
-        endDateField.setText("");
+        startDateField.clearDate();
+        endDateField.clearDate();
         keywordField.setText("");
         limitField.setText("80");
         logTypeBox.setSelectedIndex(0);
@@ -195,13 +199,31 @@ public final class AuditPanel extends JPanel {
 
     private FilterSnapshot filterSnapshot() {
         return new FilterSnapshot(userIdField.getText(), logTypeBox.getSelectedIndex(), levelBox.getSelectedIndex(),
-                startDateField.getText(), endDateField.getText(), keywordField.getText(), limitField.getText());
+                startDateField.getDate(), endDateField.getDate(), keywordField.getText(), limitField.getText());
     }
 
     private DateRangeSnapshot dateRangeSnapshot() {
-        String startText = startDateField.getText();
-        String endText = endDateField.getText();
-        return new DateRangeSnapshot(startText, endText);
+        return new DateRangeSnapshot(startDateField.getDate(), endDateField.getDate());
+    }
+
+    private void showView(int index) {
+        auditTabs.setSelectedIndex(index);
+        updateSelectedButton(index);
+    }
+
+    private void updateSelectedButton(int selectedIndex) {
+        for (int index = 0; index < viewButtons.size(); index++) {
+            UiComponents.setSelectedStyle(viewButtons.get(index), index == selectedIndex);
+        }
+    }
+
+    private static Date startOfDay(LocalDate date) {
+        return date == null ? null : Date.from(date.atStartOfDay(ZoneId.systemDefault()).toInstant());
+    }
+
+    private static Date endOfDay(LocalDate date) {
+        return date == null ? null : Date.from(date.plusDays(1).atStartOfDay(ZoneId.systemDefault())
+                .minusNanos(1).toInstant());
     }
 
     private static String selectedLogType(int index) {
@@ -353,8 +375,8 @@ public final class AuditPanel extends JPanel {
         userIdField.setText(userId);
         logTypeBox.setSelectedIndex(logTypeIndex);
         levelBox.setSelectedIndex(levelIndex);
-        startDateField.setText(startDate);
-        endDateField.setText(endDate);
+        startDateField.setDate(parseOptionalDate(startDate, "开始日期"));
+        endDateField.setDate(parseOptionalDate(endDate, "结束日期"));
         keywordField.setText(keyword);
         limitField.setText(limit);
     }
@@ -383,6 +405,14 @@ public final class AuditPanel extends JPanel {
         };
     }
 
+    boolean actionSelected(int index) {
+        return UiComponents.isSelectedStyle(viewButtons.get(index));
+    }
+
+    private static LocalDate parseOptionalDate(String value, String fieldName) {
+        return value == null || value.isBlank() ? null : UiInputParsers.requiredDate(value, fieldName);
+    }
+
     public interface Actions {
         List<Document> query(AuditLogQuery query);
 
@@ -396,27 +426,27 @@ public final class AuditPanel extends JPanel {
     }
 
     private record FilterSnapshot(String userId, int logTypeIndex, int levelIndex,
-                                  String startDate, String endDate, String keyword, String limit) {
+                                  LocalDate startDate, LocalDate endDate, String keyword, String limit) {
         private AuditLogQuery toQuery() {
             AuditLogQuery query = new AuditLogQuery();
             query.setUserId(UiInputParsers.optionalLong(userId));
             query.setLogType(selectedLogType(logTypeIndex));
             query.setLogLevel(selectedLogLevel(levelIndex));
-            query.setStartTime(UiInputParsers.optionalStartDate(startDate, "开始日期"));
-            query.setEndTime(UiInputParsers.optionalEndDate(endDate, "结束日期"));
+            query.setStartTime(startOfDay(startDate));
+            query.setEndTime(endOfDay(endDate));
             query.setKeyword(keyword);
             query.setLimit(UiInputParsers.optionalInt(limit, 80, "条数"));
             return query;
         }
     }
 
-    private record DateRangeSnapshot(String startDate, String endDate) {
+    private record DateRangeSnapshot(LocalDate startDate, LocalDate endDate) {
         private Date startTime() {
-            return UiInputParsers.optionalStartDate(startDate, "开始日期");
+            return startOfDay(startDate);
         }
 
         private Date endTime() {
-            return UiInputParsers.optionalEndDate(endDate, "结束日期");
+            return endOfDay(endDate);
         }
     }
 }

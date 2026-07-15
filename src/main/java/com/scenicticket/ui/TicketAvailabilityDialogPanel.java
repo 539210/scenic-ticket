@@ -6,7 +6,6 @@ import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTable;
-import javax.swing.JTextField;
 import javax.swing.table.DefaultTableModel;
 import java.awt.BorderLayout;
 import java.awt.Component;
@@ -23,8 +22,8 @@ public final class TicketAvailabilityDialogPanel extends JPanel {
     private static final int[] COLUMN_WIDTHS = {75, 120, 110, 90, 80, 90, 90};
 
     private final LocalDate today;
-    private final JTextField startDateField;
-    private final JTextField endDateField;
+    private final DatePickerField startDateField;
+    private final DatePickerField endDateField;
 
     public TicketAvailabilityDialogPanel(String itemTitle, LocalDate today) {
         super(new BorderLayout());
@@ -32,8 +31,8 @@ public final class TicketAvailabilityDialogPanel extends JPanel {
             throw new IllegalArgumentException("景点名称不能为空");
         }
         this.today = java.util.Objects.requireNonNull(today, "today");
-        startDateField = new JTextField(today.plusDays(1).toString(), 12);
-        endDateField = new JTextField(today.plusDays(14).toString(), 12);
+        startDateField = new DatePickerField(today.plusDays(1));
+        endDateField = new DatePickerField(today.plusDays(14));
 
         JPanel fields = new JPanel(new GridBagLayout());
         fields.setOpaque(false);
@@ -61,8 +60,8 @@ public final class TicketAvailabilityDialogPanel extends JPanel {
     }
 
     public DateRange request() {
-        LocalDate startDate = UiInputParsers.requiredDate(startDateField.getText(), "开始日期");
-        LocalDate endDate = UiInputParsers.requiredDate(endDateField.getText(), "结束日期");
+        LocalDate startDate = startDateField.getDate();
+        LocalDate endDate = endDateField.getDate();
         if (startDate.isBefore(today)) {
             throw new IllegalArgumentException("开始日期不能早于今天");
         }
@@ -101,8 +100,8 @@ public final class TicketAvailabilityDialogPanel extends JPanel {
     }
 
     void setDates(String startDate, String endDate) {
-        startDateField.setText(startDate);
-        endDateField.setText(endDate);
+        startDateField.setDate(UiInputParsers.requiredDate(startDate, "开始日期"));
+        endDateField.setDate(UiInputParsers.requiredDate(endDate, "结束日期"));
     }
 
     public record DateRange(LocalDate startDate, LocalDate endDate) {

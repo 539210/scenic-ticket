@@ -38,8 +38,8 @@ class TicketAvailabilityDialogPanelTest {
         panel.setDates("2026-07-20", "2026-07-19");
         assertThrows(IllegalArgumentException.class, panel::request);
 
-        panel.setDates("2026/07/20", "2026-07-21");
-        assertThrows(IllegalArgumentException.class, panel::request);
+        assertThrows(IllegalArgumentException.class,
+                () -> panel.setDates("2026/07/20", "2026-07-21"));
     }
 
     @Test
